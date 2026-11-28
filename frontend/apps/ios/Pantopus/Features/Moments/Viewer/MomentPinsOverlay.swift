@@ -73,17 +73,19 @@ struct MomentPinsOverlay: View {
         }
     }
 
-    /// Takes the tap that chooses where the new pin goes (on the picture only).
+    /// Takes the tap that chooses where the new pin goes (on the picture only). The tap is read in the picture's own
+    /// frame (before it is positioned), so on a picture wider or taller than the screen the pin lands under the finger.
     private func catcher(_ frame: CGRect) -> some View {
         Color.white.opacity(0.001)
             .frame(width: frame.width, height: frame.height)
-            .position(x: frame.midX, y: frame.midY)
+            .contentShape(Rectangle())
             .onTapGesture(coordinateSpace: .local) { point in
                 store.spot = CGPoint(
                     x: min(max(point.x / max(frame.width, 1), 0), 1),
                     y: min(max(point.y / max(frame.height, 1), 0), 1)
                 )
             }
+            .position(x: frame.midX, y: frame.midY)
             .accessibilityLabel("Choose a spot on the picture for your pin")
             .accessibilityAddTraits(.isButton)
             .accessibilityIdentifier("moments.pins.catch")

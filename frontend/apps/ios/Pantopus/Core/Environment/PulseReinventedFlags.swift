@@ -90,6 +90,7 @@ final class PulseReinventedFlags {
 
     private func apply(_ on: Bool) {
         if isOn != on { isOn = on }
+        PulseTrackSwitch.applied(on) // the Pulse track's phone-side pieces (the widget) follow the switch
     }
 
     private static func key(_ account: String) -> String {

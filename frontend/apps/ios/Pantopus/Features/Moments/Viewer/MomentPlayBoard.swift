@@ -207,30 +207,37 @@ struct MomentFogLayer: View {
 
 /// Swatch: colours to try over a part of the photo, marked as a try-on; "Original" takes it off.
 struct MomentSwatchLayer: View {
+    let moment: MomentDTO
     let item: MomentPlayItem
     let frame: CGRect
-    @State private var tried: Int?
+    private let store = MomentPlayStore.shared
 
-    var body: some View {
+    /// The swatch's area on the picture.
+    static func rect(_ item: MomentPlayItem, in frame: CGRect) -> CGRect {
         let box = item.box ?? MomentPlayItem.Box(x: 0.3, y: 0.3, w: 0.4, h: 0.4)
-        let rect = CGRect(
+        return CGRect(
             x: frame.minX + box.x * frame.width,
             y: frame.minY + box.y * frame.height,
             width: box.w * frame.width,
             height: box.h * frame.height
         )
+    }
+
+    var body: some View {
+        let rect = Self.rect(item, in: frame)
         let colors = (item.colors ?? []).compactMap(Self.color)
+        let key = "\(moment.id)/\(item.id)"
+        let tried = store.swatchTried[key]
+        // The paint itself is `MomentSwatchPaint`, under the stamps; here the area's edge and the paints to try.
         ZStack {
             RoundedRectangle(cornerRadius: 6)
-                .fill(tried.flatMap { colors[safeIndex: $0] } ?? Color.clear)
-                .blendMode(.multiply)
-                .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.white, style: StrokeStyle(lineWidth: 1.5, dash: [5, 4])))
+                .stroke(Color.white, style: StrokeStyle(lineWidth: 1.5, dash: [5, 4]))
                 .frame(width: rect.width, height: rect.height)
                 .position(x: rect.midX, y: rect.midY)
                 .allowsHitTesting(false)
             HStack(spacing: 6) {
                 ForEach(Array(colors.enumerated()), id: \.offset) { index, color in
-                    Button { tried = tried == index ? nil : index } label: {
+                    Button { store.swatchTried[key] = tried == index ? nil : index } label: {
                         Circle()
                             .fill(color)
                             .frame(width: 28, height: 28)
@@ -240,7 +247,7 @@ struct MomentSwatchLayer: View {
                     .accessibilityLabel("Try colour \(index + 1)")
                     .accessibilityIdentifier("moments.play.swatch.\(index)")
                 }
-                Button("Original") { tried = nil }
+                Button("Original") { store.swatchTried[key] = nil }
                     .font(.system(size: 13, weight: .bold))
                     .foregroundStyle(.white)
                     .accessibilityIdentifier("moments.play.swatch.original")
@@ -270,6 +277,32 @@ struct MomentSwatchLayer: View {
             green: Double((value >> 8) & 0xFF) / 255,
             blue: Double(value & 0xFF) / 255
         )
+    }
+}
+
+/// A swatch's paint being tried, on the photo itself: drawn under the stamps, so a stamp over the area keeps its own
+/// colours. Nothing while the reader shows the original.
+struct MomentSwatchPaint: View {
+    let moment: MomentDTO
+    let picture: CGSize?
+    private let store = MomentPlayStore.shared
+
+    var body: some View {
+        GeometryReader { geo in
+            let frame = picture.map { MomentMarks.fill($0, in: geo.size) } ?? CGRect(origin: .zero, size: geo.size)
+            ForEach(moment.layers.play.filter { $0.kind == .swatch }) { item in
+                let colors = (item.colors ?? []).compactMap(MomentSwatchLayer.color)
+                if let tried = store.swatchTried["\(moment.id)/\(item.id)"], let color = colors[safeIndex: tried] {
+                    let rect = MomentSwatchLayer.rect(item, in: frame)
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(color)
+                        .blendMode(.multiply)
+                        .frame(width: rect.width, height: rect.height)
+                        .position(x: rect.midX, y: rect.midY)
+                }
+            }
+        }
+        .allowsHitTesting(false)
     }
 }
 

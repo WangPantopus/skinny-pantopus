@@ -42,6 +42,8 @@
   height: 100%;
   width: min(100%, calc(100dvh * 9 / 16));
   overflow: hidden;
+  /* PHASE-6 K1: the canvas sizes itself by the frame's room (container units). */
+  container-type: size;
   background: var(--st-night);
 }
 .st-studio[data-wide] .st-stage {
@@ -58,6 +60,10 @@
 .st-art {
   position: absolute;
   inset: 0 0 auto;
+  /* PHASE-6 K1: fitted, whole, in the room above the bottom bar (its height is --st-foot-h, set by the Studio), so the bar
+     never covers it; centred in the frame when that makes it narrower. */
+  width: min(100cqw, (100cqh - var(--st-foot-h, 0px)) * 9 / 16);
+  margin: 0 auto;
   aspect-ratio: 9 / 16;
   max-height: 100%;
   overflow: hidden;
@@ -239,13 +245,13 @@
 }
 .st-looks button {
   flex: none;
-  height: 34px;
+  height: 32px;
   padding: 0 13px;
   border: 1px solid var(--st-line);
   border-radius: 17px;
   background: var(--st-soft);
   color: #fff;
-  font-size: 15px;
+  font-size: 13px;
   line-height: 1;
   white-space: nowrap;
 }
@@ -288,7 +294,7 @@
 }
 .st-done {
   justify-self: end;
-  height: 34px;
+  height: 32px;
   padding: 0 16px;
   border: 0;
   border-radius: 17px;
@@ -338,7 +344,7 @@
 }
 .st-start p {
   margin: 0 0 8px;
-  font-size: 18px;
+  font-size: 15px;
   font-weight: 700;
   line-height: 24px;
 }
@@ -406,8 +412,26 @@
   gap: 8px;
   flex-wrap: wrap;
 }
+/* See the picture first (PHASE-5 A2): Fit / Fill, Turn and Reset under the picture, on the first screen. */
+.st-adjust {
+  display: flex;
+  gap: 8px;
+  margin: 0 16px;
+  flex-wrap: wrap;
+}
+.st-adjust .st-chip {
+  background: rgba(11, 18, 32, 0.72);
+}
+.st-adjust .st-chip:disabled {
+  opacity: 0.45;
+}
+/* The details as one line (PHASE-5 A4). */
+.st-summary strong {
+  font-size: 14px;
+  line-height: 18px;
+}
 .st-chip {
-  height: 34px;
+  height: 32px;
   padding: 0 15px;
   border: 1px solid var(--st-line);
   border-radius: 17px;
@@ -433,7 +457,7 @@
 .st-when {
   flex: 1;
   min-width: 0;
-  height: 48px;
+  height: 44px;
   padding: 0 14px;
   border: 1px solid var(--st-line);
   border-radius: 24px;
@@ -467,13 +491,13 @@
 .st-post {
   flex: none;
   min-width: 92px;
-  height: 48px;
+  height: 44px;
   padding: 0 16px;
   border: 0;
   border-radius: 24px;
   background: var(--st-blue);
   color: #fff;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 700;
   display: inline-flex;
   align-items: center;
@@ -520,7 +544,7 @@
 }
 .st-panel h3 {
   margin: 0;
-  font-size: 18px;
+  font-size: 15px;
 }
 .st-panel p {
   margin: 0;
@@ -592,7 +616,7 @@
 }
 .st-drawer h2 {
   margin: 0;
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 700;
 }
 .st-drawer fieldset {
@@ -744,7 +768,7 @@
 }
 .st-tray h2 {
   margin: 0;
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 700;
 }
 .st-tray-head {
@@ -1065,4 +1089,70 @@
 }
 .st-filmlooks button[aria-pressed='true'] img {
   border-color: #7dd3fc;
+}
+/* Several picked at once (PHASE-5 A5): the picture before and the next one, beside "2 of 3". */
+.st-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.st-browse {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(11, 18, 32, 0.72);
+  color: #fff;
+  cursor: pointer;
+}
+.st-browse:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+/* PHASE-6 K3: where an item and one of the Studio's small controls (the close button, the tool rail) overlap, the item gets
+   the touch: the items stack over the controls, and everything that opens over the canvas stacks over the items. */
+.st-studio .sp-layer[data-edit] .sp-stamp,
+.st-studio .pl-item[data-edit],
+.st-studio .dt-dot {
+  z-index: 1;
+}
+.st-studio :is(.st-toolpanel, .st-words, .st-start, .st-foot, .st-panel, .st-scrim, .st-drawer) {
+  z-index: 2;
+}
+/* While an item is dragged the controls fade to 30% and take no touches, and come back when it is let go. */
+.st-studio :is(.st-top, .st-rail, .st-foot, .st-toolpanel) {
+  transition: opacity 0.15s ease;
+}
+.st-studio[data-dragging] :is(.st-top, .st-rail, .st-foot, .st-toolpanel) {
+  opacity: 0.3;
+  pointer-events: none;
+}
+/* PHASE-6 F3: the details are a real sheet on a narrow screen: a grabber over the summary line, which a drag up opens, and
+   one on the drawer's header, which a drag down closes. The browser leaves those drags to the Studio. */
+.st-grabber {
+  display: block;
+  width: 36px;
+  height: 5px;
+  margin: -4px auto 0;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.35);
+  touch-action: none;
+}
+.st-studio:not([data-wide]) .st-bar .st-row,
+.st-drawer-head {
+  touch-action: none;
+}
+.st-drawer header.st-drawer-head {
+  position: relative;
+  padding-top: 10px;
+  cursor: grab;
+}
+.st-drawer-head .st-grabber {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  margin: 0 0 0 -18px;
 }

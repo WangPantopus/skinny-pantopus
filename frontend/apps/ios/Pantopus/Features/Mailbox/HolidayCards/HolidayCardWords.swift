@@ -228,6 +228,8 @@ enum HolidayCardWords {
         case .christmasMorning:
             return ("On Christmas morning", "\(shortDay(cards.christmasMorningAt, calendar: calendar)), with the 7 a.m. mail.")
         case .now:
+            // One person on Pantopus, right away (cards-next 3.3; only offered with `improved`).
+            if case .person = recipient { return ("Right away", "Drops into their mailbox now, with a gentle notice.") }
             if recipient.isLink {
                 return ("Right away", "Whoever opens your link can open the card as soon as they join.")
             }
@@ -343,6 +345,9 @@ enum HolidayCardWords {
     }
 
     static let sealNoteByLink = "You can take it back until someone opens it."
+
+    /// A card to a person that comes right away (cards-next 3.3).
+    static let rightAwayNote = "This card delivers right away, so it can’t be taken back after you seal it."
 
     /// A caption as a sentence for VoiceOver: most end in a full stop or a
     /// question mark already.

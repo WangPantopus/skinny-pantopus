@@ -2,6 +2,7 @@ package app.pantopus.android.data.api.models.moments
 
 import app.pantopus.android.data.api.models.reinvented.MomentPlanDto
 import app.pantopus.android.data.api.models.reinvented.MomentRepliesStateDto
+import app.pantopus.android.data.living.MomentHeadingBody
 import com.squareup.moshi.FromJson
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
@@ -185,6 +186,18 @@ data class MomentDto(
     val play: List<MomentPlayItemDto>? = null,
     /** "Pulse, reinvented" (CONTRACT 7c): Illuminate's dots, for a reader whose switch is on; else null. */
     val dots: List<MomentDotDto>? = null,
+    /** "Pulse, reinvented" (CONTRACT 8e): the Retake it belongs to, for a reader whose switch is on; else null. */
+    val retake: app.pantopus.android.data.api.models.reinvented.MomentRetakeStateDto? = null,
+    /** "Pulse, reinvented" (CONTRACT 8h): the convergence it joined, for a reader whose switch is on; else null. */
+    val convergence: app.pantopus.android.data.api.models.reinvented.MomentConvergenceStateDto? = null,
+    /** "Pulse, reinvented" (CONTRACT 10c): its author's whole picture, shown fit and never cut; false from today's server. */
+    val whole: Boolean = false,
+    /** "Pulse, reinvented" (CONTRACT 10c): the two colours a whole picture sits on; else null. */
+    val backdrop: MomentBackdropDto? = null,
+    /** "Pulse, reinvented" (CONTRACT 8i): the pinboard it starts or is a piece of, for a reader whose switch is on; else null. */
+    val pinboard: app.pantopus.android.data.api.models.reinvented.MomentPinboardStateDto? = null,
+    /** "Pulse, reinvented" (CONTRACT 8g): how it opens later, for a reader whose switch is on; else null. */
+    val seal: app.pantopus.android.data.api.models.reinvented.MomentSealStateDto? = null,
 )
 
 /**
@@ -417,6 +430,12 @@ data class CreateMomentBody(
     val play: List<MomentPlayItemDto>? = null,
     /** The Studio's dots (CONTRACT 7c): up to eight; left out otherwise. */
     val dots: List<MomentDotDto>? = null,
+    /** CONTRACT 9h: the compass at the camera's own shot, switch on only (`data/living/LivingCompass.kt`); null left out. */
+    val heading: MomentHeadingBody? = null,
+    /** The Studio's whole photo (CONTRACT 10c): `true` only when it shows whole; left out otherwise. */
+    val whole: Boolean? = null,
+    /** The Studio's whole photo (CONTRACT 10c): the two colours it sits on, with `whole` only; left out otherwise. */
+    val backdrop: MomentBackdropDto? = null,
 )
 
 /**

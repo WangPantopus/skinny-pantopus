@@ -1,6 +1,7 @@
 /* The living map (Pulse, reinvented, phase 4, board B4): heights, shadows, lanterns, clouds, beacons, beams and night. */
 
-/* Night falls on the map when it falls there: the map's pictures darken; the pins keep their colours. */
+/* Night falls on the flat map when it falls there (or while the browser is set to dark): its tiles darken; the pins keep
+   their colours. The globe takes the basemap's own night light instead (PHASE-5 D), so it is never dimmed twice. */
 .rp-leaflet .leaflet-tile-pane {
   filter: brightness(calc(1 - 0.55 * var(--rp-night, 0))) saturate(calc(1 - 0.35 * var(--rp-night, 0)));
   transition: filter 1.5s ease;

@@ -26,11 +26,14 @@ internal enum class SendStep { Ready, Inserting, In, Closing, Seal, Sealing, Add
 /**
  * Who the sending moment is for, and what it does at the seal. [toFirst] is printed in the words ("For Hazel."); null
  * for a card sent by link. [several] cards go on a list (the moment plays once, with a stack behind the envelope).
- * [onSeal] sends the card, at the instant the seal takes.
+ * [onSeal] sends the card, at the instant the seal takes. [quickSeal]: "Quick seal" is offered under the first button
+ * (the card improvements, Wave 3.5); [onRitualEnded] once a card was sealed the whole way by hand.
  */
 internal class CardTableSendingCalls(
     val toFirst: String?,
     val several: Int,
+    val quickSeal: Boolean = false,
+    val onRitualEnded: () -> Unit = {},
     val onSeal: () -> Unit,
 )
 
@@ -90,6 +93,9 @@ internal class SendingMoment(
 
     private var gone = ""
     private var goneLine = ""
+
+    /** "Quick seal" was tapped: the fast path animations-off use, instead of the ritual. */
+    private var quick = false
     private var refusedWords: String? = null
     private var sealedAtMs = 0L
     private var holding = false
@@ -104,6 +110,9 @@ internal class SendingMoment(
         table.lay.jump(1f)
         table.turn.jump(180f)
     }
+
+    /** "Quick seal" under the first button (Wave 3.5): only before the card goes in. */
+    val offersQuickSeal: Boolean get() = calls.quickSeal && step == SendStep.Ready
 
     val words: String
         get() =
@@ -148,9 +157,13 @@ internal class SendingMoment(
 
     // ---- The buttons ----
 
-    fun primary() {
+    /**
+     * The main button. [quick]: "Quick seal" (Wave 3.5) instead, from the first step: the fast path animations-off use
+     * ([sealAtOnce]), into the same send the ritual ends in.
+     */
+    fun primary(quick: Boolean = false) {
         when (step) {
-            SendStep.Ready -> if (reduceMotion) sealAtOnce() else putIn()
+            SendStep.Ready -> if (reduceMotion || quick) sealAtOnce(quick) else putIn()
             SendStep.In -> closeFlap()
             SendStep.Seal -> {
                 // "Seal it" does the hold for them.
@@ -175,8 +188,9 @@ internal class SendingMoment(
         changed()
     }
 
-    /** With animations off: one button does all of it, the steps swap without moving. */
-    private fun sealAtOnce() {
+    /** With animations off, and for Quick seal: one button does all of it, the steps swap without moving. */
+    private fun sealAtOnce(quick: Boolean = false) {
+        this.quick = quick
         table.lay.jump(0f)
         table.pull.jump(0f)
         sealShown = true
@@ -357,7 +371,7 @@ internal class SendingMoment(
             scope.launch {
                 // The seal stays in sight a moment, however fast the server answered.
                 delay(max(0L, SEAL_SHOWN_MS - (nowMs() - sealedAtMs)))
-                if (reduceMotion) {
+                if (reduceMotion || quick) {
                     // Everything at once; after a moment step 5 takes its place, without moving.
                     table.envelopeTurn.jump(0f)
                     nameReveal = 1f
@@ -373,6 +387,7 @@ internal class SendingMoment(
                 }
                 step = SendStep.Gone
                 changed()
+                if (!quick) calls.onRitualEnded()
             }
     }
 

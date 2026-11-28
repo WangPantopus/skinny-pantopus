@@ -4,9 +4,9 @@
 //
 //  "Pulse, reinvented" phase 1 (PHASE-1 §2.2): on an iPad and the open iPhone Duo held sideways, List and Map sit
 //  side by side. Pulse opens with the list in a phone-wide column on the left (the top row, the switch and the chips
-//  over it) and the map filling the rest, with the time row over the map. List fills the window with the list in the
-//  reading column; Map fills it with the map, the top row and the switch at the top left and the deck along the
-//  bottom. Tapping the lit List or Map again goes back to both. The column is the one "Verified homes nearby" puts
+//  over it) and the map filling the rest, with the rail of round buttons at its right edge. Map fills the window with the map, the top
+//  row and the switch at the top left and the deck along the bottom; tapping the lit Map again goes back to both.
+//  (The list alone, the full rest, is reached from My Atlas.) The column is the one "Verified homes nearby" puts
 //  beside its map (`SideBySideColumnWidth.nearby`), so a screen too narrow for it (a phone, the Duo upright, an iPad
 //  window beside another app) keeps the list resting over the map (`ReinventedPulseView`). Only drawn while
 //  `pulse_reinvented` is on.
@@ -34,30 +34,30 @@ enum ReinventedPulseColumns {
 
     /// Where the map starts: past the column and its line while both show, at the screen's edge otherwise.
     static func mapInset(_ height: ReinventedPulseView.Height, sideBySide: Bool) -> CGFloat {
-        sideBySide && height == .middle ? column + 1 : 0
+        sideBySide && height == .half ? column + 1 : 0
     }
 }
 
-struct ReinventedPulseSideBySide<Header: View, Content: View, Add: View>: View {
+struct ReinventedPulseSideBySide<Header: View, Content: View, Add: View, Rail: View>: View {
     let height: ReinventedPulseView.Height
     let map: ReinventedMapModel
-    /// The time row over the map beside the list: not in My Atlas or Explore.
-    let showsTimeRow: Bool
     let header: Header
     /// The list, or My Atlas.
     let content: Content
     let add: Add
+    /// The rail of round buttons at the map's right edge (PHASE-6 A2).
+    let rail: Rail
     let onOpen: (ReinventedMapModel.Item) -> Void
 
     var body: some View {
         switch height {
-        case .middle: both
-        case .list: listAlone
-        case .map: mapAlone
+        case .half: both
+        case .full: listAlone
+        case .peek: mapAlone
         }
     }
 
-    /// The list in its column, a line, and the map (drawn behind) with the time row over it.
+    /// The list in its column, a line, and the map (drawn behind) with the rail over it.
     private var both: some View {
         HStack(alignment: .top, spacing: Spacing.s0) {
             VStack(spacing: Spacing.s0) {
@@ -72,17 +72,8 @@ struct ReinventedPulseSideBySide<Header: View, Content: View, Add: View>: View {
                 .fill(Theme.Color.appBorder)
                 .frame(width: 1)
                 .ignoresSafeArea()
-            // Clear but for the time row, so the map behind takes every other touch.
-            VStack(spacing: Spacing.s0) {
-                if showsTimeRow {
-                    ReinventedTimeRow(model: map)
-                        // Room to scroll the last time clear of the open Duo's clock corner, top right.
-                        .safeAreaPadding(.trailing, Spacing.s16)
-                        .padding(.top, Spacing.s2)
-                }
-                Spacer(minLength: 0)
-            }
-            .frame(maxWidth: .infinity)
+            // Clear but for the rail, so the map behind takes every other touch.
+            railOverMap
         }
     }
 
@@ -101,6 +92,7 @@ struct ReinventedPulseSideBySide<Header: View, Content: View, Add: View>: View {
     /// The map over the whole window: the header at the top left, the deck along the bottom.
     private var mapAlone: some View {
         ZStack(alignment: .topLeading) {
+            railOverMap
             header
                 .frame(width: ReinventedPulseColumns.column)
             ReinventedPeekDeck(model: map, onOpen: onOpen)
@@ -108,6 +100,14 @@ struct ReinventedPulseSideBySide<Header: View, Content: View, Add: View>: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
                 .padding(.bottom, 76)
         }
+    }
+
+    /// The rail at the map's right edge, under the open Duo's clock corner.
+    private var railOverMap: some View {
+        rail
+            .padding(.top, Spacing.s16)
+            .padding(.trailing, Spacing.s3)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
     }
 
     /// The deck's cards keep a phone card's width on a big screen.

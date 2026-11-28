@@ -47,6 +47,7 @@ const momentStamps = require('./momentStamps');
 const momentGuess = require('./momentGuess');
 const playItems = require('../pulse/play');
 const soundMedia = require('../pulse/sound');
+const motionMedia = require('../pulse/motion');
 const stepDeck = require('../pulse/deck');
 const shownReplies = require('../pulse/replies');
 const penName = require('../penName');
@@ -647,6 +648,11 @@ function serializeMoment(row, { author, viewerId, seen = false, myReaction = nul
       convergence: m.convergence ? require('../pulse/convergence').answerOf(m) : null,
       // A loop (CONTRACT 7j): the span the new viewers repeat, fitted to the stored video; null for any other.
       loop: m.loop ? require('../pulse/loop').answerOf(m) : null,
+      // A Live Photo's motion (CONTRACT 10b), its link given exactly when the photo's is, to others only once the
+      // clip's own picture check has passed; null for any other.
+      motion: motionMedia.motionOf(m, links, Boolean(showMedia), own),
+      // Shown as its author composed it (CONTRACT 10c): fit on its backdrop, and a video's place on the canvas.
+      ...require('../pulse/composed').answerOf(m),
     } : {}),
   };
   // Until this reader has guessed, a live guess-the-spot Moment answers without its spot (never its author's own).
@@ -690,7 +696,8 @@ function linkKeys(rows) {
     const stored = meta(row).media;
     // A Moment's sound and whispers (Pulse, reinvented, CONTRACT 7e) are signed in the same call; only answers to a
     // reader with the switch on hand them out.
-    return [...(stored ? [stored.key, stored.poster_key].filter(Boolean) : []), ...soundMedia.soundKeys(meta(row))];
+    return [...(stored ? [stored.key, stored.poster_key].filter(Boolean) : []), ...soundMedia.soundKeys(meta(row)),
+      ...motionMedia.motionKeys(meta(row))];
   });
 }
 

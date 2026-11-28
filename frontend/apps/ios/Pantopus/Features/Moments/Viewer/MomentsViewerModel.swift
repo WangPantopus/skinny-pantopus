@@ -9,6 +9,8 @@
 //  once, when it shows; the map turns it grey at once.
 //
 
+// swiftlint:disable file_length
+
 import AVFoundation
 import Foundation
 import Observation
@@ -148,6 +150,14 @@ final class MomentsViewerModel {
         ringIndex = index
         momentIndex = startIndex(in: index)
         show()
+    }
+
+    /// "Pulse, reinvented": the ring showing, with a step deck's other steps put in it in the deck's order, so the
+    /// deck's bars can open them (`MomentDeckStrip`). The Moment showing stays as it is. Today's screens never call it.
+    func joinRing(_ moments: [MomentBriefDTO], showing index: Int) {
+        guard rings.indices.contains(ringIndex), moments.indices.contains(index) else { return }
+        rings[ringIndex].moments = moments
+        momentIndex = index
     }
 
     /// Tries the one showing again after a failure.

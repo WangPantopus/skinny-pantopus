@@ -19,24 +19,38 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import * as api from '@pantopus/api';
-import type { EscrowClaimErrorCode, EscrowedMailView } from '@pantopus/api';
-import { BadgeCheck, Clock, Loader2, Mail, MailCheck, MailX, type LucideIcon } from 'lucide-react';
+import type { EscrowClaimErrorCode, EscrowedMailView, GuestOpenCardResponse } from '@pantopus/api';
+import { BadgeCheck, Clock, Loader2, Mail, MailCheck, MailX, X, type LucideIcon } from 'lucide-react';
 import { confirmStore } from '@/components/ui/confirm-store';
 import { isMissingName } from '@/components/profile/NamePrompt';
 import { launchFeatures } from '@/lib/featureFlags';
 import CardLinkScene, { cardLinkStyles as table, type CardLinkSceneFront } from './cards/CardLinkScene';
 import { PaperFront } from './cards/CardPaper';
+import CardTable, { type TableMenuItem } from './cards/CardTable';
+import { firstNameOf } from './cards/cardArt';
 import { travelCameLine } from './cards/TravelPostmarks';
 
 type Letter = EscrowedMailView['mail'];
+
+/**
+ * Off (the read has no `improved`): the letter as the page drew it before the improvements, so nothing opens before
+ * signing in, whatever else the answer carries.
+ */
+function beforeImprovements(letter: Letter): Letter {
+  if (!letter.card?.guest_open) return letter;
+  const { guest_open: _guestOpen, ...card } = letter.card;
+  return { ...letter, card };
+}
 type ClosedCode = Extract<EscrowClaimErrorCode, 'MAIL_LINK_INVALID' | 'MAIL_CLAIMED' | 'MAIL_EXPIRED' | 'MAIL_WITHDRAWN'> | 'UNAVAILABLE';
 type ViewState =
   | { phase: 'loading' }
   | { phase: 'closed'; code: ClosedCode; card?: boolean; said?: string }
-  | { phase: 'ready'; letter: Letter };
+  /** `improved`: the read said the card improvements of November 28 are on (absent: the page from before them). */
+  | { phase: 'ready'; letter: Letter; improved: boolean };
 
 // A Christmas card (holiday_cards) closes in card words: the server marks its answer `card: true`.
 const closedForCard = (err: unknown): boolean => Boolean((err as { data?: { card?: unknown } } | null)?.data?.card);
@@ -191,25 +205,39 @@ const TABLE_LOOK: CodeLook = {
  * their mailbox. Signing in another way stays below. Without a mail id (Look it over) it's drawn as the page first
  * shows it, and does nothing.
  */
-function CodeSignIn({ letter, look, mailId, token, loginHref, onSignedIn }: {
+type KeepIntent = 'save' | 'reply' | 'pass-on' | 'send-back';
+
+function CodeSignIn({ letter, look, mailId, token, loginHref, onSignedIn, initialCode = '', submitLabel }: {
   letter: LinkPageLetter;
   look: CodeLook;
   mailId?: string;
   token?: string;
   loginHref?: string;
   onSignedIn?: () => void;
+  /** Pre-filled 6-digit code from the code email's return link (never auto-submitted on GET). */
+  initialCode?: string;
+  /** Optional custom CTA label on the code confirmation button (e.g. "Save card & write back"). */
+  submitLabel?: string;
 }) {
   const card = letter.card ?? null;
   const byLink = Boolean(card?.by_link);
   const noun = card ? 'card' : 'letter';
   const live = Boolean(mailId && token);
+  const hasPrefill = Boolean(initialCode && !byLink && letter.sentTo);
   const [email, setEmail] = useState('');
-  const [sentTo, setSentTo] = useState<string | null>(null);
-  const [code, setCode] = useState('');
+  const [sentTo, setSentTo] = useState<string | null>(hasPrefill ? letter.sentTo : null);
+  const [code, setCode] = useState(hasPrefill ? initialCode : '');
   const [busy, setBusy] = useState<'send' | 'check' | null>(null);
   const [said, setSaid] = useState<string | null>(null);
   const [wait, setWait] = useState(0);
   const codeInput = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (initialCode && !byLink && letter.sentTo && !sentTo) {
+      setSentTo(letter.sentTo);
+      setCode(initialCode);
+    }
+  }, [initialCode, byLink, letter.sentTo, sentTo]);
 
   useEffect(() => {
     if (wait <= 0) return undefined;
@@ -278,7 +306,7 @@ function CodeSignIn({ letter, look, mailId, token, loginHref, onSignedIn }: {
         />
         <button type="submit" className={look.primary} disabled={busy !== null} data-testid="cardLinkCodeOpen">
           {busy === 'check' ? <Loader2 size={18} className="animate-spin" /> : null}
-          {card ? 'Open your card' : 'Read the letter'}
+          {submitLabel ?? (card ? 'Open your card' : 'Read the letter')}
         </button>
         {said ? <div role="alert" className={look.alert}>{said}</div> : null}
         <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1">
@@ -406,13 +434,13 @@ function HomeStep({ letter, look, letterHref }: {
  * Signed out: sign in or create an account with the address it was sent to. Without links (Look it over) it's drawn
  * as the page shows it, and does nothing.
  */
-export function LinkPageSignIn({ letter, loginHref, registerHref, mailId, token, onSignedIn }: {
-  letter: LinkPageLetter; loginHref?: string; registerHref?: string; mailId?: string; token?: string; onSignedIn?: () => void;
+export function LinkPageSignIn({ letter, loginHref, registerHref, mailId, token, onSignedIn, initialCode = '' }: {
+  letter: LinkPageLetter; loginHref?: string; registerHref?: string; mailId?: string; token?: string; onSignedIn?: () => void; initialCode?: string;
 }) {
   if (opensWithCode(letter)) {
     return (
       <div className="mt-5">
-        <CodeSignIn letter={letter} look={PANEL_LOOK} mailId={mailId} token={token} loginHref={loginHref} onSignedIn={onSignedIn} />
+        <CodeSignIn letter={letter} look={PANEL_LOOK} mailId={mailId} token={token} loginHref={loginHref} onSignedIn={onSignedIn} initialCode={initialCode} />
       </div>
     );
   }
@@ -450,17 +478,105 @@ export function CardLinkWords({ letter }: { letter: LinkPageLetter }) {
   );
 }
 
-/** Signed out, on the table: a code to the address it was sent to (by link, to theirs), or signing in another way. */
-export function CardLinkSignIn({ letter, loginHref, registerHref, mailId, token, onSignedIn }: {
-  letter: LinkPageLetter; loginHref?: string; registerHref?: string; mailId?: string; token?: string; onSignedIn?: () => void;
+/** Signed out, on the table: open the card right away (when guest_open is on), or sign in with a code to save/keep it. */
+export function CardLinkSignIn({
+  letter,
+  loginHref,
+  registerHref,
+  mailId,
+  token,
+  onSignedIn,
+  onGuestOpen,
+  openingGuest = false,
+  guestOpenError = null,
+  guestOpenedOnce = false,
+  initialCode = '',
+}: {
+  letter: LinkPageLetter;
+  loginHref?: string;
+  registerHref?: string;
+  mailId?: string;
+  token?: string;
+  onSignedIn?: () => void;
+  onGuestOpen?: () => void;
+  openingGuest?: boolean;
+  guestOpenError?: string | null;
+  guestOpenedOnce?: boolean;
+  initialCode?: string;
 }) {
-  const byLink = Boolean(letter.card?.by_link);
+  const card = letter.card ?? null;
+  const byLink = Boolean(card?.by_link);
   const byNumber = !letter.sentTo.includes('@');
+  const sealed = Boolean(card?.sealed);
+  const guestOpen = Boolean(card?.guest_open);
+  const live = Boolean(mailId && token);
+  const first = firstNameOf(letter.senderName);
+  const [showSignIn, setShowSignIn] = useState(Boolean(initialCode || guestOpenedOnce));
+
+  useEffect(() => {
+    if (initialCode || guestOpenedOnce) setShowSignIn(true);
+  }, [initialCode, guestOpenedOnce]);
+
+  if (guestOpen) {
+    const primaryWords = sealed
+      ? (guestOpenedOnce ? 'Peek at the envelope again' : 'Peek at the envelope')
+      : (guestOpenedOnce ? 'Open it again' : 'Open your card');
+    const subline = sealed
+      ? (byLink
+        ? 'Save it to your mailbox so it’s waiting for you on Christmas morning.'
+        : 'We’ll email you on Christmas morning when the seal lifts — or save it to your mailbox now.')
+      : guestOpenedOnce
+        ? `Save ${first}’s card to your free Pantopus mailbox to keep it on your Mantel, write back, or send your own.`
+        : 'Open and read it right here — no account needed.';
+    return (
+      <div className={table.actions} data-testid="cardLinkGuestActions">
+        {live && onGuestOpen ? (
+          <button type="button" className={table.primary} disabled={openingGuest} onClick={onGuestOpen} data-testid="cardLinkGuestOpen">
+            {openingGuest ? <Loader2 size={18} className="animate-spin" /> : null}
+            {primaryWords}
+          </button>
+        ) : (
+          <span className={table.primary}>{primaryWords}</span>
+        )}
+        <p className={table.line}>{subline}</p>
+        {guestOpenError ? <div role="alert" className={table.alert}>{guestOpenError}</div> : null}
+        {!live ? (
+          <span className={table.secondary}>{sealed ? 'Save for Christmas morning' : 'Save to my mailbox'}</span>
+        ) : showSignIn ? (
+          <div className="mt-1 flex w-full flex-col gap-2.5" data-testid="cardLinkSavePanel">
+            <div className={table.keepDivider}>{sealed ? 'Save to your mailbox' : 'Keep it or write back'}</div>
+            {opensWithCode(letter) ? (
+              <CodeSignIn
+                letter={letter}
+                look={TABLE_LOOK}
+                mailId={mailId}
+                token={token}
+                loginHref={loginHref}
+                onSignedIn={onSignedIn}
+                initialCode={initialCode}
+                submitLabel="Save to my mailbox"
+              />
+            ) : (
+              <>
+                {loginHref ? <Link href={loginHref} className={table.secondary}>Sign in</Link> : null}
+                {registerHref ? <Link href={registerHref} className={table.secondary}>Create a free account</Link> : null}
+              </>
+            )}
+          </div>
+        ) : (
+          <button type="button" className={table.secondary} onClick={() => setShowSignIn(true)} data-testid="cardLinkShowSave">
+            {sealed ? 'Save for Christmas morning' : 'Save to my mailbox'}
+          </button>
+        )}
+      </div>
+    );
+  }
+
   if (opensWithCode(letter)) {
     return (
       <div className={table.actions}>
         <h2>Open your card</h2>
-        <CodeSignIn letter={letter} look={TABLE_LOOK} mailId={mailId} token={token} loginHref={loginHref} onSignedIn={onSignedIn} />
+        <CodeSignIn letter={letter} look={TABLE_LOOK} mailId={mailId} token={token} loginHref={loginHref} onSignedIn={onSignedIn} initialCode={initialCode} />
       </div>
     );
   }
@@ -472,6 +588,136 @@ export function CardLinkSignIn({ letter, loginHref, registerHref, mailId, token,
       {registerHref ? <Link href={registerHref} className={table.secondary}>Create a free account</Link> : <span className={table.secondary}>Create a free account</span>}
       {byLink ? null : <p className={table.small}>Use {letter.sentTo}, the {byNumber ? 'number' : 'address'} this card was sent to.</p>}
     </div>
+  );
+}
+
+/** Modal sheet over the full-screen guest CardTable when the reader taps Write back, Pass it on, or Save. */
+function GuestKeepSheet({
+  intent,
+  letter,
+  mailId,
+  token,
+  loginHref,
+  signedIn,
+  askName,
+  wrongAccount,
+  account,
+  claiming,
+  switching,
+  problem,
+  ownWords,
+  initialCode,
+  onClose,
+  onSignedIn,
+  onNamed,
+  onClaim,
+  onSwitchAccount,
+}: {
+  intent: KeepIntent;
+  letter: LinkPageLetter;
+  mailId: string;
+  token: string;
+  loginHref: string;
+  signedIn: boolean | null;
+  askName: boolean;
+  wrongAccount: boolean;
+  account: string;
+  claiming: boolean;
+  switching: boolean;
+  problem: 'MAIL_OWN_LETTER' | 'FAILED' | 'SIGN_OUT' | null;
+  ownWords: string;
+  initialCode: string;
+  onClose: () => void;
+  onSignedIn: () => void;
+  onNamed: () => void;
+  onClaim: () => void;
+  onSwitchAccount: () => void;
+}) {
+  const first = firstNameOf(letter.senderName);
+  const byNumber = !letter.sentTo.includes('@');
+  const copy: Record<KeepIntent, { title: string; intro: string; cta: string }> = {
+    reply: {
+      title: `Write back to ${first}`,
+      intro: `Save ${first}’s card to your free Pantopus mailbox and send a note back.`,
+      cta: `Save & write back`,
+    },
+    'pass-on': {
+      title: 'Pass this card on',
+      intro: `Save ${first}’s card to your free Pantopus mailbox, then pass it on free to up to two people.`,
+      cta: 'Save & pass it on',
+    },
+    'send-back': {
+      title: `Send ${first} a Christmas card`,
+      intro: `Save ${first}’s card to your free Pantopus mailbox — your first 7 cards are free.`,
+      cta: 'Save & send a card',
+    },
+    save: {
+      title: 'Save to your mailbox',
+      intro: `Keep ${first}’s card on your Mantel, write back anytime, or send up to 7 free cards.`,
+      cta: 'Save to my mailbox',
+    },
+  };
+  const words = copy[intent];
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') { event.stopPropagation(); onClose(); } };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [onClose]);
+
+  return createPortal(
+    <div className={table.keepShade} data-ui onClick={onClose} data-testid="cardGuestKeepSheet">
+      <section role="dialog" aria-modal="true" aria-labelledby="cardGuestKeepTitle" className={table.keepSheet} data-scroll onClick={(event) => event.stopPropagation()}>
+        <div className={table.keepHead}>
+          <h2 id="cardGuestKeepTitle">{words.title}</h2>
+          <button type="button" className={table.keepClose} onClick={onClose} aria-label="Close" data-testid="cardGuestKeepClose">
+            <X size={18} aria-hidden />
+          </button>
+        </div>
+        <p className={table.keepIntro}>{words.intro}</p>
+        {signedIn === false ? (
+          <CodeSignIn
+            letter={letter}
+            look={TABLE_LOOK}
+            mailId={mailId}
+            token={token}
+            loginHref={loginHref}
+            onSignedIn={onSignedIn}
+            initialCode={initialCode}
+            submitLabel={words.cta}
+          />
+        ) : signedIn === true && wrongAccount ? (
+          <div className="flex flex-col gap-2.5">
+            <div role="alert" className={table.alert}>
+              This card was sent to {letter.sentTo}
+              {account ? <>, and you’re signed in as <b>{account}</b></> : null}.
+              {' '}Sign in or create an account with that {byNumber ? 'number' : 'address'} to save it.
+            </div>
+            <button type="button" onClick={onSwitchAccount} disabled={switching} className={table.primary}>
+              {switching && <Loader2 size={18} className="animate-spin" />}
+              Use another account
+            </button>
+            {problem === 'SIGN_OUT' && <p role="alert" className={table.line}>Sign-out couldn’t be confirmed. Try again before using another account.</p>}
+          </div>
+        ) : signedIn === true && askName ? (
+          <div className="flex flex-col gap-2.5">
+            <NameStep letter={letter} look={TABLE_LOOK} busy={claiming} onOpen={onNamed} />
+            {problem === 'MAIL_OWN_LETTER' && <div role="alert" className={table.alert}>{ownWords}</div>}
+            {problem === 'FAILED' && <div role="alert" className={table.alert}>Couldn’t add the card to your mailbox. Check your connection and try again.</div>}
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2.5">
+            <button type="button" onClick={onClaim} disabled={claiming} className={table.primary} data-testid="cardGuestKeepConfirm">
+              {claiming ? <Loader2 size={18} className="animate-spin" /> : null}
+              {words.cta}
+            </button>
+            {problem === 'MAIL_OWN_LETTER' && <div role="alert" className={table.alert}>{ownWords}</div>}
+            {problem === 'FAILED' && <div role="alert" className={table.alert}>Couldn’t add the card to your mailbox. Check your connection and try again.</div>}
+          </div>
+        )}
+      </section>
+    </div>,
+    document.body,
   );
 }
 
@@ -513,11 +759,53 @@ export default function OpenLetterView({ mailId, token, isCard = false }: {
   // Someone who just gave their name and has no home yet is offered one once the card is theirs (HomeStep).
   const justNamed = useRef(false);
   const [askHome, setAskHome] = useState(false);
+  // Pre-filled 6-digit code from the code email's return link (never auto-submitted; stripped from the URL on mount).
+  const [initialCode, setInitialCode] = useState('');
+  // Guest card opening before sign-up (POST /api/mailbox/claim/:mailId/open): full tactile CardTable right in browser.
+  const [guestCard, setGuestCard] = useState<GuestOpenCardResponse | null>(null);
+  const [guestTableOpen, setGuestTableOpen] = useState(false);
+  const [guestOpenedOnce, setGuestOpenedOnce] = useState(false);
+  const [openingGuest, setOpeningGuest] = useState(false);
+  const [guestOpenError, setGuestOpenError] = useState<string | null>(null);
+  const [guestReplay, setGuestReplay] = useState(0);
+  const intentKey = `pantopus:card-keep-intent:${mailId}`;
+  const [keepIntent, setKeepIntentState] = useState<KeepIntent | null>(null);
+  const setKeepIntent = (next: KeepIntent | null) => {
+    setKeepIntentState(next);
+    try {
+      if (next) window.sessionStorage.setItem(intentKey, next);
+      else window.sessionStorage.removeItem(intentKey);
+    } catch { /* storage blocked */ }
+  };
+  const readStoredIntent = (): KeepIntent | null => {
+    try {
+      const value = window.sessionStorage.getItem(intentKey);
+      return value === 'save' || value === 'reply' || value === 'pass-on' || value === 'send-back' ? value : null;
+    } catch {
+      return null;
+    }
+  };
+  const clearStoredIntent = () => {
+    try { window.sessionStorage.removeItem(intentKey); } catch { /* storage blocked */ }
+  };
 
   const here = `/open/${mailId}?token=${encodeURIComponent(token)}`;
   const loginHref = `/login?redirectTo=${encodeURIComponent(here)}`;
   // A claimed letter is the person's own: it is in their Personal drawer.
   const letterHref = `/app/mailbox/personal/${mailId}`;
+
+  // Only while the read says the improvements are on; before them the page left `?code=` alone.
+  const improvedRead = state.phase === 'ready' && state.improved;
+  useEffect(() => {
+    if (typeof window === 'undefined' || !improvedRead) return;
+    const url = new URL(window.location.href);
+    const rawCode = (url.searchParams.get('code') || '').replace(/\D/g, '').slice(0, 10);
+    if (rawCode.length >= 6) {
+      setInitialCode(rawCode);
+      url.searchParams.delete('code');
+      window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
+    }
+  }, [improvedRead]);
 
   useEffect(() => {
     let cancelled = false;
@@ -527,7 +815,7 @@ export default function OpenLetterView({ mailId, token, isCard = false }: {
     }
     setState({ phase: 'loading' });
     api.mailCompose.getEscrowedMailPublic(mailId, token)
-      .then((res) => { if (!cancelled) setState({ phase: 'ready', letter: res.mail }); })
+      .then((res) => { if (!cancelled) setState({ phase: 'ready', letter: res.improved ? res.mail : beforeImprovements(res.mail), improved: Boolean(res.improved) }); })
       .catch((err: unknown) => {
         if (cancelled) return;
         setState({ phase: 'closed', code: closedCode(err), card: closedForCard(err) || (isCard && closedCode(err) === 'UNAVAILABLE'), said: closedCode(err) === 'UNAVAILABLE' ? undefined : serverWords(err) });
@@ -567,23 +855,62 @@ export default function OpenLetterView({ mailId, token, isCard = false }: {
     void readName();
   }, [signedIn, ready, hasName]);
 
-  const claim = async () => {
-    setClaiming(true);
-    setProblem(null);
-    if (hasName === null && !(await readName())) { setClaiming(false); return; }
+  const openGuest = async () => {
+    if (openingGuest) return;
+    if (guestCard) {
+      setGuestTableOpen(true);
+      setGuestOpenedOnce(true);
+      return;
+    }
+    setOpeningGuest(true);
+    setGuestOpenError(null);
     try {
-      await api.mailCompose.claimEscrowedMail(mailId, token);
-      if (justNamed.current) {
-        const mine = await api.homes.getMyHomes().catch(() => null);
-        if (mine && mine.homes.length === 0) { setAskHome(true); setClaiming(false); return; }
-      }
-      router.push(letterHref);
+      const opened = await api.mailCompose.openEscrowedCardGuest(mailId, token);
+      setGuestCard(opened);
+      setGuestTableOpen(true);
+      setGuestOpenedOnce(true);
     } catch (err: unknown) {
       const code = (err as { code?: unknown } | null)?.code;
       if (typeof code === 'string' && CLOSED_CODES.has(code)) {
+        setState({ phase: 'closed', code: code as ClosedCode, card: true, said: serverWords(err) });
+      } else {
+        setGuestOpenError(serverWords(err) ?? 'Couldn’t open the card just now. Check your connection and try again.');
+      }
+    } finally {
+      setOpeningGuest(false);
+    }
+  };
+
+  const claim = async (explicitIntent: KeepIntent | null = null) => {
+    setClaiming(true);
+    setProblem(null);
+    if (hasName === null && !(await readName())) { setClaiming(false); return; }
+    const intent = state.phase === 'ready' && state.improved ? explicitIntent ?? keepIntent ?? readStoredIntent() : null;
+    const targetHref = intent && intent !== 'save' ? `${letterHref}?intent=${encodeURIComponent(intent)}` : letterHref;
+    try {
+      await api.mailCompose.claimEscrowedMail(mailId, token);
+      clearStoredIntent();
+      if (justNamed.current && (!intent || intent === 'save')) {
+        const mine = await api.homes.getMyHomes().catch(() => null);
+        if (mine && mine.homes.length === 0) {
+          setGuestTableOpen(false);
+          setKeepIntentState(null);
+          setAskHome(true);
+          setClaiming(false);
+          return;
+        }
+      }
+      router.push(targetHref);
+    } catch (err: unknown) {
+      const code = (err as { code?: unknown } | null)?.code;
+      if (typeof code === 'string' && CLOSED_CODES.has(code)) {
+        setGuestTableOpen(false);
+        setKeepIntent(null);
         setState({ phase: 'closed', code: code as ClosedCode, card: closedForCard(err) || Boolean(state.phase === 'ready' && state.letter.card), said: serverWords(err) });
       } else if (code === 'MAIL_UNAVAILABLE' && state.phase === 'ready' && state.letter.card) {
         // Refused for a reason it doesn't name (one of them has blocked the other): the server's words, on the same page as a closed card.
+        setGuestTableOpen(false);
+        setKeepIntent(null);
         setState({ phase: 'closed', code: 'MAIL_WITHDRAWN', card: true, said: serverWords(err) });
       } else if (code === 'MAIL_CONTACT_MISMATCH') {
         setWrongAccount(true);
@@ -695,7 +1022,7 @@ export default function OpenLetterView({ mailId, token, isCard = false }: {
     );
   }
 
-  const { letter } = state;
+  const { letter, improved } = state;
   // A Christmas card shows its front (unless it's sealed until Christmas), never its note, until it's in their mailbox.
   const card = letter.card ?? null;
   const noun = card ? 'card' : 'letter';
@@ -704,13 +1031,81 @@ export default function OpenLetterView({ mailId, token, isCard = false }: {
   const ownWords = byLink ? 'This is your own card. Send the link to the person it’s for.' : `You sent this ${noun}. It’s waiting for the person you wrote to.`;
 
   if (launchFeatures.cardTable && card) {
+    const first = firstNameOf(letter.senderName);
+    if (guestTableOpen && guestCard) {
+      const guestSealed = guestCard.card.sealed;
+      const guestMenu: TableMenuItem[] = [
+        { label: 'Open it again', onSelect: () => setGuestReplay((n) => n + 1) },
+        { label: guestSealed ? 'Save for Christmas morning' : 'Save to my mailbox', onSelect: () => setKeepIntent('save') },
+        ...(guestSealed ? [] : [
+          { label: `Write back to ${first}`, onSelect: () => setKeepIntent('reply') },
+          { label: `Send ${first} a card`, onSelect: () => setKeepIntent('send-back') },
+        ]),
+        ...(guestCard.journey && !guestSealed ? [{ label: 'See its journey', onSelect: () => router.push(`/cards/journey/${guestCard.journey}`) }] : []),
+      ];
+      return (
+        <CardTable
+          card={guestCard.card}
+          improved={improved}
+          note={guestCard.note}
+          fromName={guestCard.senderName}
+          toName={guestCard.toName || 'You'}
+          mailedOn={guestCard.mailedOn}
+          replay={guestReplay}
+          paused={keepIntent !== null}
+          closeLabel="Close card"
+          menu={guestMenu}
+          writeBack={guestSealed ? null : { label: `Write back to ${first}`, short: 'Write back', onSelect: () => setKeepIntent('reply') }}
+          sendBack={guestSealed ? null : { label: 'Save to my mailbox', short: 'Save card', onSelect: () => setKeepIntent('save') }}
+          passOn={!guestSealed && guestCard.journey ? { label: 'Pass it on', onSelect: () => setKeepIntent('pass-on') } : null}
+          journey={!guestSealed && guestCard.journey ? { label: 'See its journey', onSelect: () => router.push(`/cards/journey/${guestCard.journey}`) } : null}
+          mediaFrom={(fileId) => ({ claim: mailId, token, fileId })}
+          onClose={() => { setKeepIntent(null); setGuestTableOpen(false); }}
+          overlay={keepIntent ? (
+            <GuestKeepSheet
+              intent={keepIntent}
+              letter={letter}
+              mailId={mailId}
+              token={token}
+              loginHref={loginHref}
+              signedIn={signedIn}
+              askName={askName}
+              wrongAccount={wrongAccount}
+              account={account}
+              claiming={claiming}
+              switching={switching}
+              problem={problem}
+              ownWords={ownWords}
+              initialCode={initialCode}
+              onClose={() => setKeepIntent(null)}
+              onSignedIn={() => void claim(keepIntent)}
+              onNamed={() => { justNamed.current = true; setHasName(true); void claim(keepIntent); }}
+              onClaim={() => void claim(keepIntent)}
+              onSwitchAccount={() => void switchAccount()}
+            />
+          ) : null}
+        />
+      );
+    }
+
     return (
-      <CardLinkScene front={linkPageFront(letter)} postmarks={letter.card?.travel?.postmarks ?? null}>
+      <CardLinkScene front={linkPageFront(letter)} postmarks={letter.card?.travel?.postmarks ?? null} improved={improved}>
         <CardLinkWords letter={letter} />
 
         {signedIn === false && (
-          <CardLinkSignIn letter={letter} loginHref={loginHref} registerHref={`/register?redirectTo=${encodeURIComponent(here)}`}
-            mailId={mailId} token={token} onSignedIn={() => void claim()} />
+          <CardLinkSignIn
+            letter={letter}
+            loginHref={loginHref}
+            registerHref={`/register?redirectTo=${encodeURIComponent(here)}`}
+            mailId={mailId}
+            token={token}
+            onSignedIn={() => void claim()}
+            onGuestOpen={() => void openGuest()}
+            openingGuest={openingGuest}
+            guestOpenError={guestOpenError}
+            guestOpenedOnce={guestOpenedOnce}
+            initialCode={initialCode}
+          />
         )}
 
         {signedIn === true && wrongAccount && (
@@ -718,9 +1113,15 @@ export default function OpenLetterView({ mailId, token, isCard = false }: {
             <div role="alert" className={table.alert}>
               This card was sent to {letter.sentTo}
               {account ? <>, and you’re signed in as <b>{account}</b></> : null}.
-              {' '}Sign in or create an account with that {byNumber ? 'number' : 'address'} to open it.
+              {' '}Sign in or create an account with that {byNumber ? 'number' : 'address'} to {improved ? 'save' : 'open'} it.
             </div>
-            <button type="button" onClick={() => void switchAccount()} disabled={switching} className={table.primary}>
+            {card.guest_open ? (
+              <button type="button" onClick={() => void openGuest()} disabled={openingGuest} className={table.primary} data-testid="cardLinkGuestOpen">
+                {openingGuest ? <Loader2 size={18} className="animate-spin" /> : null}
+                {card.sealed ? 'Peek at the envelope' : 'Open and read anyway'}
+              </button>
+            ) : null}
+            <button type="button" onClick={() => void switchAccount()} disabled={switching} className={card.guest_open ? table.secondary : table.primary}>
               {switching && <Loader2 size={18} className="animate-spin" />}
               Use another account
             </button>
@@ -756,7 +1157,9 @@ export default function OpenLetterView({ mailId, token, isCard = false }: {
 
         <p className={table.small}>
           {letter.expiresAt ? `It waits until ${fmtDate(letter.expiresAt)}. ` : ''}
-          {byLink ? 'The first person to open it keeps it. ' : `Only the account with that ${byNumber ? 'number' : 'address'} can add it to a mailbox. `}
+          {byLink
+            ? (card.guest_open ? 'The first person to save it to a mailbox keeps it. ' : 'The first person to open it keeps it. ')
+            : `Only the account with that ${byNumber ? 'number' : 'address'} can ${improved ? 'save it to' : 'add it to'} a mailbox. `}
           <Link href="/start">What is Pantopus?</Link>
         </p>
       </CardLinkScene>
@@ -769,7 +1172,7 @@ export default function OpenLetterView({ mailId, token, isCard = false }: {
 
       {signedIn === false && (
         <LinkPageSignIn letter={letter} loginHref={loginHref} registerHref={`/register?redirectTo=${encodeURIComponent(here)}`}
-          mailId={mailId} token={token} onSignedIn={() => void claim()} />
+          mailId={mailId} token={token} onSignedIn={() => void claim()} initialCode={initialCode} />
       )}
 
       {signedIn === true && wrongAccount && (

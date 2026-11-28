@@ -76,7 +76,11 @@ export default function PostRow({
           )}
         </div>
       )}
-      <PostCard post={post} {...card} overMedia={studioPostPicture} />
+      {/* Today's card, one size step smaller in the new Pulse only (PHASE-6 C), drawn from this wrapper so its own file is
+          untouched (pulse.css, .rp-post-card). */}
+      <div className="rp-post-card">
+        <PostCard post={post} {...card} overMedia={studioPostPicture} />
+      </div>
       <PassItOn post={post} />
       {onAnswer && (post as Post & { eyes_on?: { open: boolean } | null }).eyes_on?.open && (
         <button

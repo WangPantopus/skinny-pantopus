@@ -74,6 +74,7 @@ struct ReinventedCircleDetail: View {
                 .tint(Theme.Color.primarySolid)
                 .disabled(model.busy)
                 .accessibilityIdentifier("reinventedCircles.keep")
+                ReinventedCircleWindowChoice(circleId: circle.id) // phase 4: homes talk to homes (CONTRACT 9f)
                 if circle.mine { makerControls(circle) }
                 if let problem = model.problem { ReinventedCircleProblem(problem) }
                 HStack(spacing: Spacing.s2) {

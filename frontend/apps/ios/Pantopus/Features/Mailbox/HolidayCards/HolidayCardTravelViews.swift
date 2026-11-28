@@ -15,14 +15,16 @@ struct HolidayCardTravelRow: View {
     @Binding var isOn: Bool
     /// "Maya", or nil for an address or a link ("They").
     let firstName: String?
+    /// The words of cards-next 3.4 ("Let this card travel").
+    var improved = false
 
     var body: some View {
         Toggle(isOn: $isOn) {
             VStack(alignment: .leading, spacing: 2) {
-                Text("Let it travel")
+                Text(improved ? "Let this card travel" : "Let it travel")
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(MailPaper.cardText)
-                Text(HolidayCardTravelWords.switchLine(firstName))
+                Text(improved ? HolidayCardTravelWords.privacyLine : HolidayCardTravelWords.switchLine(firstName))
                     .font(.system(size: 13))
                     .foregroundStyle(MailPaper.cardTextMuted)
                     .fixedSize(horizontal: false, vertical: true)
@@ -41,6 +43,10 @@ enum HolidayCardTravelWords {
     static func switchLine(_ firstName: String?) -> String {
         "\(firstName ?? "They") can pass this card on. Its towns show on a map, never names."
     }
+
+    /// Under "Let this card travel" (cards-next 3.4).
+    static let privacyLine = "Let them pass this card on free to two people. Only your city appears on the postmark — "
+        + "never your note, photo, or street address."
 
     /// The line "On its way to Maya" gains once a travelling card is sent.
     static let sentLine = "It can travel. You’ll hear when it reaches a town."

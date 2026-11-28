@@ -456,7 +456,8 @@ async function postMoment(line, who, days, resume = false) {
     location,
     labels,
     labelKind: momentPlace.labelKind(labels, labels.place_label),
-    takenAt: store.takenAtShown(line.taken_at),
+    // Founder, 2026-11-28: a seeded post never shows when its picture was taken (no "Taken Sept 23" line).
+    takenAt: null,
     altitude,
   });
   // Already handled for the connections' push (momentNotify.notifyConnections leaves a Moment with `notify` alone).
@@ -510,7 +511,7 @@ async function postPulse(line, who, kind) {
     geocodeProvider: 'mapbox',
     geocodeAccuracy: tag.kind,
     geocodePlaceId: tag.placeId,
-    mediaLocations: [{ latitude: line.latitude, longitude: line.longitude, capturedAt: line.taken_at || null }],
+    mediaLocations: [{ latitude: line.latitude, longitude: line.longitude, capturedAt: null }],
   });
   if (answer.status !== 201 || !answer.body?.post?.id) {
     throw new Error(`the post was refused (${answer.status}: ${answer.body?.error || 'no reason'})`);
@@ -531,14 +532,12 @@ async function momentHeight(line, user) {
 }
 
 async function describeMoment(line, plan, user) {
-  const taken = store.takenAtShown(line.taken_at);
-  const day = taken ? ` (reads "Taken ${new Date(taken).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'America/Los_Angeles' })}")` : '';
   const height = await momentHeight(line, user);
   // A manifest prepared before heights were read has no altitude_m at all: preparing again reads it, keeping captions.
   const shows = height ? `, ${height.altitude_ft.toLocaleString('en-US')} ft up`
     : !('altitude_m' in line) ? ', no height (run prepare again to read it from the file)'
       : line.altitude_m == null ? ', no height in the file' : ', no height (heights are off for this account)';
-  return `Moment for ${plan.days} day${plan.days === 1 ? '' : 's'} at ${line.place_label}${day}${shows}`;
+  return `Moment for ${plan.days} day${plan.days === 1 ? '' : 's'} at ${line.place_label}${shows}`;
 }
 
 async function run() {

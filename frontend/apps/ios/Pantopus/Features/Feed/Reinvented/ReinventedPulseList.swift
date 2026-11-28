@@ -21,6 +21,8 @@ struct ReinventedPulseList: View {
     let onRefreshStrip: () async -> Void
     /// "Tonight in <town>" (8k): the film's Moments as one run in the viewer.
     var onOpenRun: ([MomentRingDTO]) -> Void = { _ in }
+    /// Nothing passed the filters (PHASE-5 B): clear them.
+    var onClearFilters: () -> Void = {}
 
     var body: some View {
         switch model.load {
@@ -59,12 +61,17 @@ struct ReinventedPulseList: View {
                 if let strip, !strip.isEmpty, model.reach != "explore" {
                     ReinventedAliveStrip(strip: strip, onOpenMoment: onOpenMoment, onOpenRing: onOpenRing)
                 }
+                // Your day (CONTRACT 8k): in the evening, the person's own photos of the day, private until they share.
+                if model.reach == "around", model.chip == "all" { YourDayCard() }
                 // Tonight in <town> (CONTRACT 8k): in the evening, on Around me's whole list, read once the list has come.
                 if model.reach == "around", model.chip == "all" { ReinventedTownFilmCard(onPlay: onOpenRun) }
                 // Eyes on near you (CONTRACT 8f): read only once the Ask chip is picked.
                 if model.chip == "ask" { EyesOnNearSection(viewer: model.viewer) }
                 // Relics near you (CONTRACT 8g): read only once the Spots chip is picked.
                 if model.chip == "spots" { RelicsNearSection() }
+                // Places you follow (CONTRACT 9c, phase 4): at the top of Explore.
+                if model.reach == "explore" { ReinventedFollowedPlacesSection(pulse: model, moment: onOpenMoment, post: onOpenPost) }
+                if model.reach == "close" { ReinventedWindowsRow() } // phase 4: homes talk to homes (CONTRACT 9f)
                 if model.isEmpty {
                     emptyNote
                 }
@@ -116,7 +123,11 @@ struct ReinventedPulseList: View {
         }
         // Tonight in <town> (8k): only in the evening, only once the list's first page is here (this view is the loaded list).
         .task(id: model.reach == "around" && model.chip == "all") {
-            if model.reach == "around", model.chip == "all" { await ReinventedTownFilmModel.shared.read() }
+            if model.reach == "around", model.chip == "all" {
+                async let day: Void = YourDayModel.shared.read()
+                await ReinventedTownFilmModel.shared.read()
+                await day
+            }
         }
         .accessibilityIdentifier("reinventedPulse.list")
     }
@@ -172,11 +183,33 @@ struct ReinventedPulseList: View {
                 .font(.system(size: 14))
                 .foregroundStyle(Theme.Color.appTextSecondary)
                 .multilineTextAlignment(.center)
+            if model.filters != nil {
+                // Nothing passed the filters: clear them, or look wider.
+                HStack(spacing: Spacing.s3) {
+                    Button("Clear the filters", action: onClearFilters)
+                        .accessibilityIdentifier("reinventedPulse.empty.clearFilters")
+                    Button("Look wider") { Task { await widen() } }
+                        .accessibilityIdentifier("reinventedPulse.empty.wider")
+                }
+                .font(.system(size: 14, weight: .semibold))
+                .frame(minHeight: 44)
+            }
         }
         .frame(maxWidth: .infinity)
         .padding(.horizontal, Spacing.s5)
         .padding(.top, Spacing.s5)
         .accessibilityIdentifier("reinventedPulse.empty")
+    }
+
+    /// One step wider: Close circle to Around me, Around me to its farthest, then Explore.
+    private func widen() async {
+        if model.reach == "close" {
+            await model.pick(reach: "around", miles: model.miles)
+        } else if model.miles < 25 {
+            await model.pick(reach: "around", miles: 25)
+        } else {
+            await model.pick(reach: "explore", miles: model.miles)
+        }
     }
 
     private func bandLine(_ band: ReinventedBandDTO) -> some View {

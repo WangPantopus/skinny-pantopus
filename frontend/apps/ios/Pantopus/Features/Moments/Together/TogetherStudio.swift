@@ -25,6 +25,8 @@ final class TogetherStudio {
         case eyesOnAnswer(askId: String, question: String)
         /// Add a piece to a pinboard (8i): a photo, one per person.
         case pinboardPiece(startId: String, prompt: String)
+        /// One photo of "Your day" (8k), posted from its card: the day's date and the id the app picked for it.
+        case yourDay(date: String, id: String)
     }
 
     /// Set before the Studio opens; cleared when it closes (`ReinventedStudioPresenter.close`).
@@ -107,6 +109,8 @@ final class TogetherStudio {
         case let .pinboardPiece(startId, _):
             // A pinboard's piece is a photo (CONTRACT 8i); anything else posts as an ordinary Moment.
             if case .photo = model.draft { fields.pinboardOf = startId }
+        case let .yourDay(date, id):
+            fields.yourDay = .init(date: date, id: id)
         case nil:
             let title = String(retakeTitle.trimmingCharacters(in: .whitespacesAndNewlines).prefix(60))
             if startsRetake, !title.isEmpty, model.offersRetake { fields.retake = .init(title: title) }
@@ -184,14 +188,21 @@ struct TogetherCreateFields: Encodable, Hashable {
     var joinConvergence: Bool?
     var pinboard: PinboardStart?
     var pinboardOf: String?
+    var yourDay: YourDayKey?
 
     struct PinboardStart: Encodable, Hashable {
         let prompt: String
     }
 
+    /// `your_day` (8k): the day a photo belongs to, and the id the app picked for that day's approval.
+    struct YourDayKey: Encodable, Hashable {
+        let date: String
+        let id: String
+    }
+
     var isEmpty: Bool {
         retake == nil && retakeOf == nil && eyesOnFor == nil && seal == nil && joinConvergence == nil && pinboard == nil
-            && pinboardOf == nil
+            && pinboardOf == nil && yourDay == nil
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -202,6 +213,7 @@ struct TogetherCreateFields: Encodable, Hashable {
         case joinConvergence = "join_convergence"
         case pinboard
         case pinboardOf = "pinboard_of"
+        case yourDay = "your_day"
     }
 
     func encode(to encoder: any Encoder) throws {
@@ -213,6 +225,7 @@ struct TogetherCreateFields: Encodable, Hashable {
         try c.encodeIfPresent(joinConvergence, forKey: .joinConvergence)
         try c.encodeIfPresent(pinboard, forKey: .pinboard)
         try c.encodeIfPresent(pinboardOf, forKey: .pinboardOf)
+        try c.encodeIfPresent(yourDay, forKey: .yourDay)
     }
 }
 

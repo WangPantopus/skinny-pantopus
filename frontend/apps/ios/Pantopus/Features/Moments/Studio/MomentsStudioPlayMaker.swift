@@ -10,7 +10,7 @@ import SwiftUI
 
 struct MomentsStudioPlayMaker: View {
     enum Making: String, CaseIterable, Identifiable {
-        case poll, slider, dial, board, question, guess, countdown, quote, fog, swatch
+        case poll, slider, dial, board, question, guess, countdown, quote, fog, swatch, movingWords
 
         var id: String {
             rawValue
@@ -28,6 +28,7 @@ struct MomentsStudioPlayMaker: View {
             case .quote: "Quote"
             case .fog: "Fog-wipe"
             case .swatch: "Swatch"
+            case .movingWords: "Moving words"
             }
         }
     }
@@ -41,13 +42,19 @@ struct MomentsStudioPlayMaker: View {
     @State private var byNumber = false
     @State private var ends = Date().addingTimeInterval(86400)
     @State private var swatches: Set<Int> = [0, 1]
+    @State private var movingText = ""
+    @State private var movingLettering = "classic"
+    @State private var movingMotion = "drift"
+    @State private var movingColor = MomentMovingWordsColor.white
     @State private var lifted: [String] = []
 
     private var kinds: [Making] {
         Making.allCases.filter { kind in
             switch kind {
             case .fog: model.offersLooks && !(model.marking.studio?.play.contains { $0.kind == .fog } ?? false)
-            case .swatch: model.offersLooks
+            case .swatch: model.offersLooks && !(model.marking.studio?.play.contains { $0.kind == .swatch } ?? false)
+            case .movingWords:
+                model.offersLooks && (model.marking.studio?.play.filter { $0.kind == .movingWords }.count ?? 0) < MomentsMovingWords.most
             default: true
             }
         }
@@ -143,6 +150,8 @@ struct MomentsStudioPlayMaker: View {
             hint("The picture opens frosted; people wipe it clear on their own screen.")
         case .swatch:
             swatchForm
+        case .movingWords:
+            MomentsStudioMovingWordsForm(words: $movingText, lettering: $movingLettering, motion: $movingMotion, color: $movingColor)
         }
         Button { put(kind) } label: {
             Text("Put it on the picture")
@@ -253,7 +262,20 @@ struct MomentsStudioPlayMaker: View {
         case .question, .countdown, .quote: wordsItem(kind)
         case .fog: MomentPlayItem(id: model.playId(.fog), kind: .fog)
         case .swatch: swatchItem()
+        case .movingWords: movingWordsItem()
         }
+    }
+
+    /// Moving words (CONTRACT 7k): one line of the author's own words, a lettering, a motion and a colour.
+    private func movingWordsItem() -> MomentPlayItem? {
+        let words = movingText.replacingOccurrences(of: "\n", with: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !words.isEmpty else { return nil }
+        var item = MomentPlayItem(id: model.playId(.movingWords), kind: .movingWords)
+        item.text = MomentsMovingWords.cut(words)
+        item.lettering = movingLettering
+        item.motion = movingMotion
+        item.color = movingColor
+        return item
     }
 
     private func hint(_ words: String) -> some View {

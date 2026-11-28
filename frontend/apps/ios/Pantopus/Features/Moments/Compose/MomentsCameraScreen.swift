@@ -38,6 +38,8 @@ struct MomentsCameraScreen: View {
         }
         // The timer is the table's: lifted off the table, a countdown stops before it takes anything.
         .onChange(of: duo.pose, initial: true) { _, pose in if pose != .table { camera.cancelCountdown() } }
+        // "Pulse, reinvented" (CONTRACT 9h): the compass, read only while the switch is on and the phone has one.
+        .task { await MomentsStudioCompass.shared.watch() }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("moments.camera")
     }

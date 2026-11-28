@@ -66,6 +66,8 @@ struct MomentDeckStrip: View {
             .padding(.top, Spacing.s2)
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier("moments.viewer.deck")
+            // A step opened by itself (from Pulse's list or a link) brings the deck's other steps into the ring.
+            .task(id: moment.id) { await model.joinDeck(deck, showing: moment.id) }
             .sheet(isPresented: Binding(get: { saves.guideFrom == moment.id }, set: { if !$0 { saves.guideFrom = nil } })) {
                 MomentsFieldGuide { saves.guideFrom = nil }
                     .overViewerSheet()
@@ -194,6 +196,32 @@ extension MomentsViewerModel {
     /// The Moment `id` plays in the ring showing, so a step's bar can open it.
     func plays(_ id: String) -> Bool {
         ring?.moments.contains { $0.id == id } ?? false
+    }
+
+    /// A step opened by itself (Pulse's list and a link open one Moment) reads the deck's other steps this reader may
+    /// see and puts them in the ring, in the deck's order where the step showing is, so the bars can open them and a tap
+    /// on goes to the next step. Steps that ended or that the reader can't open are left out.
+    func joinDeck(_ deck: MomentDeckDTO, showing id: String) async {
+        guard let ring, deck.steps.contains(where: { step in !ring.moments.contains { $0.id == step } }) else { return }
+        var briefs = Dictionary(ring.moments.map { ($0.id, $0) }) { first, _ in first }
+        for step in deck.steps where briefs[step] == nil {
+            guard let read = try? await cache.detail(step) else { continue }
+            briefs[step] = MomentBriefDTO(
+                id: read.id,
+                kind: read.kind,
+                createdAt: read.createdAt,
+                expiresAt: read.expiresAt,
+                seen: false
+            )
+        }
+        guard !Task.isCancelled, moment?.id == id, let now = self.ring,
+              let at = now.moments.firstIndex(where: { $0.id == id }) else { return }
+        let inDeck = Set(deck.steps)
+        let joined = now.moments[..<at].filter { !inDeck.contains($0.id) }
+            + deck.steps.compactMap { briefs[$0] }
+            + now.moments[(at + 1)...].filter { !inDeck.contains($0.id) }
+        guard joined.count != now.moments.count, let index = joined.firstIndex(where: { $0.id == id }) else { return }
+        joinRing(joined, showing: index)
     }
 
     /// Opens the Moment `id` of the ring showing, if it plays in it. Today's screens never call it.

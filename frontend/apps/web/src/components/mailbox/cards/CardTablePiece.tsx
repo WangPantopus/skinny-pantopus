@@ -8,7 +8,7 @@
 // its sheet over the table.
 // ============================================================
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
@@ -207,6 +207,33 @@ export default function CardTablePiece({
   // Open the next card (mail-cards-experience Part 4): only when the Mailbox list opened this card and handed it the
   // others waiting. It replaces this card's page, so ✕ and Back still go to the Mailbox.
   const [waiting] = useState(() => nextCards(piece.id));
+
+  // Hand off from the guest card table: when a recipient tapped Write back, Pass it on, or Send a card before joining,
+  // carry them straight into that action once their card lands in the mailbox, and strip `?intent=` from the URL.
+  // Only while GET /cards says the card improvements are on (before them there was no guest table to come from).
+  const improved = Boolean(season.data?.improved);
+  const intentHandled = useRef(false);
+  useEffect(() => {
+    if (!improved || intentHandled.current || typeof window === 'undefined' || card.sealed || blockedNow) return;
+    const url = new URL(window.location.href);
+    const intent = url.searchParams.get('intent');
+    if (!intent) return;
+    const consume = () => {
+      intentHandled.current = true;
+      url.searchParams.delete('intent');
+      window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
+    };
+    if (intent === 'reply' && !replyPiece && exchange?.can_reply) {
+      consume();
+      setWriting(true);
+    } else if (intent === 'pass-on' && travel?.can_pass_on && travel.next_place) {
+      consume();
+      setPassingOn(true);
+    } else if (intent === 'send-back' && senderId && theirs.isSuccess) {
+      consume();
+      router.push(sendOneBackPath({ userId: senderId, name: from }));
+    }
+  }, [improved, blockedNow, card.sealed, exchange?.can_reply, from, replyPiece, router, senderId, theirs.isSuccess, travel?.can_pass_on, travel?.next_place]);
   const nextCard = waiting.length ? {
     count: waiting.length,
     onOpen: () => {
@@ -299,6 +326,7 @@ export default function CardTablePiece({
       // The joined pair is laid out with room for the reply under the card: a new table when it comes.
       key={reply ? 'joined' : 'card'}
       card={card}
+      improved={improved}
       // Its photo and greeting open through the reader's own route (memories contract section 4); on a reply, the card is
       // the reader's own, from their Sent.
       mediaFrom={replyPiece ? (original ? (fileId) => ({ sent: original.id, fileId }) : null) : (fileId) => ({ piece: piece.id, fileId })}
@@ -390,7 +418,7 @@ export default function CardTablePiece({
           goneWords: passTo.kind === 'link' ? 'Your card is ready.' : `On its way to ${passFirst}.`,
           gone: passSent ? (
             <>
-              <p>{arrivalLine(passSent.card)}</p>
+              <p>{arrivalLine(passSent.card, improved)}</p>
               {passSent.link ? <p data-testid="passOnLink" style={{ userSelect: 'text', WebkitUserSelect: 'text' }}>{passSent.link}</p> : null}
               {takeBackLine(passSent.card) ? <p>{takeBackLine(passSent.card)}</p> : null}
               <div data-row>

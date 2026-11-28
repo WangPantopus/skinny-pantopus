@@ -1,5 +1,7 @@
 # Replacing ATTOM, Smarty and Lob: research, design and build plan
 
+Start the next property-data session with the [November 28 nationwide handoff](handoff-2026-11-28/README.md) and its [copy-ready coordinator prompt](handoff-2026-11-28/prompts.md).
+
 November 5, 2026; updated November 7 and November 11. PR #3418, merged on the founder's OK. This package is the research, design and plan.
 The build is under way ([HANDOFF.md](HANDOFF.md)), and nothing is decided beyond what [decisions.md](decisions.md) marks as
 the founder's. This package merges PR #3418 (national coverage, sources, prices,

@@ -123,7 +123,8 @@ extension SettingsIndexViewModel {
 
     /// The strands row, after Pantopus AI's in the Privacy group; nothing with the switch off or before it was read.
     var strandsChoiceRows: [GroupedListRow] {
-        guard PulseReinventedFlags.shared.isOn, let on = ReinventedStrandsChoice.shared.on else { return [] }
+        guard PulseReinventedFlags.shared.isOn else { return [] }
+        guard let on = ReinventedStrandsChoice.shared.on else { return yourDayReminderRows }
         return [
             GroupedListRow(
                 id: Self.strandsChoiceRow,
@@ -133,11 +134,12 @@ extension SettingsIndexViewModel {
                 control: .toggle(isOn: on),
                 accessibilityIdentifier: "settings.strands"
             )
-        ]
+        ] + yourDayReminderRows
     }
 
     /// The row's switch flipped: saved, or put back when the server says no. True when it was this row.
     func toggleStrandsChoice(_ rowId: String, isOn: Bool) async -> Bool {
+        if await toggleYourDayReminder(rowId, isOn: isOn) { return true }
         guard rowId == Self.strandsChoiceRow else { return false }
         await ReinventedStrandsChoice.shared.set(isOn)
         return true

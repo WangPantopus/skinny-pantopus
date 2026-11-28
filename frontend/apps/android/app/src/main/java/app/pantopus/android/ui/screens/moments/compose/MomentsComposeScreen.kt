@@ -114,6 +114,7 @@ import app.pantopus.android.ui.screens.moments.compose.marks.MomentsMarksPills
 import app.pantopus.android.ui.screens.moments.compose.marks.rememberLooked
 import app.pantopus.android.ui.screens.moments.studio.MomentsStudioStep
 import app.pantopus.android.ui.screens.moments.studio.StudioBeforeAfterActions
+import app.pantopus.android.ui.screens.moments.studio.StudioFrontBackMode
 import app.pantopus.android.ui.screens.moments.viewer.StageSystemBars
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
@@ -140,6 +141,7 @@ fun MomentsComposeScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     // Back from the Studio to today's Post screen (the switch went off): the Studio's own choices go.
     LaunchedEffect(studio) { if (!studio) viewModel.leaveStudio() }
+    var bothCameras by rememberSaveable { mutableStateOf(false) }
     val close by rememberUpdatedState(onClose)
     LaunchedEffect(state.done) { if (state.done) close() }
     StageSystemBars()
@@ -214,18 +216,28 @@ fun MomentsComposeScreen(
 
     Box(modifier = Modifier.fillMaxSize().background(PantopusColors.momentStage).semantics { testTagsAsResourceId = true }) {
         when (state.step) {
-            ComposeStep.Camera ->
-                CameraStep(
-                    state = state,
-                    hasCamera = ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED,
-                    askCamera = { cameraPermission.launch(Manifest.permission.CAMERA) },
-                    onClose = closeOrAsk,
-                    // The in-app camera: a Moment taken here, just now (the Live mark).
-                    onCaptured = { media -> viewModel.captured(media, fromCamera = true) },
-                    onLibrary = openLibrary,
-                    onText = { viewModel.showStep(ComposeStep.Text) },
-                    onNotice = { message -> if (message != null) viewModel.showNotice(message) else viewModel.clearNotice() },
-                )
+            ComposeStep.Camera -> {
+                if (!(studio && bothCameras)) {
+                    CameraStep(
+                        state = state,
+                        hasCamera =
+                            ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED,
+                        askCamera = { cameraPermission.launch(Manifest.permission.CAMERA) },
+                        onClose = closeOrAsk,
+                        // The in-app camera: a Moment taken here, just now (the Live mark).
+                        onCaptured = { media -> viewModel.captured(media, fromCamera = true) },
+                        onLibrary = openLibrary,
+                        onText = { viewModel.showStep(ComposeStep.Text) },
+                        onNotice = { message -> if (message != null) viewModel.showNotice(message) else viewModel.clearNotice() },
+                    )
+                }
+                if (studio) {
+                    StudioFrontBackMode(bothCameras, { bothCameras = true }, { bothCameras = false }) {
+                        bothCameras = false
+                        viewModel.captured(it, fromCamera = true)
+                    }
+                }
+            }
             ComposeStep.Text ->
                 TextStep(
                     state = state,
@@ -272,6 +284,8 @@ fun MomentsComposeScreen(
                             ),
                         onDots = viewModel::setDots,
                         onItems = viewModel::setItems,
+                        onWhole = viewModel::setWhole,
+                        onPlaceWhole = viewModel::placeWhole,
                     )
                 } else {
                     ReviewStep(

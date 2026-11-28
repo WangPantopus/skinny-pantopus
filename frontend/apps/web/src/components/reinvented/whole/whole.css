@@ -1,0 +1,7 @@
+/* A whole picture's backdrop (PHASE-5 A6): over the viewer's own background, under the picture (components/reinvented/whole/Whole.tsx). */
+.wh-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}

@@ -325,7 +325,9 @@ object MailSentWords {
     /** "To Maya O. · Christmas card"; by email "To d***@example.com · by email". */
     fun title(card: SentCard): String {
         val to = card.toName?.takeIf { it.isNotBlank() } ?: "them"
-        if (card.byLink) return if (card.status == "claimed") "To $to · by link" else "To whoever opens your link"
+        // A link's own name on its envelope (the card improvements, Wave 3.2) shows while it waits; without one, as before.
+        val named = card.status == "claimed" || !card.toName.isNullOrBlank()
+        if (card.byLink) return if (named) "To $to · by link" else "To whoever opens your link"
         val kind = if (card.kind == "letter") "Letter" else "Christmas card"
         return if (card.byEmail && card.kind != "letter") "To $to · by email" else "To $to · $kind"
     }

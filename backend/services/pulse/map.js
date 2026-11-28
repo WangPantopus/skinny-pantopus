@@ -19,6 +19,7 @@ const { haversineMeters } = require('../../utils/trustState');
 const logger = require('../../utils/logger');
 const list = require('./list');
 const postStudio = require('./postStudio');
+const filtersOf = require('./filters');
 
 const TIMES = ['live', 'today', 'week', 'all', 'tonight', 'weekend'];
 const BACK = ['today', 'week', 'all'];
@@ -131,8 +132,32 @@ function markOf(post) {
   };
 }
 
+/**
+ * The map's answer narrowed by a request's filters (CONTRACT 10a): rings, kept Moments and guess spots by the Moments'
+ * tests, marks by the posts' (Heads-ups always), tickets by `kinds` and the `room` state (a pin says nothing of who hosts
+ * or when it was made, so `from` and `since` leave tickets as Plans shows them).
+ */
+async function filtered(answer, userId, filters) {
+  const people = filters.from === 'connections'
+    ? new Set([String(userId), ...(await store.connectionIds(userId)).map(String)])
+    : null;
+  const tests = filtersOf.testsFor(filters, { chips: list.CHIPS, people, forMap: true });
+  const after = (at) => tests.since == null || Date.parse(at || '') > tests.since;
+  const moment = (authorId, at) => tests.moments && tests.byPerson(authorId) && after(at);
+  const plans = (!filters.kinds || filters.kinds.includes('plans')) && (!filters.state || filters.state.includes('room'));
+  return {
+    ...answer,
+    rings: answer.rings.filter((ring) => moment(ring.author?.id, ring.newest_at)),
+    marks: answer.marks.filter((mark) => tests.post(mark.post)),
+    tickets: plans ? answer.tickets.filter((pin) => !filters.state || pin.is_full === false) : [],
+    kept: answer.kept.filter((entry) => moment(entry.moment?.author?.id, entry.moment?.share_at || entry.moment?.created_at)),
+    guess_spots: answer.guess_spots.filter((spot) => moment(spot.author?.id, spot.created_at)),
+    ...filtersOf.echo(filters),
+  };
+}
+
 /** GET /api/reinvented/map for `user` (CONTRACT 6b). `box` is checked by the route. */
-async function mapFor(user, box, { time = 'live' } = {}) {
+async function mapFor(user, box, { time = 'live', filters = null } = {}) {
   const userId = user.id;
   const forward = FORWARD.includes(time);
   const since = backSince(time, box);
@@ -157,7 +182,7 @@ async function mapFor(user, box, { time = 'live' } = {}) {
     .map(markOf)
     // Heads-ups first (drawn on top), then newest first, as the map reads them.
     .sort((a, b) => Number(b.heads_up) - Number(a.heads_up));
-  return {
+  const answer = {
     time,
     rings: shownRings,
     marks,
@@ -167,6 +192,7 @@ async function mapFor(user, box, { time = 'live' } = {}) {
     heights_on: heights,
     float_on: float,
   };
+  return filters ? filtered(answer, userId, filters) : answer;
 }
 
 /** GET /api/reinvented/strip for `user` (CONTRACT 6c): Live from here, plans starting soon, people you know. */

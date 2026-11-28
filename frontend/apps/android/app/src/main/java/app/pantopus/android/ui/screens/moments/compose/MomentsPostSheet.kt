@@ -74,6 +74,7 @@ import androidx.compose.ui.unit.sp
 import app.pantopus.android.R
 import app.pantopus.android.data.moments.MomentHeight
 import app.pantopus.android.ui.screens.feed.reinvented.after.MomentExploreRow
+import app.pantopus.android.ui.screens.feed.reinvented.after.TogetherStudioRows
 import app.pantopus.android.ui.screens.moments.components.LiveGlyph
 import app.pantopus.android.ui.screens.moments.components.MomentSelfFace
 import app.pantopus.android.ui.screens.moments.studio.StudioMadeUpNote
@@ -319,6 +320,7 @@ fun MomentsPostSheet(
                 }
                 if (!(studio && state.madeUp)) NoLocationRow(state = state, onNoLocation = onNoLocation)
                 if (studio) MomentExploreRow(state)
+                if (studio) TogetherStudioRows(state)
                 state.heightFeet?.takeIf { state.offersHeight }?.let { feet ->
                     // The Sky: a floating Moment's height is "About 4,400 ft above sea level".
                     val line = if (state.sky && state.floats) SkyWords.aboutHeight(feet) else MomentHeight.line(feet)

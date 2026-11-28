@@ -44,6 +44,20 @@ export function nightOf(sun: Sun): number {
   return Math.max(0, Math.min(1, (6 - sun.elevation_deg) / 18));
 }
 
+/** The basemap's light, as Mapbox's Standard map names it. */
+export type MapLight = 'day' | 'dawn' | 'dusk' | 'night';
+
+/**
+ * The map's light (PHASE-5 D): night when the browser is set to dark or the sun is more than 6° below the horizon where
+ * the map is looking; dawn or dusk while it is within 6° of the horizon (morning or evening by which side of the sky
+ * it is on); day otherwise.
+ */
+export function lightOf(sun: Sun, browserDark: boolean): MapLight {
+  if (browserDark || sun.elevation_deg < -6) return 'night';
+  if (sun.elevation_deg < 6) return sun.azimuth_deg < 180 ? 'dawn' : 'dusk';
+  return 'day';
+}
+
 /** How far a Moment's height lifts its ring: 0 on the ground to 1 at 15,000 ft or in flight (today's Moments map's scale). */
 export function liftOf(altitudeFt: number, flying: boolean): number {
   return flying ? 1 : Math.min(1, Math.sqrt(Math.max(altitudeFt, 0) / 15000));

@@ -172,6 +172,7 @@ fun SendCardScreen(
             title = if (collectionOpen) "All collections" else page.title(form),
             step = form.step.takeIf { page == SendCardPage.Steps },
             onBack = back,
+            order = stepOrder(season?.improved == true),
         )
         // On the shelves the stamps left sit on the "To" line instead.
         if (!shelves) {
@@ -289,13 +290,15 @@ fun SendCardScreen(
             ListContinueBar(form, onContinue = viewModel::continueWithList)
         } else if (shelves && season != null) {
             // The shelves' bar shows only once a card is chosen; the rack is the same.
-            ShelvesBar(season, form.design, onLarge = { largeDesign = it }, onNext = viewModel::next)
+            val nextLabel = pickNextLabel(season.improved, form)
+            ShelvesBar(season, form.design, onLarge = { largeDesign = it }, onNext = viewModel::next, nextLabel = nextLabel)
             PickRack(
                 season,
                 large = largeDesign,
                 onLarge = { largeDesign = it },
                 onChoose = viewModel::chooseDesign,
                 onNext = viewModel::next,
+                nextLabel = nextLabel,
             )
         } else if (onSteps && form.step == SendCardStep.Pick && season != null) {
             PickBar(
@@ -305,6 +308,7 @@ fun SendCardScreen(
                 onLarge = { largeDesign = it },
                 onChoose = viewModel::chooseDesign,
                 onNext = viewModel::next,
+                nextLabel = pickNextLabel(season.improved, form),
             )
         }
     }
@@ -509,7 +513,8 @@ private fun Steps(
     onSendAgain: (() -> Unit)? = null,
 ) {
     val backNote = form.backNote(postage = cards.postageEnabled)
-    if (backNote != null && form.step == SendCardStep.To) {
+    // On the first step: Pick a card while the card improvements are on (Wave 3.1), else Who it's for.
+    if (backNote != null && form.step == stepOrder(cards.improved).first()) {
         DeskNote(
             backNote,
             modifier = Modifier.padding(start = Spacing.s4, end = Spacing.s4, top = Spacing.s2),
@@ -532,8 +537,13 @@ private fun Steps(
     val to = form.to
     val design = cards.designs.firstOrNull { it.id == form.design }
     val keepingState by viewModel.signatureKeeper.state.collectAsStateWithLifecycle()
+    val mediaWords = cards.mediaWords(stamps, form)
     when (form.step) {
-        SendCardStep.To -> ToStep(form, viewModel)
+        SendCardStep.To -> {
+            // The card already chosen, with "Change" (Wave 3.1).
+            if (cards.improved) design?.let { PickedCardLine(it, onChange = viewModel::changeCard) }
+            if (cards.improved && form.byLink) LinkNameForm(form, viewModel) else ToStep(form, viewModel, improved = cards.improved)
+        }
         SendCardStep.Pick -> PickStep(cards, form.design, onLarge = onLarge)
         SendCardStep.Write ->
             if (design != null) {
@@ -562,7 +572,8 @@ private fun Steps(
                         photos = photoCalls(cards, form, viewModel),
                         voice = form.voice,
                         voices = voiceCalls(cards, form, viewModel),
-                        buyStamp = onStampsForMedia.takeIf { cards.postageEnabled && cards.media?.boughtStamp?.toBuy == true },
+                        buyStamp = onStampsForMedia.takeIf { mediaWords.buyStamp },
+                        mediaWords = mediaWords,
                         noteHelp = viewModel.noteHelp.takeIf { cards.noteHelp },
                     )
                 }
@@ -580,7 +591,7 @@ private fun Steps(
                         stamps = stamps,
                         endRoom = endRoom,
                         // "Let it travel" (travelling card plan Part 2): only where the server offers it.
-                        travel = (!form.travelOff).takeIf { cards.travel?.on == true },
+                        travel = viewModel.town.isOn(form).takeIf { cards.travel?.on == true },
                         onTravel = viewModel.town::set,
                     )
                 }
@@ -595,8 +606,8 @@ private fun Steps(
                         ListLookEndLines(form, listLook, stamps)
                     }
                     design != null && to != null && preview != null -> {
-                        LookStep(cards, to, design, preview)
-                        LookEndLines(lookTakeBackLine(to)) {
+                        LookStep(cards, to, design, preview, linkName = envelopeName(form.linkName).takeIf { cards.improved })
+                        LookEndLines(lookTakeBackLine(to, form.arrival)) {
                             StampPostageLine(stamps, design = form.design, modifier = Modifier.padding(top = 10.dp))
                         }
                     }
@@ -645,6 +656,8 @@ private fun StepHeader(
     title: String,
     step: SendCardStep?,
     onBack: () -> Unit,
+    /** The steps in the order the flow walks them ([stepOrder]). */
+    order: List<SendCardStep> = SendCardStep.steps,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(start = Spacing.s1, end = 14.dp),
@@ -666,13 +679,13 @@ private fun StepHeader(
             color = PantopusColors.cardTextStrong,
             modifier = Modifier.weight(1f).semantics { heading() },
         )
-        val index = step?.let { SendCardStep.steps.indexOf(it) } ?: -1
+        val index = step?.let { order.indexOf(it) } ?: -1
         if (index >= 0) {
             Row(
                 horizontalArrangement = Arrangement.spacedBy(5.dp),
-                modifier = Modifier.clearAndSetSemantics { contentDescription = "Step ${index + 1} of ${SendCardStep.steps.size}" },
+                modifier = Modifier.clearAndSetSemantics { contentDescription = "Step ${index + 1} of ${order.size}" },
             ) {
-                SendCardStep.steps.forEachIndexed { at, _ ->
+                order.forEachIndexed { at, _ ->
                     Box(
                         modifier =
                             Modifier
@@ -949,7 +962,12 @@ private fun SentCardBox(
                 color = PantopusColors.cardTextQuiet,
             )
             Text(
-                if (card.byLink && card.status != "claimed") "To whoever opens your link" else "To ${card.toName ?: "them"}",
+                // A link waiting for someone says so, unless it carries the name on its envelope (Wave 3.2).
+                if (card.byLink && card.status != "claimed" && card.toName.isNullOrBlank()) {
+                    "To whoever opens your link"
+                } else {
+                    "To ${card.toName ?: "them"}"
+                },
                 fontSize = 17.sp,
                 lineHeight = 22.sp,
                 fontWeight = FontWeight.SemiBold,
@@ -1059,8 +1077,8 @@ private fun photoCalls(
 
 /**
  * What Write on the back can do with a voice greeting (memories plan step 7): only with the key on, when `GET /cards`
- * says greetings can be added now, for one card to one person, and not when no bought stamp can be had. One already
- * added stays so it can be removed.
+ * says greetings can be added now, for one card to one person (a list too while `improved`), and not when no bought
+ * stamp can be had. One already added stays so it can be removed.
  */
 private fun voiceCalls(
     cards: HolidayCardsResponse,
@@ -1073,6 +1091,9 @@ private fun voiceCalls(
     return CardVoiceCalls(drafts::addVoice, drafts::retryVoice, drafts::removeVoice)
 }
 
-/** One card to one person, while a bought stamp is left or can be bought (not `media.bought_stamp` "unavailable"). */
+/**
+ * One card to one person (a list too while `improved`: Wave 2), while a bought stamp is left or can be bought (not
+ * `media.bought_stamp` "unavailable"; while `improved` it's left out as long as a free photo or voice card is left).
+ */
 private fun HolidayCardsResponse.mediaCanGo(form: SendCardForm): Boolean =
-    form.to !is CardRecipient.Several && media?.boughtStamp?.unavailable != true
+    (improved || form.to !is CardRecipient.Several) && media?.boughtStamp?.unavailable != true

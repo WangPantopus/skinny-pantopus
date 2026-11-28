@@ -324,31 +324,65 @@ If you don't know the sender, you can safely ignore this email.
  *   footnote: string, footer: string[] }}
  */
 function cardWaitingEmailContent({
-  senderName, expiresAt, sealed, stillSealed = true, design = null, reminder = false, timeZone = 'UTC',
+  senderName, expiresAt, sealed, stillSealed = true, design = null, reminder = false, unsealedReminder: unsealedAsked = false, timeZone = 'UTC',
 }) {
   const until = new Date(expiresAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone });
   const web = (process.env.PUBLIC_WEB_URL || APP_URL).trim().replace(/\/+$/, '');
+  const tableOn = areLaunchFeaturesEnabled(['mailbox', 'holiday_cards', 'card_table']);
+  // The card round (featureFlags cardImprovementsOn): opening before signing up (guestOpen is false while it is off),
+  // a sealed card's own front once its seal has lifted, and the Christmas-morning reminder's words. Off, every word
+  // and the picture are as before it.
+  const { cardImprovementsOn, cardGuestOpenEnabled } = require('../utils/featureFlags');
+  const improved = cardImprovementsOn();
+  const guestOpen = tableOn && cardGuestOpenEnabled();
+  const unsealedReminder = improved && unsealedAsked;
   // Required here, not at the top: holidayCards reads the database client, which this service never needs otherwise.
-  const shown = areLaunchFeaturesEnabled(['mailbox', 'holiday_cards', 'card_table'])
-    ? require('./holidayCards').emailPicture({ design, sealed }) : null;
+  const shown = tableOn
+    ? require('./holidayCards').emailPicture({ design, sealed: improved ? sealed && stillSealed : sealed }) : null;
   // The card's own front is in the picture: "this" card.
   const front = Boolean(shown?.caption);
   const card = front ? 'this Christmas card' : 'a Christmas card';
-  const first = reminder
-    ? `${senderName}’s Christmas card is still waiting for you on Pantopus.`
-    : `${senderName} sent you ${card} on Pantopus.`;
+  const first = unsealedReminder
+    ? `${senderName}’s Christmas card is ready to open!`
+    : reminder
+      ? `${senderName}’s Christmas card is still waiting for you on Pantopus.`
+      : `${senderName} sent you ${card} on Pantopus.`;
+  const subject = unsealedReminder
+    ? `${senderName}’s Christmas card is ready to open`
+    : reminder
+      ? `${senderName}’s Christmas card is still waiting for you`
+      : `${senderName} sent you a Christmas card on Pantopus`;
+  const heading = unsealedReminder
+    ? 'Your Christmas card is ready to open'
+    : reminder
+      ? 'Your Christmas card is still waiting'
+      : 'You have a Christmas card';
+  const lines = sealed && stillSealed
+    ? [`${first} It’s sealed until Christmas morning.`,
+      guestOpen
+        ? 'We’ll email you on Christmas morning when the seal lifts — or join Pantopus free now to keep it waiting in your mailbox.'
+        : 'Join Pantopus with this email address to open it and keep it in your own Pantopus mailbox. A Pantopus account is free.']
+    : guestOpen
+      ? [unsealedReminder
+          ? `${senderName}’s Christmas card is ready to open, with a note on the back just for you.`
+          : `${first.slice(0, -1)}, with a note on the back just for you.`,
+        `Open it right in your browser — no account or app needed. Join Pantopus free anytime to keep it in your mailbox or write back.`]
+      : sealed
+        ? [first, 'Join Pantopus with this email address to open it and keep it in your own Pantopus mailbox. A Pantopus account is free.']
+        : [`${first.slice(0, -1)}, with a note on the back just for you.`,
+          `Join Pantopus with this email address to ${front ? 'turn it over' : 'open it'}, read their note and keep the card in your own Pantopus mailbox. A Pantopus account is free.`];
+  const footnote = guestOpen
+    ? `The card waits for you until ${until}. Join with this email address anytime to save it to your mailbox.${
+      reminder ? ' This is the only reminder we’ll send.' : ''}`
+    : `The card waits for you until ${until}. Sign in or create your account with this email address.${
+      reminder ? ' This is the only reminder we’ll send.' : ''}`;
   return {
     ...(shown ? { picture: `${web}${shown.path}`, pictureAlt: shown.alt } : {}),
-    subject: reminder ? `${senderName}’s Christmas card is still waiting for you` : `${senderName} sent you a Christmas card on Pantopus`,
-    heading: reminder ? 'Your Christmas card is still waiting' : 'You have a Christmas card',
-    lines: sealed
-      ? [stillSealed ? `${first} It’s sealed until Christmas morning.` : first,
-        'Join Pantopus with this email address to open it and keep it in your own Pantopus mailbox. A Pantopus account is free.']
-      : [`${first.slice(0, -1)}, with a note on the back just for you.`,
-        `Join Pantopus with this email address to ${front ? 'turn it over' : 'open it'}, read their note and keep the card in your own Pantopus mailbox. A Pantopus account is free.`],
-    button: 'Open your card',
-    footnote: `The card waits for you until ${until}. Sign in or create your account with this email address.${
-      reminder ? ' This is the only reminder we’ll send.' : ''}`,
+    subject,
+    heading,
+    lines,
+    button: sealed && stillSealed && guestOpen ? 'Peek at your card' : 'Open your card',
+    footnote,
     footer: ['Pantopus — Your household, organized.', 'If you don’t know the sender, you can safely ignore this email.'],
   };
 }
@@ -366,12 +400,13 @@ function cardWaitingEmailContent({
  * @param {boolean} [opts.stillSealed] - false once Christmas morning has passed (cardWaitingEmailContent)
  * @param {string} [opts.design] - the picture the sender picked
  * @param {boolean} [opts.reminder] - the one reminder
+ * @param {boolean} [opts.unsealedReminder] - true for the Christmas-morning reminder when a sealed card's seal lifts
  * @param {string} [opts.timeZone] - the sender's clock (cardWaitingEmailContent)
  */
 async function sendCardWaitingEmail({
-  toEmail, senderName, claimLink, expiresAt, sealed, stillSealed, design, reminder, timeZone,
+  toEmail, senderName, claimLink, expiresAt, sealed, stillSealed, design, reminder, unsealedReminder, timeZone,
 }) {
-  const words = cardWaitingEmailContent({ senderName, expiresAt, sealed, stillSealed, design, reminder, timeZone });
+  const words = cardWaitingEmailContent({ senderName, expiresAt, sealed, stillSealed, design, reminder, unsealedReminder, timeZone });
   const safeLink = escapeHtml(claimLink);
   const nameFirst = `<strong>${escapeHtml(senderName)}</strong>${escapeHtml(words.lines[0].slice(senderName.length))}`;
 

@@ -747,9 +747,16 @@ export async function uploadHolidayCardMedia(kind: 'photo' | 'voice', file: File
  * `own` the uploader's upload, `sent` the sender's own card, `piece` the card they received.
  */
 export async function getHolidayCardMediaBlob(
-  where: { own: string } | { sent: string; fileId: string } | { piece: string; fileId: string },
+  where: { own: string } | { sent: string; fileId: string } | { piece: string; fileId: string } | { claim: string; token: string; fileId: string },
   signal?: AbortSignal,
 ): Promise<Blob> {
+  if ('claim' in where) {
+    const response = await apiClient.get<Blob>(
+      `/api/mailbox/claim/${encodeURIComponent(where.claim)}/card-media/${encodeURIComponent(where.fileId)}`,
+      { responseType: 'blob', signal, headers: { 'X-Card-Claim-Token': where.token } },
+    );
+    return response.data;
+  }
   const url = 'own' in where
     ? `/api/mailbox/cards/media/${encodeURIComponent(where.own)}`
     : 'sent' in where
@@ -760,10 +767,17 @@ export async function getHolidayCardMediaBlob(
 }
 
 export interface HolidayCards {
+  /**
+   * The card improvements of November 28 are on (server env CARD_IMPROVEMENTS): draw the new experience. Absent: the
+   * card experience from before them. Never kept beyond this read.
+   */
+  improved?: boolean;
   /** Which of a card's own photo and voice can be added now (launch key holiday_card_memories), and their limits. */
   media?: {
     photo: { usable: boolean; max_bytes: number; long_side: number };
     voice: { usable: boolean; max_seconds: number; max_bytes: number };
+    /** Per-person free photo/voice card allowance (e.g. first 2 free cards with photo/voice); absent when disabled. */
+    free_allowance?: { limit: number; remaining: number };
     /**
      * They go only on a card sent with a bought stamp (founder 2026-11-11), while photos are usable: 'ready' (one is left;
      * the card spends it), 'buy' (none: say so, and the buttons open the stamp books) or 'unavailable' (none, and none can
@@ -799,7 +813,9 @@ export interface HolidayCards {
    * server has it) all four, its email going at your next 7 a.m. (`next_round_at`) or on Christmas morning. A link keeps
    * `email`.
    */
-  arrivals: { person: HolidayCardArrival[]; email: HolidayCardArrival[]; email_all?: HolidayCardArrival[] };
+  arrivals: { person: HolidayCardArrival[]; email: HolidayCardArrival[]; email_all?: HolidayCardArrival[];
+    /** While `improved`: every choice to a person, Right away (`now`) included; `person` stays as older apps read it. */
+    person_all?: HolidayCardArrival[] };
   /** Your next 7 a.m. round and Christmas morning, where you are. */
   next_round_at: string;
   christmas_morning_at: string;
@@ -815,7 +831,9 @@ export interface HolidayCards {
    * sender's town ("Boise, ID"), or null: ask "Where does it start?" once. `places`: how many people one person may pass
    * a card to.
    */
-  travel?: { on: boolean; town: string | null; places: number };
+  travel?: { on: boolean; town: string | null; places: number;
+    /** While `improved`: where the switch starts (false: off); absent, it starts on as before. */
+    default_on?: boolean };
 }
 
 /** GET /api/mailbox/cards */
@@ -878,6 +896,8 @@ export async function suggestHolidayCardNote(data: {
 export interface HolidayCardArrivalsFor {
   /** The arrivals open to them now. */
   arrivals: HolidayCardArrival[];
+  /** While the card improvements are on: every choice open to them now, Right away (`now`) included. */
+  arrivals_all?: HolidayCardArrival[];
   /** The day of their next 7 a.m. mail where they live ("2026-10-31"). */
   next_round_on: string;
 }
@@ -892,7 +912,11 @@ export async function sendHolidayCard(data: {
   design: string;
   message: string;
   arrival: HolidayCardArrival;
-  to: { user_id: string } | { email: string } | { link: true };
+  /**
+   * `link.name` (only while GET /cards says `improved`): the name written on the link's envelope, at most 40
+   * characters; left out for none.
+   */
+  to: { user_id: string } | { email: string } | { link: true; name?: string };
   /**
    * One per card draft, sent again with every look and retry of it: a repeat of a send answers with the card it
    * stored (200), CARD_TAKEN_BACK once that card was taken back, or CARD_REQUEST_SENT (with `card`) when the draft
@@ -938,6 +962,7 @@ export interface HolidayCardPreview {
     picture?: string } | null;
   /** By email: the page its link opens (the address masked, as on that page). */
   link_page: { sender_name: string; sender_verified: boolean; sealed: boolean; sent_to: string; sent_on: string; by_link?: boolean;
+    guest_open?: boolean;
     /** The card's front as the page shows it; null when it's sealed until Christmas. */
     front?: CardLinkFront | null } | null;
   /** By email, set to go at your 7 a.m. or on Christmas morning: when (null: as it's sealed). */
@@ -963,6 +988,11 @@ export interface HolidayCardList {
   recipients: { to: { user_id: string } | { email: string }; request_id: string }[];
   /** One signature for the whole list, as one note. */
   signature?: CardSignature | null;
+  /** Optional photo, photo description, Live Photo clip, and voice greeting shared across the list's cards. */
+  photo?: string;
+  photo_alt?: string;
+  photo_live?: string;
+  voice?: string;
   /** Each address keeps the list's choice (send it when the server offers `arrivals.email_all`). */
   emails_keep_arrival?: boolean;
   /** "Let it travel" (server key card_travel): each card starts a journey of its own. */

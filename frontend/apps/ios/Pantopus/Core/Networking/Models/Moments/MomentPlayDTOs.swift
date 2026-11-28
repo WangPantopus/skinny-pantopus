@@ -17,6 +17,8 @@ public struct MomentPlayItem: Codable, Sendable, Hashable, Identifiable {
     public enum Kind: String, Codable, Sendable {
         case poll, slider, board, question, guess, countdown, quote, fog, swatch
         case beforeAfter = "before_after"
+        /// Moving words (CONTRACT 7k): drawn over the photo, never answered.
+        case movingWords = "moving_words"
         /// A kind this app doesn't know yet (a newer server): never drawn.
         case unknown
     }
@@ -103,6 +105,10 @@ public struct MomentPlayItem: Codable, Sendable, Hashable, Identifiable {
     public var box: Box?
     public var before: String?
     public var after: String?
+    /// Moving words (CONTRACT 7k): the lettering's shared id, the motion, and `#RRGGBB`.
+    public var lettering: String?
+    public var motion: String?
+    public var color: String?
     /// Read only: whether answers are taken now (never for the author), the reader's answer, and the results.
     public var open = false
     public var mine: Mine?
@@ -119,7 +125,7 @@ public struct MomentPlayItem: Codable, Sendable, Hashable, Identifiable {
 
     enum CodingKeys: String, CodingKey {
         case id, kind, x, y, scale, rotation, question, options, left, right, look, emoji, prompt, range, answer, title
-        case text, source, colors, box, before, after, open, mine, results
+        case text, source, colors, box, before, after, open, mine, results, lettering, motion, color
         case xAxis = "x_axis"
         case yAxis = "y_axis"
         case endsAt = "ends_at"
@@ -152,6 +158,9 @@ public struct MomentPlayItem: Codable, Sendable, Hashable, Identifiable {
         box = try? c.decodeIfPresent(Box.self, forKey: .box)
         before = try? c.decodeIfPresent(String.self, forKey: .before)
         after = try? c.decodeIfPresent(String.self, forKey: .after)
+        lettering = try? c.decodeIfPresent(String.self, forKey: .lettering)
+        motion = try? c.decodeIfPresent(String.self, forKey: .motion)
+        color = try? c.decodeIfPresent(String.self, forKey: .color)
         open = (try? c.decodeIfPresent(Bool.self, forKey: .open)) ?? false
         mine = try? c.decodeIfPresent(Mine.self, forKey: .mine)
         results = try? c.decodeIfPresent(Results.self, forKey: .results)
@@ -185,6 +194,9 @@ public struct MomentPlayItem: Codable, Sendable, Hashable, Identifiable {
         try c.encodeIfPresent(box, forKey: .box)
         try c.encodeIfPresent(before, forKey: .before)
         try c.encodeIfPresent(after, forKey: .after)
+        try c.encodeIfPresent(lettering, forKey: .lettering)
+        try c.encodeIfPresent(motion, forKey: .motion)
+        try c.encodeIfPresent(color, forKey: .color)
     }
 }
 
@@ -405,9 +417,17 @@ public struct MomentLayersDTO: Sendable, Hashable {
     public let deck: MomentDeckDTO?
     /// A loop on a video (CONTRACT 7j, `MomentLoopDTOs.swift`): the span the new viewers repeat, nil for any other.
     public let loop: MomentLoopDTO?
+    /// The picture is its author's composed whole (CONTRACT 10c): the new viewers fit it, never cut, on its backdrop.
+    public let whole: Bool
+    /// A whole video's place on the 9:16 canvas (CONTRACT 10c), nil for a photo or a video posted as taken.
+    public let placement: MomentWholePlacementDTO?
+    /// The two colours around a whole picture (CONTRACT 10c), nil when the viewer makes them from the picture.
+    public let backdrop: MomentBackdropDTO?
+    /// A Live Photo's motion (CONTRACT 10b): its clip and length; nil for any other Moment, or until its check passed.
+    public let motion: MomentMotionDTO?
 
     private enum CodingKeys: String, CodingKey {
-        case play, mentions, dots, sound, deck, loop
+        case play, mentions, dots, sound, deck, loop, whole, placement, backdrop, motion
     }
 
     init(from decoder: any Decoder) {
@@ -418,10 +438,48 @@ public struct MomentLayersDTO: Sendable, Hashable {
         sound = try? c?.decodeIfPresent(MomentSoundDTO.self, forKey: .sound)
         deck = try? c?.decodeIfPresent(MomentDeckDTO.self, forKey: .deck)
         loop = try? c?.decodeIfPresent(MomentLoopDTO.self, forKey: .loop)
+        whole = (try? c?.decodeIfPresent(Bool.self, forKey: .whole)).flatMap { $0 } ?? false
+        placement = try? c?.decodeIfPresent(MomentWholePlacementDTO.self, forKey: .placement)
+        backdrop = try? c?.decodeIfPresent(MomentBackdropDTO.self, forKey: .backdrop)
+        motion = try? c?.decodeIfPresent(MomentMotionDTO.self, forKey: .motion)
     }
 
     /// The before and after on a photo, if it has one (one at most).
     public var beforeAfter: MomentPlayItem? {
         play.first { $0.kind == .beforeAfter }
+    }
+}
+
+/// CONTRACT 7k: the four colours moving words are sent in (`#RRGGBB`, upper-case, as the server stores them): white,
+/// warm yellow, black and sky. Values on the wire, kept here beside the item rather than in feature code.
+public enum MomentMovingWordsColor {
+    public static let white = "#FFFFFF"
+    public static let all = [white, "#FDE68A", "#111827", "#38BDF8"]
+}
+
+/// CONTRACT 10c: where a whole video sits on the 9:16 canvas (Resize's own model): its width as a share of the canvas's
+/// width before turning, its middle on the canvas (0 to 1), and degrees clockwise.
+public struct MomentWholePlacementDTO: Codable, Sendable, Hashable {
+    public let width: Double
+    public let x: Double
+    public let y: Double
+    public let turn: Double
+}
+
+/// CONTRACT 10c: the two colours of the backdrop a whole picture sits on, `#RRGGBB` upper-case.
+public struct MomentBackdropDTO: Codable, Sendable, Hashable {
+    public let top: String
+    public let bottom: String
+}
+
+/// CONTRACT 10b: a Live Photo's motion on a Moment. `url` is a short signed link, nil while the photo's own link is held
+/// back.
+public struct MomentMotionDTO: Codable, Sendable, Hashable {
+    public let url: String?
+    public let durationMs: Double?
+
+    private enum CodingKeys: String, CodingKey {
+        case url
+        case durationMs = "duration_ms"
     }
 }

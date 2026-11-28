@@ -8,7 +8,7 @@ import { get, post } from '../client';
 import apiClient from '../client';
 import type { Mail } from '@pantopus/types';
 import type { MailIntent, InkSelection } from '@pantopus/types';
-import type { StructuredMailSendPayload } from './mailbox';
+import type { CardPhoto, CardSignature, CardTravel, CardVoice, StructuredMailSendPayload } from './mailbox';
 
 // ─── Escrow types ──────────────────────────────────────────
 
@@ -20,6 +20,8 @@ export interface CardLinkFront { design: string; caption: string; paper: string;
  * never the letter itself (GET /api/mailbox/claim/:mailId).
  */
 export interface EscrowedMailView {
+  /** The card improvements of November 28 are on (server env CARD_IMPROVEMENTS). Absent: the page from before them. */
+  improved?: boolean;
   mail: {
     id: string;
     senderName: string;
@@ -38,10 +40,40 @@ export interface EscrowedMailView {
      * A Christmas card: whether it's sealed, and its front (the stock picture the sender picked, as the public
      * /cards/<slug> page draws it), null while it's sealed until Christmas. Never its note, signature, photo or voice.
      */
-    card?: { holiday: string; year: number; sealed: boolean; front?: CardLinkFront | null; by_link?: boolean;
+    card?: { holiday: string; year: number; sealed: boolean; sealed_until?: string | null; front?: CardLinkFront | null;
+      by_link?: boolean; guest_open?: boolean; to_name?: string | null;
       /** A card that travels (server key card_travel): its envelope's postmarks, the towns and the miles it came. */
       travel?: { postmarks: { town: string; state: string | null; on: string }[]; towns: number; miles: number } } | null;
   };
+}
+
+/**
+ * The card opened on the browser table before signing in (POST /api/mailbox/claim/:mailId/open): the card, note,
+ * signature and (covered) media for an unsealed Christmas card, or only the sealed envelope metadata when sealed.
+ */
+export interface GuestOpenCardResponse {
+  senderName: string;
+  toName: string | null;
+  mailedOn: string | null;
+  note: string;
+  card: {
+    design: string;
+    number?: number | null;
+    caption: string | null;
+    paper: string;
+    table?: string | null;
+    mood?: 'reverence' | 'santa' | 'nostalgia' | null;
+    year: number;
+    sealed: boolean;
+    sealed_until?: string | null;
+    verse?: string | null;
+    signature?: CardSignature | null;
+    photo?: CardPhoto | null;
+    voice?: CardVoice | null;
+    travel?: Pick<CardTravel, 'postmarks' | 'miles' | 'towns'> | null;
+  };
+  journey: string | null;
+  by_link: boolean;
 }
 
 /** Why a letter's link can't be opened or claimed: the `code` of a claim route's error. */
@@ -210,6 +242,20 @@ export async function getEscrowedMailPublic(
 ): Promise<EscrowedMailView> {
   return get<EscrowedMailView>(
     `/api/mailbox/claim/${encodeURIComponent(mailId)}`,
+    { token },
+  );
+}
+
+/**
+ * Open an unsealed Christmas card on the browser table without signing in (or inspect a sealed card's envelope
+ * without revealing its contents). Calls POST /api/mailbox/claim/:mailId/open
+ */
+export async function openEscrowedCardGuest(
+  mailId: string,
+  token: string,
+): Promise<GuestOpenCardResponse> {
+  return post<GuestOpenCardResponse>(
+    `/api/mailbox/claim/${encodeURIComponent(mailId)}/open`,
     { token },
   );
 }

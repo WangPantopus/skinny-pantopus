@@ -68,6 +68,7 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -77,6 +78,7 @@ import app.pantopus.android.data.api.models.moments.MomentPlayItemDto
 import app.pantopus.android.data.api.models.moments.MomentStampPlacement
 import app.pantopus.android.data.moments.MomentMediaFile
 import app.pantopus.android.ui.screens.feed.reinvented.after.StudioPostKindRow
+import app.pantopus.android.ui.screens.feed.reinvented.after.TogetherStudioGhost
 import app.pantopus.android.ui.screens.feed.reinvented.after.studioPostPill
 import app.pantopus.android.ui.screens.moments.components.MomentCardBackground
 import app.pantopus.android.ui.screens.moments.components.momentCardGradient
@@ -88,6 +90,8 @@ import app.pantopus.android.ui.screens.moments.compose.MomentsSkyActions
 import app.pantopus.android.ui.screens.moments.compose.VideoStill
 import app.pantopus.android.ui.screens.moments.compose.marks.MomentLook
 import app.pantopus.android.ui.screens.moments.compose.marks.MomentMarksTool
+import app.pantopus.android.ui.screens.moments.compose.marks.MomentPlacement
+import app.pantopus.android.ui.screens.moments.compose.marks.MomentPlacementPainter
 import app.pantopus.android.ui.screens.moments.compose.postAtHome
 import app.pantopus.android.ui.screens.moments.compose.postMapSpot
 import app.pantopus.android.ui.screens.moments.compose.postPlaceKind
@@ -161,6 +165,9 @@ internal fun MomentsStudioStep(
     onDots: (List<MomentDotDto>) -> Unit = {},
     // Playable items (phase 2, CONTRACT 7b, 7k: moving words so far): the items as they are now.
     onItems: (List<MomentPlayItemDto>) -> Unit = {},
+    // See the picture first (PHASE-5 A, CONTRACT 10c): the photo shows and posts whole on these colours; moved there.
+    onWhole: (MomentPlacementPainter.Backdrop) -> Unit = {},
+    onPlaceWhole: (MomentPlacement?, IntSize) -> Unit = { _, _ -> },
     gate: MomentsStudioGateViewModel = hiltViewModel(),
     penNames: PenNameChoiceViewModel = hiltViewModel(),
 ) {
@@ -200,21 +207,32 @@ internal fun MomentsStudioStep(
                 .then(if (state.marking != null) Modifier.clearAndSetSemantics {} else Modifier),
     ) {
         val pair = state.studioPair
-        if (pair != null) StudioBeforeAfterPicture(pair) else StudioPicture(state)
-        if (pair == null) StudioCutoutPress(state, onLift = onLiftCutout)
-        // The stamps sit on the picture, under the X, the tools, the caption and the bar.
-        StudioStampLayer(state = state, onStamps = onStamps)
-        StudioDotLayer(state.dots, rememberStudioPicture(state), enabled = !state.posting, onDots = onDots) { id ->
-            pickedDot = id
-            illuminate = true
-        }
-        StudioPlayLayer(state.items, rememberStudioPicture(state), enabled = !state.posting, onItems = onItems) { id ->
-            // Moving words open their own form; a poll or a countdown opens the play form.
-            val words = state.items.any { it.id == id && it.movingWords }
-            wordsItem = id.takeIf { words }
-            wordsForm = words
-            playItem = id.takeUnless { words }
-            playForm = !words
+        // A photo shows whole, on its own colours (PHASE-5 A); a video, a text card and before and after as before.
+        val whole = rememberStudioWhole(state, lookPicture, read = onTrayOpen, onWhole = onWhole)
+        val wholeLive = remember { mutableStateOf<MomentPlacement?>(null) }
+        StudioPictureAndLayers(
+            whole = whole,
+            state = state,
+            live = wholeLive,
+            onPlace = onPlaceWhole,
+            picture = { if (pair != null) StudioBeforeAfterPicture(pair) else StudioPicture(state) },
+        ) {
+            TogetherStudioGhost(state)
+            if (pair == null) StudioCutoutPress(state, onLift = onLiftCutout)
+            // The stamps sit on the picture, under the X, the tools, the caption and the bar.
+            StudioStampLayer(state = state, onStamps = onStamps)
+            StudioDotLayer(state.dots, rememberStudioPicture(state), enabled = !state.posting, onDots = onDots) { id ->
+                pickedDot = id
+                illuminate = true
+            }
+            StudioPlayLayer(state.items, rememberStudioPicture(state), enabled = !state.posting, onItems = onItems) { id ->
+                // Moving words open their own form; a poll or a countdown opens the play form.
+                val words = state.items.any { it.id == id && it.movingWords }
+                wordsItem = id.takeIf { words }
+                wordsForm = words
+                playItem = id.takeUnless { words }
+                playForm = !words
+            }
         }
         // The fades keep the rail and the caption readable over a bright picture.
         Box(
@@ -284,6 +302,8 @@ internal fun MomentsStudioStep(
             StudioPostKindRow(state, Modifier.padding(horizontal = Spacing.s4).padding(bottom = Spacing.s3))
             // "Guess the spot" picked: what others will see.
             StudioGuessLine(state)
+            // A whole photo: Fill or Fit, and Reset (PHASE-5 A).
+            StudioWholeRow(state, whole, wholeLive, onPlaceWhole, Modifier.padding(start = Spacing.s4, bottom = Spacing.s3))
             // A caption goes with a photo or a video; a text card is its own words.
             if (state.media != null) {
                 // After "@" at the end of the caption: the author's connections (never under a made-up name).

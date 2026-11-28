@@ -130,6 +130,8 @@ import java.time.ZoneId
 internal fun ToStep(
     form: SendCardForm,
     viewModel: SendCardViewModel,
+    /** The card improvements are on: "Send it by link" asks for the name on its envelope first (Wave 3.2, [LinkNameForm]). */
+    improved: Boolean = false,
 ) {
     if (form.byEmail) return EmailForm(form, viewModel)
     val query by viewModel.query.collectAsStateWithLifecycle()
@@ -172,10 +174,11 @@ internal fun ToStep(
                     }
             }
         }
-        // Sending to someone not on Pantopus already invites them (plan 11.6): said once, above both ways.
+        // Sending to someone not on Pantopus already invites them (plan 11.6): said once, above both ways. With the card
+        // improvements they can open and read it before they join (Wave 1).
         if (LaunchFeatures.cardTable) {
             Text(
-                "They don’t need Pantopus yet. They join to open it.",
+                if (improved) NO_ACCOUNT_NEEDED else "They don’t need Pantopus yet. They join to open it.",
                 fontSize = 14.sp,
                 lineHeight = 20.sp,
                 color = PantopusColors.cardTextQuiet,
@@ -195,7 +198,7 @@ internal fun ToStep(
         if (LaunchFeatures.cardTable && form.listed.isEmpty()) {
             CardButton(
                 "Send it by link",
-                onClick = viewModel::chooseLink,
+                onClick = if (improved) ({ viewModel.showLink(true) }) else viewModel::chooseLink,
                 kind = CardButtonKind.Words,
                 icon = PantopusIcon.Link,
                 modifier = Modifier.padding(top = Spacing.s1).testTag("sendCardByLink"),
@@ -520,9 +523,11 @@ internal fun PickBar(
     onLarge: (String?) -> Unit,
     onChoose: (String) -> Unit,
     onNext: () -> Unit,
+    /** "Write on this card", or "Choose who it’s for" with Pick a card first and no one chosen yet (Wave 3.1). */
+    nextLabel: String = WRITE_ON_THIS_CARD,
 ) {
-    PickBarBody(cards.designOf(chosen), onLarge = onLarge, onNext = onNext)
-    PickRack(cards, large = large, onLarge = onLarge, onChoose = onChoose, onNext = onNext)
+    PickBarBody(cards.designOf(chosen), onLarge = onLarge, onNext = onNext, nextLabel = nextLabel)
+    PickRack(cards, large = large, onLarge = onLarge, onChoose = onChoose, onNext = onNext, nextLabel = nextLabel)
 }
 
 /** The bar itself: [picked] small with its caption and "See it larger" (or how to choose one), and "Write on this card". */
@@ -531,6 +536,7 @@ internal fun PickBarBody(
     picked: HolidayCardDesign?,
     onLarge: (String?) -> Unit,
     onNext: () -> Unit,
+    nextLabel: String = WRITE_ON_THIS_CARD,
 ) {
     Column(modifier = Modifier.fillMaxWidth().background(PantopusColors.cardDesk).testTag("sendCardPickBar")) {
         HorizontalDivider(color = PantopusColors.cardNoteEdge)
@@ -572,7 +578,7 @@ internal fun PickBarBody(
             }
         }
         CardButton(
-            "Write on this card",
+            nextLabel,
             onClick = onNext,
             enabled = picked != null,
             modifier =
@@ -591,6 +597,7 @@ internal fun PickRack(
     onLarge: (String?) -> Unit,
     onChoose: (String) -> Unit,
     onNext: () -> Unit,
+    nextLabel: String = WRITE_ON_THIS_CARD,
 ) {
     cards.designOf(large)?.let { design ->
         val collection = cards.collections.firstOrNull { design.id in it.designs }
@@ -609,6 +616,7 @@ internal fun PickRack(
                 onLarge(null)
                 onNext()
             },
+            writeLabel = nextLabel,
         )
     }
 }
@@ -875,6 +883,8 @@ internal fun WriteStep(
     voices: CardVoiceCalls? = null,
     /** No bought stamp left (`media.bought_stamp` "buy"): both buttons open the stamp books, with the line under them. */
     buyStamp: (() -> Unit)? = null,
+    /** Under the photo and greeting buttons: why they open the stamp books, or the free photo cards line. */
+    mediaWords: CardMediaWords = CardMediaWords(buyStamp = buyStamp != null),
     /** "Help me write it" (`GET /api/mailbox/cards` `note_help`, the server's launch key `card_note_help`); null: no button. */
     noteHelp: CardNoteHelper? = null,
 ) {
@@ -968,7 +978,7 @@ internal fun WriteStep(
             // A note picked there lands on the back, face up.
             CardNoteHelpRow(noteHelp, design.id, to, message, limit, onOpen = { focusManager.clearFocus() }, onPicked = { showBack = true })
         }
-        MediaUnderTheNote(design, to, fromName, photo, photos, voice, voices, buyStamp) { focusManager.clearFocus() }
+        MediaUnderTheNote(design, to, fromName, photo, photos, voice, voices, buyStamp, mediaWords) { focusManager.clearFocus() }
         if (canSign) {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(top = Spacing.s2),
@@ -1043,6 +1053,7 @@ private fun MediaUnderTheNote(
     voice: CardVoiceDraft?,
     voices: CardVoiceCalls?,
     buyStamp: (() -> Unit)?,
+    words: CardMediaWords,
     beforeAdd: () -> Unit,
 ) {
     if (photos != null) {
@@ -1069,7 +1080,9 @@ private fun MediaUnderTheNote(
             beforeRecord = beforeAdd,
         )
     }
-    if (buyStamp != null && (photos != null || voices != null)) MediaNeedsBoughtStamp()
+    if (photos != null || voices != null) {
+        if (buyStamp != null) MediaNeedsBoughtStamp(words.needsStampLine) else words.freeHint?.let { MediaFreeHint(it) }
+    }
 }
 
 // ── Step 4: seal it for the day ──────────────────────────────
@@ -1096,11 +1109,12 @@ internal fun SealStep(
     onTravel: (Boolean) -> Unit = {},
 ) {
     val zone = HolidayCardTimes.zone(cards.timeZone)
-    val options = arrivalOptions(cards.arrivals, to, form.theirs)
+    val options = arrivalOptions(cards.arrivals, to, form.theirs, cards.improved)
     val several = (to as? CardRecipient.Several)?.entries?.size
     Column(modifier = Modifier.padding(start = Spacing.s4, end = Spacing.s4, top = Spacing.s3)) {
         Box(modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.s2).rotate(1f)) {
-            MailPiece(envelopePreview(design, fromName, to, sealed = form.arrival == "sealed_christmas"))
+            val linkName = envelopeName(form.linkName).takeIf { cards.improved }
+            MailPiece(envelopePreview(design, fromName, to, sealed = form.arrival == "sealed_christmas", linkName = linkName))
         }
         if (to is CardRecipient.Several) {
             Text(
@@ -1137,11 +1151,11 @@ internal fun SealStep(
                 }
             }
             // On the same paper, under the arrival choices (travelling card plan Part 2).
-            travel?.let { on -> TravelChoice(to, on, onTravel, modifier = Modifier.padding(top = 10.dp)) }
+            travel?.let { on -> TravelChoice(to, on, onTravel, modifier = Modifier.padding(top = 10.dp), improved = cards.improved) }
         }
         // Before it's sent there's no knowing their clock; the sent card says the time on this one. Both lines show here,
         // so a sender who skips Look it over has read them (plan Part 5).
-        DeskNote(sealNote(to), modifier = Modifier.padding(top = 14.dp))
+        DeskNote(sealNote(to, form.arrival), modifier = Modifier.padding(top = 14.dp))
         StampPostageLine(stamps, design = design.id, modifier = Modifier.padding(top = Spacing.s3), count = several ?: 1)
         Spacer(Modifier.height(endRoom))
     }
@@ -1266,10 +1280,12 @@ internal fun arrivalOptions(
     arrivals: HolidayCardArrivals,
     to: CardRecipient,
     theirs: HolidayCardArrivalsFor?,
+    /** The card improvements are on: a person can have it right away too (Wave 3.3). A list is unchanged. */
+    improved: Boolean = false,
 ): List<String> {
     val byEmail = arrivals.emailAll ?: arrivals.email
     return when (to) {
-        is CardRecipient.Person -> theirs?.arrivals ?: arrivals.person
+        is CardRecipient.Person -> personArrivals(arrivals, theirs, improved)
         // A list's one choice, by the sender's clock; each card is checked by its own person's on Look it over.
         is CardRecipient.Several -> if (to.entries.any { it is CardRecipient.Person }) arrivals.person else byEmail
         is CardRecipient.Email -> byEmail
@@ -1278,6 +1294,15 @@ internal fun arrivalOptions(
 }
 
 /** Until when it can be taken back. Before it's sent there's no knowing their clock; the sent card says the time. */
+private fun sealNote(
+    to: CardRecipient,
+    arrival: String?,
+): String =
+    when {
+        comesRightAway(to, arrival) -> RIGHT_AWAY_NO_TAKE_BACK
+        else -> sealNote(to)
+    }
+
 private fun sealNote(to: CardRecipient): String =
     when (to) {
         is CardRecipient.Several -> listSealNote(to.entries)
@@ -1330,6 +1355,8 @@ private fun TravelChoice(
     on: Boolean,
     onChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
+    /** The card improvements are on: "Let this card travel", with what passing it on shows (Wave 3.4). */
+    improved: Boolean = false,
 ) {
     val shape = RoundedCornerShape(Radii.lg)
     Row(
@@ -1347,13 +1374,18 @@ private fun TravelChoice(
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                "Let it travel",
+                if (improved) TRAVEL_TITLE else "Let it travel",
                 fontSize = 15.sp,
                 lineHeight = 20.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = PantopusColors.cardTextStrong,
             )
-            Text(travelSentence(to), fontSize = 13.sp, lineHeight = 18.sp, color = PantopusColors.cardTextQuiet)
+            Text(
+                if (improved) TRAVEL_LINE else travelSentence(to),
+                fontSize = 13.sp,
+                lineHeight = 18.sp,
+                color = PantopusColors.cardTextQuiet,
+            )
         }
         Switch(
             checked = on,
@@ -1407,7 +1439,13 @@ private fun arrivalChoice(
                 }
         "christmas_morning" ->
             "On Christmas morning" to "${HolidayCardTimes.shortDay(cards.christmasMorningAt, zone)}, with the 7 a.m. mail."
-        else -> "Right away, by email" to "They get an email now and can open it once they join with that address."
+        // To a person, offered only while the card improvements are on (Wave 3.3).
+        else ->
+            if (to is CardRecipient.Person) {
+                RIGHT_AWAY_TO_PERSON
+            } else {
+                "Right away, by email" to "They get an email now and can open it once they join with that address."
+            }
     }
 }
 
@@ -1512,13 +1550,15 @@ private fun envelopePreview(
     fromName: String,
     to: CardRecipient,
     sealed: Boolean,
+    /** A link's name on its envelope (the card improvements, Wave 3.2); none: the envelope has no name. */
+    linkName: String? = null,
 ): MailPieceModel =
     MailPieceModel(
         id = "preview-${design.id}",
         kind = MailKind.Letter,
         from = fromName,
         fromLine = null,
-        to = ((to as? CardRecipient.Several)?.entries?.firstOrNull() ?: to).label.takeIf { to !is CardRecipient.Link },
+        to = if (to is CardRecipient.Link) linkName else ((to as? CardRecipient.Several)?.entries?.firstOrNull() ?: to).label,
         toLine = null,
         sender = MailSender.Neighbor,
         opened = false,

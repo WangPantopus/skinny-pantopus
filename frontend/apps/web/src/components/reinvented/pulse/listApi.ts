@@ -46,6 +46,9 @@ export interface ListPage {
   next_cursor: string | null;
   end: string | null;
   needs_place?: boolean;
+  /** With the map's box (CONTRACT 11a), on the first page: how many the box holds; `count_more` when the map's cap was met. */
+  count?: number | null;
+  count_more?: boolean;
 }
 
 export interface Point {
@@ -61,15 +64,38 @@ export function readList(
     cursor,
     point,
     circle = null,
-  }: { reach: Reach; miles: number; chip: Chip; cursor: string | null; point: Point | null; circle?: string | null },
+    filters = null,
+    box = null,
+    noPlace = false,
+  }: {
+    reach: Reach;
+    miles: number;
+    chip: Chip;
+    cursor: string | null;
+    point: Point | null;
+    circle?: string | null;
+    /** PHASE-5 B (CONTRACT 10a): `kinds`, `when`, `from`, `state`, `since`; with any of them the chip isn't sent. */
+    filters?: Record<string, string> | null;
+    /** PHASE-6 B (CONTRACT 11a): the open part of the map; the list is then what the map shows there (Around me only). */
+    box?: Box | null;
+    /** CONTRACT 11b: posts and Moments without a place follow, under "Without a place". */
+    noPlace?: boolean;
+  },
   signal?: AbortSignal,
 ): Promise<ListPage> {
-  const params: Record<string, string | number> = { reach, chip, limit: 20 };
+  const params: Record<string, string | number> = filters ? { reach, ...filters, limit: 20 } : { reach, chip, limit: 20 };
   // Close circle can be one of the person's circles (CONTRACT 8d): only its people who are in.
   if (reach === 'close' && circle) params.circle = circle;
-  if (reach === 'around') params.miles = miles;
+  const byBox = reach === 'around' && box ? box : null;
+  if (byBox) {
+    params.south = byBox.south;
+    params.west = byBox.west;
+    params.north = byBox.north;
+    params.east = byBox.east;
+  } else if (reach === 'around') params.miles = miles;
+  if (noPlace && reach === 'around') params.no_place = 1;
   if (cursor) params.cursor = cursor;
-  if (point && reach === 'around') {
+  if (point && reach === 'around' && !byBox) {
     params.latitude = Math.round(point.latitude * 1e5) / 1e5;
     params.longitude = Math.round(point.longitude * 1e5) / 1e5;
   }
@@ -149,8 +175,9 @@ export interface Box {
   east: number;
 }
 
-export function readMap(box: Box, time: MapTime, signal?: AbortSignal): Promise<MapData> {
-  return get<MapData>('/api/reinvented/map', { ...box, time }, { signal });
+/** The map for a box and the time row's choice, with the list's filters (CONTRACT 10a; the map takes no `when`). */
+export function readMap(box: Box, time: MapTime, signal?: AbortSignal, filters: Record<string, string> | null = null): Promise<MapData> {
+  return get<MapData>('/api/reinvented/map', { ...box, time, ...(filters || {}) }, { signal });
 }
 
 /** A plan's time as its ticket says it: "Now", "Tonight 6", "Today 10", "Sat 9". */

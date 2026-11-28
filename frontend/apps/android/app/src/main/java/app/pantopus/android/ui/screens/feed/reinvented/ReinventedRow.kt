@@ -2,7 +2,12 @@ package app.pantopus.android.ui.screens.feed.reinvented
 
 import app.pantopus.android.data.api.models.moments.MomentDto
 import app.pantopus.android.data.api.models.moments.MomentRingDto
+import app.pantopus.android.data.api.models.reinvented.PulseTravelDto
 import app.pantopus.android.data.api.models.reinvented.ReinventedBandDto
+import app.pantopus.android.data.api.models.reinvented.ReinventedListItemDto
+import app.pantopus.android.data.api.models.reinvented.shownConvergence
+import app.pantopus.android.data.api.models.reinvented.shownPinboard
+import app.pantopus.android.data.api.models.reinvented.shownRetake
 import app.pantopus.android.data.pulse.ReinventedBox
 import app.pantopus.android.data.pulse.ReinventedPoint
 import app.pantopus.android.ui.screens.feed.pulse.PulseIntent
@@ -28,8 +33,10 @@ sealed interface ReinventedRow {
         override val key: String get() = "moment-${moment.id}"
     }
 
+    /** A post that stays, with its phase 3 keys (who carried it, an Eyes-on window; CONTRACT 8f). */
     data class Post(
         val card: PulsePostCardContent,
+        val travel: PulseTravelDto? = null,
     ) : ReinventedRow {
         override val key: String get() = "post-${card.id}"
     }
@@ -56,7 +63,9 @@ internal fun ReinventedPulseState.rows(cards: List<PulsePostCardContent>): List<
     val rows = mutableListOf<ReinventedRow>()
     var lastBand: String? = null
     val explore = reach == ReinventedPulseViewModel.EXPLORE
+    val pieces = mutableSetOf<String>()
     for ((index, item) in items.withIndex()) {
+        if (item.repeatsPiece(pieces)) continue
         if (explore && pickedCount > 0 && index == 0) rows += ReinventedRow.Heading("Today, elsewhere")
         if (explore && pickedCount > 0 && index == pickedCount) rows += ReinventedRow.Heading("New elsewhere")
         val before = rows.size
@@ -65,16 +74,36 @@ internal fun ReinventedPulseState.rows(cards: List<PulsePostCardContent>): List<
             rows += ReinventedRow.Band(line)
             lastBand = line.band
         }
-        val moment = item.moment
-        val post = item.post
-        when {
-            item.type == ReinventedPulseViewModel.MOMENT && moment != null -> rows += ReinventedRow.Moment(moment, item.kept)
-            post != null -> byId[post.id]?.let { rows += ReinventedRow.Post(it) }
-        }
+        item.row(byId)?.let { rows += it }
         val why = item.why
         if (explore && why != null && rows.size > before) rows += ReinventedRow.Why(item.type + item.id, why)
     }
     return rows
+}
+
+/** What an item draws as: a Moment (kept or fading), or a post once its card is made. */
+private fun ReinventedListItemDto.row(byId: Map<String, PulsePostCardContent>): ReinventedRow? {
+    val moment = moment
+    val post = post
+    return when {
+        type == ReinventedPulseViewModel.MOMENT && moment != null -> ReinventedRow.Moment(moment, kept)
+        post != null -> byId[post.id]?.let { ReinventedRow.Post(it, travel) }
+        else -> null
+    }
+}
+
+/**
+ * A Retake (CONTRACT 8e), a convergence's piece (8h) and a pinboard (8i) are one row each: the first of their Moments in
+ * the list stands for the whole and opens it.
+ */
+private fun ReinventedListItemDto.repeatsPiece(seen: MutableSet<String>): Boolean {
+    val moment = moment ?: return false
+    val key =
+        moment.shownRetake?.let { "retake-${it.startId}" }
+            ?: moment.shownConvergence?.let { "sky-${it.id}" }
+            ?: moment.shownPinboard?.let { "board-${it.startId}" }
+            ?: return false
+    return !seen.add(key)
 }
 
 /** The status line over a post that stays, from the kinds today's Pulse has; null for the rest. */
@@ -148,6 +177,8 @@ data class ReinventedListActions(
     val onKeepExploring: () -> Unit = {},
     /** A row's place: the map glides there. */
     val onShowOnMap: (ReinventedPoint) -> Unit = {},
+    /** The signed-in person ("Pass it on" is offered only under others' posts). */
+    val viewer: String? = null,
 )
 
 /** What a tile of the strip opens. */

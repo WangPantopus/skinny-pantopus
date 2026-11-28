@@ -384,7 +384,7 @@ router.post('/', createLimiter, async (req, res) => {
     // read only while the switch is on for the author (their values are kept for every Moment they post then, so an
     // edit may add a stamp). Sent while it is off: 403 PULSE_REINVENTED_OFF, so the app goes back to today's screens.
     const reinvented = await store.reinventedOn(req.user);
-    if (!reinvented && ['stamps', 'elevation', 'guess', 'explore', 'play', 'dots', 'deck', 'replies_shown', 'mentions', 'retake', 'retake_of', 'eyes_on_for', 'seal', 'join_convergence', 'pinboard', 'pinboard_of', 'your_day', 'heading', 'loop'].some((key) => Object.prototype.hasOwnProperty.call(req.body || {}, key))) {
+    if (!reinvented && ['stamps', 'elevation', 'guess', 'explore', 'play', 'dots', 'deck', 'replies_shown', 'mentions', 'retake', 'retake_of', 'eyes_on_for', 'seal', 'join_convergence', 'pinboard', 'pinboard_of', 'your_day', 'heading', 'loop', 'whole', 'placement', 'backdrop'].some((key) => Object.prototype.hasOwnProperty.call(req.body || {}, key))) {
       throw store.reinventedOff();
     }
     const studio = reinvented ? momentStamps.parseStudio(req.body) : null;
@@ -419,6 +419,8 @@ router.post('/', createLimiter, async (req, res) => {
         throw store.fail(400, 'MOMENT_INVALID', loopError.message);
       }
     }
+    // A picture shown as its author composed it (CONTRACT 10c): whole, its backdrop, and a video's placement on the canvas.
+    const composed = studio ? require('../services/pulse/composed').parse(req.body, { kind: body.kind }) : {};
     // Retake (CONTRACT 8e): start one (`retake.title`) or add a frame (`retake_of`); checked below, once the place is known.
     const retakeAsk = studio ? retake.parse(req.body) : null;
     // Seal it (CONTRACT 8g): opens on a date, at a place or with rain; checked below, once the place is known.
@@ -626,6 +628,8 @@ router.post('/', createLimiter, async (req, res) => {
         }),
         // Loop (CONTRACT 7j): the span the new viewers repeat; the file stays an ordinary video.
         ...require('../services/pulse/loop').keptPart(loop),
+        // A picture shown as composed (CONTRACT 10c): fit on its backdrop, and a video's place on the canvas.
+        ...composed,
         // Replies people can see (CONTRACT 8a): the author's choice for this Moment, never under a made-up name.
         ...require('../services/pulse/replies').choiceAtPosting(req.body?.replies_shown, { penName: underPenName }),
         // Mentions (CONTRACT 7h): the author's connections who may see it, not blocked either way; none under a made-up name.

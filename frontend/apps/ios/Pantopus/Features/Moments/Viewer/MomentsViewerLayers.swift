@@ -22,14 +22,35 @@ struct MomentPhotoSurface: View {
     let moment: MomentDTO
     let image: UIImage
     @State private var flags = PulseReinventedFlags.shared
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        if flags.isOn, let pair = moment.layers.beforeAfter {
+        if flags.isOn, moment.layers.whole, moment.layers.beforeAfter == nil {
+            // See the picture first (phase 5, CONTRACT 10c): the author's whole picture, fitted, on its backdrop.
+            MomentWholePicture(moment: moment, image: image)
+        } else if flags.isOn, let pair = moment.layers.beforeAfter {
             MomentBeforeAfterView(picture: image, item: pair)
                 .accessibilityElement(children: .contain)
                 .accessibilityLabel("\(moment.author.shortName)'s before and after")
                 .accessibilityIdentifier("moments.viewer.photo")
                 .overlay { MomentLayersOverlay(moment: moment, picture: MomentBeforeAfterHalves.size(of: image.size)) }
+        } else if flags.isOn, let motion = moment.layers.motion, motion.url != nil {
+            // A Live Photo's motion (phase 5 C, CONTRACT 10b): once, silently, as it opens; again with its sound while held.
+            Color.clear
+                .overlay {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                        .accessibilityLabel("\(moment.author.shortName)'s photo")
+                        .accessibilityIdentifier("moments.viewer.photo")
+                        .overlay { MomentMotionLayer(motion: motion, fills: true) }
+                }
+                .clipped()
+                .overlay { MomentLayersOverlay(moment: moment, picture: image.size) }
+                .overlay(alignment: .bottomLeading) { MomentMotionMark().padding(.leading, 16).padding(.bottom, 120) }
+        } else if flags.isOn, MomentDepth.shows(reduceMotion: reduceMotion) {
+            // Depth windows (phase 4): tilt to look around; flat with Reduce Motion, in Low Power Mode, or when slow.
+            MomentDepthWindow(moment: moment, image: image)
         } else if flags.isOn, !moment.layers.dots.isEmpty || !moment.layers.play.isEmpty {
             // Dots and items open cards: they are laid over the frame that shows, not the photo's overflow, so a card
             // stays on the screen on a wide photo.
@@ -97,6 +118,10 @@ struct MomentLayersOverlay: View {
             // Clear underneath so the layers always have the picture's size (the stamps draw nothing without stamps).
             ZStack {
                 Color.clear
+                // A swatch's paint is tried on the photo, under the stamps.
+                if moment.layers.play.contains(where: { $0.kind == .swatch }) {
+                    MomentSwatchPaint(moment: moment, picture: picture)
+                }
                 MomentStampsOverlay(moment: moment, picture: picture)
                 if !moment.layers.play.isEmpty {
                     MomentPlayOverlay(moment: moment, picture: picture)

@@ -3,7 +3,9 @@
 // on Christmas morning by jobs/cardEmailSend, which also tries again one that didn't go, and by its sender's "Email it
 // again" (POST /api/mailbox/cards/:id/email-again). Three days after it went out, a card still unopened gets one reminder
 // (remind, below; jobs/cardEmailSend), between 9 a.m. and 8 p.m. where its sender lives, behind the server's
-// CARD_EMAIL_REMINDERS switch.
+// CARD_EMAIL_REMINDERS switch. While the card round is on (featureFlags cardImprovementsOn), a card sealed until
+// Christmas keeps its one reminder for Christmas morning instead: from 7 a.m. where its sender lives once its seal has
+// lifted, saying it is ready to open. Off, it is reminded three days after its email like any other card.
 //
 // Where it is lives on the card's Mail row, in mail_extracted.card.email ({ state, tries, at, sent_at };
 // services/holidayCards emailTrouble), so the sender's Sent can say when it didn't go out. A try first marks the row
@@ -20,7 +22,7 @@ const notificationService = require('./notificationService');
 const holidayCards = require('./holidayCards');
 const mailDelivery = require('./mailDelivery');
 const logger = require('../utils/logger');
-const { skipForLaunchCut, cardEmailRemindersEnabled } = require('../utils/featureFlags');
+const { skipForLaunchCut, cardEmailRemindersEnabled, cardImprovementsOn } = require('../utils/featureFlags');
 const { maskContact } = require('../jobs/mailEscrowExpiry');
 
 // Emails go a few at a time, not 20 connections to the mail server at once for a list, nor hundreds on Christmas morning.
@@ -35,6 +37,7 @@ const RETRY_EVERY_MS = 10 * 60 * 1000;
 // a card whose 10 days end at night still gets its reminder the next morning.
 const REMIND_AFTER_MS = 3 * 24 * 60 * 60 * 1000;
 const DAY_STARTS = 9;
+const CHRISTMAS_DAY_STARTS = 7;
 const DAY_ENDS = 20;
 const REMIND_UNTIL_MS = (10 * 24 + (24 - DAY_ENDS + DAY_STARTS)) * 60 * 60 * 1000;
 // A reminder that didn't go is tried again 10 minutes later, 3 tries in all; its sender is never told.
@@ -75,28 +78,34 @@ async function senderZone(mail) {
   return (await mailDelivery.personTimeZone(mail.sender_user_id)) || mailDelivery.FALLBACK_TIME_ZONE;
 }
 
-/** Whether it is daytime where this zone is: 9 a.m. up to 8 p.m. */
-function isDaytime(timeZone, now = new Date()) {
+/** Whether it is daytime where this zone is: 9 a.m. (or 7 a.m. for a sealed card opening on Christmas morning) up to 8 p.m. */
+function isDaytime(timeZone, now = new Date(), { fromHour = DAY_STARTS } = {}) {
   const { hour } = DateTime.fromJSDate(now, { zone: timeZone });
-  return hour >= DAY_STARTS && hour < DAY_ENDS;
+  return hour >= fromHour && hour < DAY_ENDS;
 }
 
 // The card's email as it is now: its words come from the card (who it's from, as stored when it was sent; sealed or
 // not and its picture; its 90 days told by the sender's clock), as the first try had them. `reminder`: its one reminder.
 // A card sealed until Christmas keeps its sealed envelope, but once Christmas morning has passed where its sender lives
-// its words no longer say it's sealed: it opens as soon as they join.
-async function sendOnce(mail, { reminder = false, timeZone: zone = null } = {}) {
+// its words no longer say it's sealed: it opens as soon as they join (or right in the browser).
+async function sendOnce(mail, { reminder = false, timeZone: zone = null, now = new Date() } = {}) {
   const token = holidayCards.cardEmailToken(mail.id);
   if (!token) return { ok: false, error: 'NO_LINK_SECRET' };
   const card = mail.mail_extracted?.card || {};
   const timeZone = zone || await senderZone(mail);
   const sealed = card.arrival === 'sealed_christmas';
+  // The card round: sealed for as long as the card itself says (its sealed_until), and its reminder once the seal has
+  // lifted says so. Off: by Christmas morning on the sender's clock, and the reminder's usual words, as before.
+  const improved = cardImprovementsOn();
+  const stillSealed = improved
+    ? sealed && (card.sealed_until ? Date.parse(card.sealed_until) > now.getTime() : holidayCards.christmasMorning(timeZone).getTime() > now.getTime())
+    : sealed && holidayCards.christmasMorning(timeZone).getTime() > Date.now();
   try {
     const sent = await emailService.sendCardWaitingEmail({
       toEmail: mail.escrow_recipient_contact, senderName: mail.sender_display || 'Someone',
       claimLink: escrowClaimLink(mail.id, token), expiresAt: mail.escrow_expires_at,
-      sealed, stillSealed: sealed && holidayCards.christmasMorning(timeZone).getTime() > Date.now(),
-      design: card.design || null, reminder, timeZone,
+      sealed, stillSealed,
+      design: card.design || null, reminder, ...(improved ? { unsealedReminder: Boolean(reminder && sealed && !stillSealed) } : {}), timeZone,
     });
     return sent?.success ? { ok: true } : { ok: false, error: sent?.error || 'EMAIL_NOT_SENT' };
   } catch (err) {
@@ -259,8 +268,17 @@ function remindable(mail, now = new Date()) {
   const email = emailOf(mail);
   if (!email || email.state !== 'sent' || !email.sent_at || !mail.escrow_recipient_contact) return false;
   if (mail.escrow_status !== 'pending' || !(Date.parse(mail.escrow_expires_at) > now.getTime())) return false;
-  const since = now.getTime() - Date.parse(email.sent_at);
-  if (!(since >= REMIND_AFTER_MS && since < REMIND_UNTIL_MS)) return false;
+  const card = mail?.mail_extracted?.card || {};
+  if (cardImprovementsOn() && card.arrival === 'sealed_christmas') {
+    // Sealed cards never waste their one reminder before Christmas morning; instead they remind once the seal lifts.
+    if (holidayCards.isSealed(mail, now)) return false;
+    const unlockedAt = Date.parse(card.sealed_until || email.sent_at);
+    const sinceUnlock = now.getTime() - unlockedAt;
+    if (!(sinceUnlock >= 0 && sinceUnlock < REMIND_UNTIL_MS)) return false;
+  } else {
+    const since = now.getTime() - Date.parse(email.sent_at);
+    if (!(since >= REMIND_AFTER_MS && since < REMIND_UNTIL_MS)) return false;
+  }
   const reminder = email.reminder;
   if (!reminder) return true;
   return reminder.state === 'failed' && (Number(reminder.tries) || 0) < REMIND_TRIES
@@ -278,12 +296,13 @@ async function remind(mail, now = new Date()) {
   if (skipForLaunchCut(['mailbox', 'holiday_cards'], 'cardEmailReminder')) return { skipped: true };
   if (!cardEmailRemindersEnabled() || !remindable(mail, now)) return { skipped: true };
   const timeZone = await senderZone(mail);
-  if (!isDaytime(timeZone, now)) return { skipped: true, night: true };
+  const fromHour = cardImprovementsOn() && mail?.mail_extracted?.card?.arrival === 'sealed_christmas' ? CHRISTMAS_DAY_STARTS : DAY_STARTS;
+  if (!isDaytime(timeZone, now, { fromHour })) return { skipped: true, night: true };
   const was = reminderOf(mail);
   const tries = (Number(was?.tries) || 0) + 1;
   const row = await writeReminder(mail, was, { ...(was || {}), state: 'sending', tries, at: now.toISOString() });
   if (!row) return { skipped: true };
-  const result = await inTurn(() => sendOnce(row, { reminder: true, timeZone }));
+  const result = await inTurn(() => sendOnce(row, { reminder: true, timeZone, now }));
   const at = new Date().toISOString();
   try {
     await writeReminder(row, reminderOf(row), result.ok
@@ -300,15 +319,8 @@ async function remind(mail, now = new Date()) {
   return { sent: false, error: result.error };
 }
 
-/**
- * The cards by email due their reminder (jobs/cardEmailSend), oldest email first, still waiting and not yet past their
- * 90 days, whatever the hour (remind waits for the sender's daytime): `fresh`, those whose email went out 3 to 10 days
- * ago with no reminder yet, `limit` of them from `offset` on, so a run can page past the ones waiting for their sender's
- * morning; and on the first page `again`, those whose reminder didn't go (remindable picks the ones whose last try was
- * 10 minutes ago or more, under REMIND_TRIES). Nothing while CARD_EMAIL_REMINDERS is off.
- */
-async function dueToRemind(now = new Date(), { offset = 0, limit = 200 } = {}) {
-  if (!cardEmailRemindersEnabled()) return { fresh: [], again: [] };
+// dueToRemind while the card round is off: every card alike, sealed or not, 3 to 10 days after its email went out.
+async function dueToRemindThreeDaysOn(now, { offset, limit }) {
   const window = () => supabaseAdmin.from('Mail').select(ROW)
     .eq('escrow_status', 'pending')
     .contains('tags', [holidayCards.CARD_TAG])
@@ -317,6 +329,42 @@ async function dueToRemind(now = new Date(), { offset = 0, limit = 200 } = {}) {
     .lte('mail_extracted->card->email->>sent_at', new Date(now.getTime() - REMIND_AFTER_MS).toISOString())
     .gt('mail_extracted->card->email->>sent_at', new Date(now.getTime() - REMIND_UNTIL_MS).toISOString())
     .order('mail_extracted->card->email->>sent_at', { ascending: true }).order('id', { ascending: true });
+  const [fresh, again] = await Promise.all([
+    window().is('mail_extracted->card->email->reminder', null).range(offset, offset + limit - 1),
+    offset ? Promise.resolve({ data: [] })
+      : window().eq('mail_extracted->card->email->reminder->>state', 'failed').limit(limit),
+  ]);
+  if (fresh.error || again.error) throw new Error((fresh.error || again.error).message);
+  return { fresh: fresh.data || [], again: (again.data || []).filter((mail) => remindable(mail, now)) };
+}
+
+/**
+ * The cards by email due their reminder (jobs/cardEmailSend), oldest email first, still waiting and not yet past their
+ * 90 days, whatever the hour (remind waits for the sender's daytime): `fresh`, those whose email went out 3 to 10 days
+ * ago (while the card round is on, a card sealed until Christmas instead once its seal has lifted, for about 10 days)
+ * with no reminder yet, `limit` of them from `offset` on, so a run can page past the ones waiting for their sender's
+ * morning; and on the first page `again`, those whose reminder didn't go (remindable picks the ones whose last try was
+ * 10 minutes ago or more, under REMIND_TRIES). Nothing while CARD_EMAIL_REMINDERS is off.
+ */
+async function dueToRemind(now = new Date(), { offset = 0, limit = 200 } = {}) {
+  if (!cardEmailRemindersEnabled()) return { fresh: [], again: [] };
+  if (!cardImprovementsOn()) return dueToRemindThreeDaysOn(now, { offset, limit });
+  // Both kinds in one list, in one order, so the job's one offset pages them truly: with a list for each, a page of
+  // cards waiting for their sender's morning pushed the offset past sealed cards that were due and never read.
+  const iso = (ms) => `"${new Date(ms).toISOString()}"`;
+  const sentAt = 'mail_extracted->card->email->>sent_at';
+  const sealedUntil = 'mail_extracted->card->>sealed_until';
+  const due = [
+    `and(mail_extracted->card->>arrival.neq.sealed_christmas,${sentAt}.lte.${iso(now.getTime() - REMIND_AFTER_MS)},${sentAt}.gt.${iso(now.getTime() - REMIND_UNTIL_MS)})`,
+    `and(mail_extracted->card->>arrival.eq.sealed_christmas,${sealedUntil}.lte.${iso(now.getTime())},${sealedUntil}.gt.${iso(now.getTime() - REMIND_UNTIL_MS)})`,
+  ].join(',');
+  const window = () => supabaseAdmin.from('Mail').select(ROW)
+    .eq('escrow_status', 'pending')
+    .contains('tags', [holidayCards.CARD_TAG])
+    .gt('escrow_expires_at', now.toISOString())
+    .eq('mail_extracted->card->email->>state', 'sent')
+    .or(due)
+    .order(sentAt, { ascending: true }).order('id', { ascending: true });
   const [fresh, again] = await Promise.all([
     window().is('mail_extracted->card->email->reminder', null).range(offset, offset + limit - 1),
     offset ? Promise.resolve({ data: [] })

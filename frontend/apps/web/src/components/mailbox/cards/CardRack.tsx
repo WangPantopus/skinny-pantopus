@@ -25,6 +25,7 @@ export default function CardRack({
   year,
   onClose,
   onWrite,
+  writeLabel = 'Write on this card',
 }: {
   /** The collection's pictures, in grid order. */
   designs: HolidayCardDesign[];
@@ -35,6 +36,8 @@ export default function CardRack({
   /** Back to the grid: the last card seen is the one ticked. */
   onClose: (lastSeen: string) => void;
   onWrite: (id: string) => void;
+  /** Its button's words (Pick a card first, `improved`: "Choose who it’s for" while no one is chosen yet). */
+  writeLabel?: string;
 }) {
   const [mounted, setMounted] = useState(false);
   const [at, setAt] = useState(() => Math.max(0, designs.findIndex((d) => d.id === start)));
@@ -168,7 +171,7 @@ export default function CardRack({
       </div>
       <p className={styles.srOnly} aria-live="polite">{`${design.caption}, ${at + 1} of ${designs.length}`}</p>
       <div className={styles.bottom}>
-        <button type="button" className={styles.primary} data-testid="cardRackWrite" onClick={() => onWrite(design.id)}>Write on this card</button>
+        <button type="button" className={styles.primary} data-testid="cardRackWrite" onClick={() => onWrite(design.id)}>{writeLabel}</button>
         <p className={styles.hint} aria-hidden="true">{designs.length > 1 ? 'Swipe for the next card' : ''}</p>
       </div>
     </div>,

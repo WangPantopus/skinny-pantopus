@@ -334,6 +334,7 @@ extension MomentsViewer {
                 if let image = model.image {
                     // The photo with its stamps; "Pulse, reinvented"'s layers only while the switch is on for you.
                     MomentPhotoSurface(moment: moment, image: image)
+                        .environment(\.momentHolding, model.holding) // A Live Photo's motion replays while held (CONTRACT 10b).
                 }
             case .video:
                 ZStack {
@@ -347,6 +348,7 @@ extension MomentsViewer {
                 .accessibilityLabel("\(moment.author.shortName)'s video")
                 .accessibilityIdentifier("moments.viewer.video")
                 .overlay { MomentLayersOverlay(moment: moment, picture: moment.pictureSize) }
+                .modifier(MomentWholeVideoFrame(moment: moment, player: model.video.player, poster: model.poster)) // CONTRACT 10c
             case .text:
                 // While a reply is being written the card keeps its color and gives up its words, so they
                 // don't read through the reactions and the reply box. On a table nothing covers the card.

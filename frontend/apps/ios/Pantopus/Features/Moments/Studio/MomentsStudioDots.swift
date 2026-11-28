@@ -268,6 +268,9 @@ extension MomentsComposerModel {
         (tools.blur, tools.pair) = (nil, nil)
         (tools.look, tools.lookOriginal, tools.lookResult) = (.original, nil, nil)
         tools.mentioned = []
+        // A Live Photo's clip that wasn't sent goes with its picture.
+        if let clip = tools.motion { try? FileManager.default.removeItem(at: clip.file) }
+        (tools.motion, tools.motionFor, tools.keepsMotion) = (nil, nil, true)
         marking.studio = tools
     }
 }

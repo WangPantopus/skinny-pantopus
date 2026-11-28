@@ -32,6 +32,9 @@ final class MomentPlayStore {
         set { wipedBy[MomentsComposerModel.account ?? ""] = newValue }
     }
 
+    /// The paint a reader is trying on each swatch ("<moment>/<item>" → the colour's index); none shows the original.
+    var swatchTried: [String: Int] = [:]
+
     /// The item whose author's answers list is open (a question box's answers, a board's notes).
     var answersOf: (moment: String, item: MomentPlayItem)?
     /// The Moment whose item has its write sheet open (a question box's answer, a board's note): the viewer holds.
@@ -106,6 +109,15 @@ struct MomentPlayOverlay: View {
     let moment: MomentDTO
     let picture: CGSize?
     private let store = MomentPlayStore.shared
+    /// Each card's own height as laid out (before its scale), to keep it inside what shows.
+    @State private var heights: [String: CGFloat] = [:]
+
+    /// Cards grow with the picture, but not past this on a wide screen (an iPad, the open Duo): a phone's card
+    /// drawn twice as big ran under the caption.
+    private static let largest: CGFloat = 1.4
+    /// The name row and chips over the top of the picture, and the caption and reply box over its bottom.
+    private static let topBand: CGFloat = 110
+    private static let bottomBand: CGFloat = 112
 
     var body: some View {
         GeometryReader { geo in
@@ -117,17 +129,22 @@ struct MomentPlayOverlay: View {
                     MomentFogLayer(moment: moment, item: fog)
                 }
                 ForEach(items.filter { $0.kind == .swatch }) { swatch in
-                    MomentSwatchLayer(item: swatch, frame: frame)
+                    MomentSwatchLayer(moment: moment, item: swatch, frame: frame)
                 }
-                ForEach(items.filter { ![.fog, .swatch, .beforeAfter, .unknown].contains($0.kind) }) { item in
+                // Moving words (CONTRACT 7k): drawn at their place, moving; never answered.
+                ForEach(items.filter { $0.kind == .movingWords }) { item in
+                    MomentMovingWordsView(item: item, unit: unit)
+                        .position(x: frame.minX + item.x * frame.width, y: frame.minY + item.y * frame.height)
+                }
+                ForEach(items.filter { ![.fog, .swatch, .beforeAfter, .movingWords, .unknown].contains($0.kind) }) { item in
+                    let scale = CGFloat(item.scale) * min(unit, Self.largest)
                     MomentPlayCard(moment: moment, item: item)
                         .frame(width: 268)
-                        .scaleEffect(CGFloat(item.scale) * unit)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { heights[item.id] = $0 }
+                        .scaleEffect(scale)
                         .rotationEffect(.degrees(item.rotation))
-                        .position(
-                            x: min(max(frame.minX + item.x * frame.width, 60), geo.size.width - 60),
-                            y: frame.minY + item.y * frame.height
-                        )
+                        .position(place(item, scale: scale, frame: frame, in: geo.size))
                 }
             }
         }
@@ -140,6 +157,23 @@ struct MomentPlayOverlay: View {
                     .presentationDetents([.medium, .large])
             }
         }
+    }
+
+    /// The card's centre: at its author's place on the picture, moved only as far as it takes to stay inside what
+    /// shows, below the name row and above the caption and reply box (a card placed low on a short screen, such as
+    /// the open Duo, or drawn big, such as on an iPad, ran under the caption). One that already fits is not moved.
+    private func place(_ item: MomentPlayItem, scale: CGFloat, frame: CGRect, in size: CGSize) -> CGPoint {
+        let halfWidth = 268 * scale / 2
+        let halfHeight = (heights[item.id] ?? 0) * scale / 2
+        let wanted = CGPoint(x: frame.minX + item.x * frame.width, y: frame.minY + item.y * frame.height)
+        let bottomBand = (moment.caption ?? "").isEmpty ? 76 : Self.bottomBand
+        let left = min(halfWidth + 8, size.width / 2)
+        let top = Self.topBand + halfHeight
+        let bottom = size.height - bottomBand - halfHeight
+        return CGPoint(
+            x: min(max(wanted.x, left), max(size.width - left, left)),
+            y: top <= bottom ? min(max(wanted.y, top), bottom) : (Self.topBand + size.height - bottomBand) / 2
+        )
     }
 }
 
@@ -177,7 +211,7 @@ struct MomentPlayCard: View {
                 case .guess: MomentGuessRevealCard(moment: moment, item: item)
                 case .countdown: MomentCountdownCard(item: item)
                 case .quote: MomentQuoteCard(item: item)
-                case .fog, .swatch, .beforeAfter, .unknown: EmptyView()
+                case .fog, .swatch, .beforeAfter, .movingWords, .unknown: EmptyView()
                 }
             } else {
                 MomentPlayPreview(item: item)

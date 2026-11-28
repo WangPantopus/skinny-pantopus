@@ -10,6 +10,7 @@ import { Minus, Plus, RotateCcw, RotateCw, X } from 'lucide-react';
 import { Card } from './PlayLayer';
 import { LETTERINGS, MOTIONS, letteringStyle } from './MovingWords';
 import type { PlayItem, PlayKind } from './playTypes';
+import { keepOn } from '../studio/frame';
 import './play.css';
 
 export const MAX_PLAY = 4;
@@ -81,7 +82,12 @@ export function PlayEditLayer({ items, onChange, disabled }: { items: PlayItem[]
             const d = drag.current;
             if (!d || d.id !== item.id) return;
             const b = box.current!.getBoundingClientRect();
-            put(item.id, { x: clamp((e.clientX - b.left) / b.width - d.dx, 0.05, 0.95), y: clamp((e.clientY - b.top) / b.height - d.dy, 0.05, 0.95) });
+            // At least 24 px of the item's own box stays on the canvas (PHASE-6 K2), within the item's own 0.05 to 0.95.
+            const r = e.currentTarget.getBoundingClientRect();
+            put(item.id, {
+              x: keepOn((e.clientX - b.left) / b.width - d.dx, r.width, b.width, 0.05, 0.95),
+              y: keepOn((e.clientY - b.top) / b.height - d.dy, r.height, b.height, 0.05, 0.95),
+            });
           }}
           onPointerUp={() => (drag.current = null)}
           onPointerCancel={() => (drag.current = null)}

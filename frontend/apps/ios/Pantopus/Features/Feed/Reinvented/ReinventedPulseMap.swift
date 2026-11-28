@@ -54,6 +54,10 @@ final class ReinventedMapModel {
     var position: MapCameraPosition = .userLocation(fallback: .automatic)
     /// The card the deck shows, and the pin it lights.
     var focused: String?
+    /// The map is being moved (PHASE-6 A2: the rail fades meanwhile). Set once when a move starts and once at its end.
+    var moving = false
+    /// The filters on (CONTRACT 10a, without `when`: the time row is the map's When); nil sends today's request.
+    private(set) var filters: [String: String]?
 
     @ObservationIgnored private var region: MKCoordinateRegion?
     @ObservationIgnored private var reading: Task<Void, Never>?
@@ -122,9 +126,18 @@ final class ReinventedMapModel {
         reading = Task { [weak self] in await self?.read() }
     }
 
+    /// The filters changed: the map reads again with them.
+    func apply(filters: [String: String]?) {
+        guard filters != self.filters else { return }
+        self.filters = filters
+        reading?.cancel()
+        reading = Task { [weak self] in await self?.read() }
+    }
+
     func pick(time: String) {
         guard time != self.time else { return }
         self.time = time
+        ReinventedPulseFilterStore.shared.set(time: time) // kept with the filters, per person on this phone
         reading?.cancel()
         reading = Task { [weak self] in await self?.read() }
     }
@@ -139,14 +152,16 @@ final class ReinventedMapModel {
 
     private func read() async {
         guard let region else { return }
-        let half = (lat: region.span.latitudeDelta / 2, lng: region.span.longitudeDelta / 2)
-        if atlas { return await readAtlas(region: region, half: half) }
+        // Held inside the world (`ReinventedMapBox`): out at the globe, the server answers it.
+        let box = ReinventedMapBox(region)
+        if atlas { return await readAtlas(box) }
         let endpoint = ReinventedEndpoints.map(
-            south: region.center.latitude - half.lat,
-            west: region.center.longitude - half.lng,
-            north: region.center.latitude + half.lat,
-            east: region.center.longitude + half.lng,
-            time: time
+            south: box.south,
+            west: box.west,
+            north: box.north,
+            east: box.east,
+            time: time,
+            filters: filters
         )
         guard let response = try? await api.requestDataResponse(endpoint, includingForbidden: true, includingNotFound: true),
               !Task.isCancelled else { return }
@@ -157,6 +172,7 @@ final class ReinventedMapModel {
                 + map.kept.map(Item.kept) + map.tickets.map(Item.ticket)
             arrangeDeck()
             MomentsGuessSpots.shared.spots = map.guessSpots
+            ReinventedLivingMap.shared.answered(response.data, region: region, time: time) // phase 4: floating, sun, beams
         case 404:
             ReinventedServer.shared.markBehind()
         case 403:
@@ -167,12 +183,12 @@ final class ReinventedMapModel {
     }
 
     /// My Atlas on the map: every kept Moment of the person's in the box, as their own pins.
-    private func readAtlas(region: MKCoordinateRegion, half: (lat: Double, lng: Double)) async {
+    private func readAtlas(_ box: ReinventedMapBox) async {
         let endpoint = ReinventedEndpoints.atlasBox(
-            south: region.center.latitude - half.lat,
-            west: region.center.longitude - half.lng,
-            north: region.center.latitude + half.lat,
-            east: region.center.longitude + half.lng
+            south: box.south,
+            west: box.west,
+            north: box.north,
+            east: box.east
         )
         guard let page: ReinventedAtlasPage = try? await api.request(endpoint), !Task.isCancelled, atlas else { return }
         items = page.moments.filter { !$0.noLocation }.map { moment in
@@ -186,6 +202,9 @@ final class ReinventedMapModel {
 struct ReinventedPulseMap: View {
     let model: ReinventedMapModel
     let onOpen: (ReinventedMapModel.Item) -> Void
+    /// Zoomed far out, the satellite globe you can turn, as today's Pulse and Moments maps (`MapGlobe`; founder,
+    /// 2026-11-28: the globe stays everywhere). Close in, the map's own look and its living layers are unchanged.
+    @State private var globe = MapGlobe()
 
     var body: some View {
         Map(position: Binding(get: { model.position }, set: { model.position = $0 })) {
@@ -196,9 +215,20 @@ struct ReinventedPulseMap: View {
                         .onTapGesture { onOpen(item) }
                 }
             }
+            ReinventedBeamsContent(beams: model.atlas ? [] : ReinventedLivingMap.shared.beams, night: ReinventedLivingMap.shared.night)
         }
+        .mapGlobe(globe, closeIn: .standard)
+        .reinventedNight() // phase 4: the map turns dark when the sun is down over it
         .mapControls {}
-        .onMapCameraChange(frequency: .onEnd) { context in model.moved(to: context.region) }
+        // The globe follows the zoom as it happens, not after the map stops.
+        .onMapCameraChange(frequency: .continuous) { context in
+            globe.follow(context.region)
+            if !model.moving { model.moving = true }
+        }
+        .onMapCameraChange(frequency: .onEnd) { context in
+            model.moving = false
+            model.moved(to: context.region)
+        }
         .accessibilityIdentifier("reinventedPulse.map")
     }
 }
@@ -213,7 +243,7 @@ struct ReinventedMapPin: View {
         Group {
             switch item {
             case let .ring(ring):
-                MomentRingPin(ring: ring)
+                ReinventedLivingRing(ring: ring) // phase 4: today's ring pin unless rings float
                     .accessibilityLabel("\(ring.author.shortName)'s Moment")
             case let .mark(mark):
                 markPin(PulseIntent.from(postType: mark.post.postType), headsUp: mark.headsUp)
@@ -222,10 +252,11 @@ struct ReinventedMapPin: View {
                 markPin(nil, headsUp: false)
                     .accessibilityLabel("A kept Moment")
             case let .ticket(ticket):
-                ticketPin(ticket)
+                ticketPin(ticket).reinventedBeacon(ticket) // phase 4: glows while rings float
             }
         }
         .scaleEffect(focused ? 1.18 : 1, anchor: .bottom)
+        .reinventedLit(item.id) // phase 4: lit or dimmed while the map shows what it was asked
         .animation(.spring(response: 0.3), value: focused)
         .accessibilityAddTraits(.isButton)
         .accessibilityIdentifier("reinventedPulse.pin.\(item.id)")
@@ -339,6 +370,7 @@ struct ReinventedPeekDeck: View {
         Button { onOpen(item) } label: {
             HStack(spacing: Spacing.s3) {
                 ReinventedMapPin(item: item, focused: false)
+                    .environment(\.reinventedFlat, true) // phase 4: the deck's pins stay flat
                     .frame(width: 64, height: 72)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(title(item))

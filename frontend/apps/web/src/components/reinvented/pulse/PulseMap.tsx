@@ -8,18 +8,17 @@
 // a height floats at it, with a sun-true shadow by day and as a lantern on a thread after sunset; a Moment shown as an
 // area is a soft cloud; plans glow as beacons; night falls on the map when it falls there; live beams (CONTRACT 9h)
 // cross where several people were looking.
-// Leaflet touches `window` at import: this file is loaded with next/dynamic and `ssr: false` only.
+// The map is a globe zoomed all the way out, as today's maps are (Mapbox GL, pulseMapEngine.ts), or the flat Leaflet map
+// where the globe can't load. Leaflet touches `window` at import: this file is loaded with next/dynamic and `ssr: false` only.
 
 import { useEffect, useRef, useState } from 'react';
-import L from 'leaflet';
-import '@/components/map/leaflet-setup';
-import { MAP_PUBLIC_TOKEN, RETINA_TILE_URL, TILE_ATTRIBUTION } from '@/components/map/constants';
-import { createCachedTileLayer } from '@/components/map/CachedTileLayer';
+import { MAP_PUBLIC_TOKEN } from '@/components/map/constants';
 import { colors } from '@/components/moments/momentState';
 import { ticketWhen, type Box, type ListItem, type Point } from './listApi';
 import type { Pin } from './pins';
-import { liftOf, nightOf, shadowOf, sunPosition, type Beam, type PlaceSound, type Sun } from './mapLight';
+import { liftOf, lightOf, nightOf, shadowOf, sunPosition, type Beam, type PlaceSound, type Sun } from './mapLight';
 import type { Lit } from './AskTheMap';
+import { globePossible, openFlat, openGlobe, type Mark, type MapEngine, type Spot } from './pulseMapEngine';
 import './sky.css';
 
 export interface FlyTarget extends Point {
@@ -40,7 +39,8 @@ interface Props {
   layoutKey: string;
   flyTo: FlyTarget | null;
   selected: string | null;
-  onBox(box: Box): void;
+  /** The box in view (the map's own reads) and the box of the part left open by the top line and the list (the list's). */
+  onBox(box: Box, open: Box): void;
   onPick(key: string): void;
   /** Heights and floating are on for this reader (the read's `heights_on` and `float_on`). */
   float?: boolean;
@@ -50,6 +50,8 @@ interface Props {
   lit?: Lit | null;
   /** Listen to the town (CONTRACT 9g): the place sounds in view, heard by moving across the map. */
   sounds?: PlaceSound[] | null;
+  /** The map started moving (true) and came to rest (false): the rail fades meanwhile (PHASE-6 A2). */
+  onMoving?(moving: boolean): void;
 }
 
 // How near, in pixels, the pointer must come to a place sound to hear it; it is louder nearer.
@@ -174,119 +176,140 @@ function pinTitle(pin: Pin): string {
   return `Plan: ${pin.ticket.title}`;
 }
 
-/** How far the controls over the top of the map and the list over its bottom reach into it, in pixels. */
-function coveredInsets(mapEl: HTMLElement | null): { top: number; bottom: number } {
+interface Cover {
+  top: number;
+  bottom: number;
+  left: number;
+}
+
+/**
+ * How far the top line over the map, the sheet over its bottom (a phone's width) and the floating panel over its left (a
+ * wide screen, PHASE-6 E) reach into it, in pixels: the map counts only the part left open.
+ */
+function coveredInsets(mapEl: HTMLElement | null): Cover {
   const board = mapEl?.closest('.rp-board');
-  if (!mapEl || !board) return { top: 0, bottom: 0 };
+  if (!mapEl || !board) return { top: 0, bottom: 0, left: 0 };
   const m = mapEl.getBoundingClientRect();
   const overlaps = (r: DOMRect) => r.width > 0 && r.left < m.right - 1 && r.right > m.left + 1;
-  let top = 0, bottom = 0;
-  const above = board.querySelector('.rp-map-top');
+  let top = 0, bottom = 0, left = 0;
+  const above = board.querySelector('.rp-top');
   if (above) {
     const r = above.getBoundingClientRect();
     if (overlaps(r)) top = Math.max(0, Math.min(m.height, r.bottom - m.top));
   }
-  const sheet = board.querySelector('.rp-sheet');
+  const sheet = board.querySelector<HTMLElement>('.rp-sheet');
   if (sheet) {
     const r = sheet.getBoundingClientRect();
-    if (overlaps(r) && r.top < m.bottom) bottom = Math.max(0, Math.min(m.height, m.bottom - r.top));
+    if (sheet.dataset.wide !== undefined) {
+      if (overlaps(r)) left = Math.max(0, Math.min(m.width, r.right - m.left));
+    } else if (overlaps(r) && r.top < m.bottom) bottom = Math.max(0, Math.min(m.height, m.bottom - r.top));
   }
-  return { top, bottom };
+  return { top, bottom, left };
 }
 
-export default function PulseMap({ pins, listItems, fitKey, fallback, layoutKey, flyTo, selected, onBox, onPick, float = false, beams, lit = null, sounds = null }: Props) {
+export default function PulseMap({ pins, listItems, fitKey, fallback, layoutKey, flyTo, selected, onBox, onPick, float = false, beams, lit = null, sounds = null, onMoving }: Props) {
   const ref = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<L.Map | null>(null);
-  const layerRef = useRef<L.LayerGroup | null>(null);
-  const beamRef = useRef<L.LayerGroup | null>(null);
-  const soundRef = useRef<L.LayerGroup | null>(null);
+  // The globe where it can load, else the flat map (also when the globe's basemap errors or is slow).
+  const [flat, setFlat] = useState(() => !globePossible());
+  const [map, setMap] = useState<MapEngine | null>(null);
+  const mapNow = useRef<MapEngine | null>(null);
+  mapNow.current = map;
   // The sun over the map's centre, read again as the map moves and every minute.
   const [sun, setSun] = useState<Sun | null>(null);
   const elements = useRef(new Map<string, HTMLElement>());
   const fitted = useRef<string | null>(null);
-  const latest = useRef({ onPick, onBox, selected });
-  latest.current = { onPick, onBox, selected };
-  const insets = useRef({ top: 0, bottom: 0 });
+  const latest = useRef({ onPick, onBox, selected, onMoving });
+  latest.current = { onPick, onBox, selected, onMoving };
+  const insets = useRef<Cover>({ top: 0, bottom: 0, left: 0 });
   const [tilesMissing, setTilesMissing] = useState(!MAP_PUBLIC_TOKEN);
 
   useEffect(() => {
-    if (!ref.current) return undefined;
-    const map = L.map(ref.current, { zoomControl: false, minZoom: 2, maxZoom: 19, worldCopyJump: true }).setView([39.5, -98.35], 4);
-    if (MAP_PUBLIC_TOKEN)
-      createCachedTileLayer(RETINA_TILE_URL, TILE_ATTRIBUTION)
-        .on('tileerror', () => setTilesMissing(true))
-        .on('tileload', () => setTilesMissing(false))
-        .addTo(map);
-    L.control.zoom({ position: 'topright' }).addTo(map);
-    beamRef.current = L.layerGroup().addTo(map);
-    soundRef.current = L.layerGroup().addTo(map);
-    layerRef.current = L.layerGroup().addTo(map);
-    mapRef.current = map;
-    const light = () => {
-      const c = map.getCenter();
-      const next = sunPosition(c.lat, c.lng);
-      ref.current?.style.setProperty('--rp-night', nightOf(next).toFixed(2));
-      // A new sun only when it moved enough to change a shadow, so the pins aren't drawn again each minute.
-      setSun((prev) =>
-        prev && Math.abs(prev.azimuth_deg - next.azimuth_deg) < 3 && Math.abs(prev.elevation_deg - next.elevation_deg) < 1.5 && prev.elevation_deg > 0 === next.elevation_deg > 0
-          ? prev
-          : next,
-      );
+    const el = ref.current;
+    if (!el) return undefined;
+    let active = true,
+      engine: MapEngine | null = null,
+      clock = 0,
+      timer = 0,
+      relight: (() => void) | null = null;
+    const resize = new ResizeObserver(() => engine?.resize());
+    // PHASE-5 D: the map is dark while the browser is set to dark, or where it is night where the map is looking; bright
+    // otherwise. It turns at once when the browser's setting changes.
+    const dark = window.matchMedia('(prefers-color-scheme: dark)');
+    const onDark = () => relight?.();
+    dark.addEventListener('change', onDark);
+    const start = (m: MapEngine) => {
+      engine = m;
+      const light = () => {
+        const c = m.center();
+        const next = sunPosition(c.latitude, c.longitude);
+        // The globe takes the basemap's own light; the flat map's tiles are dimmed (fully while the browser is dark).
+        el.style.setProperty('--rp-night', (dark.matches ? 1 : nightOf(next)).toFixed(2));
+        m.light(lightOf(next, dark.matches));
+        // A new sun only when it moved enough to change a shadow, so the pins aren't drawn again each minute.
+        setSun((prev) =>
+          prev && Math.abs(prev.azimuth_deg - next.azimuth_deg) < 3 && Math.abs(prev.elevation_deg - next.elevation_deg) < 1.5 && prev.elevation_deg > 0 === next.elevation_deg > 0
+            ? prev
+            : next,
+        );
+      };
+      m.onSettled(light);
+      clock = window.setInterval(light, 60_000);
+      relight = light;
+      light();
+      // The box in view, once the map has its first view; the map reads it again after each move.
+      m.onMoveStart(() => latest.current.onMoving?.(true));
+      m.onSettled(() => {
+        latest.current.onMoving?.(false);
+        if (!fitted.current) return;
+        window.clearTimeout(timer);
+        timer = window.setTimeout(() => latest.current.onBox(m.box(), m.openBox({ ...coveredInsets(el), right: 0 })), 250);
+      });
+      resize.observe(el);
+      // A fresh map fits the list again.
+      fitted.current = null;
+      setMap(m);
     };
-    map.on('moveend', light);
-    const clock = window.setInterval(light, 60_000);
-    light();
-    // The box in view, once the map has its first view; the map reads it again after each move.
-    let timer = 0;
-    map.on('moveend', () => {
-      if (!fitted.current) return;
-      window.clearTimeout(timer);
-      timer = window.setTimeout(() => {
-        const b = map.getBounds();
-        latest.current.onBox({ south: b.getSouth(), west: b.getWest(), north: b.getNorth(), east: b.getEast() });
-      }, 250);
-    });
-    const resize = new ResizeObserver(() => map.invalidateSize());
-    resize.observe(ref.current);
+    if (flat) start(openFlat(el, setTilesMissing));
+    else
+      // Its first light from the sun where it opens (the first fit then moves it and the light follows).
+      openGlobe(el, () => active && setFlat(true), lightOf(sunPosition(39.5, -98.35), dark.matches))
+        .then((m) => {
+          if (!active) m?.remove();
+          else if (m) start(m);
+          else setFlat(true);
+        })
+        .catch(() => active && setFlat(true));
     return () => {
+      active = false;
       window.clearTimeout(timer);
       window.clearInterval(clock);
       resize.disconnect();
-      map.remove();
-      mapRef.current = null;
-      layerRef.current = null;
-      beamRef.current = null;
-      soundRef.current = null;
+      dark.removeEventListener('change', onDark);
+      engine?.remove();
+      setMap(null);
     };
-  }, []);
+  }, [flat]);
 
   // The first view: the list's points (or home), once per fresh list.
   useEffect(() => {
-    const map = mapRef.current;
     if (!map || fitted.current === fitKey) return;
     const points = listItems.map(itemPoint).filter((p): p is Point => !!p);
     if (!points.length && !fallback && !listItems.length) return;
     fitted.current = fitKey;
     const cover = (insets.current = coveredInsets(ref.current));
     if (points.length) {
-      map.fitBounds(L.latLngBounds(points.map((p) => [p.latitude, p.longitude] as L.LatLngTuple)), {
-        maxZoom: 14,
-        paddingTopLeft: [40, 40 + Math.round(cover.top)],
-        paddingBottomRight: [40, 40 + Math.round(cover.bottom)],
-        animate: false,
-      });
+      map.fit(points, { top: 40 + Math.round(cover.top), bottom: 40 + Math.round(cover.bottom), side: 40, left: Math.round(cover.left) }, 14);
     } else if (fallback) {
-      map.setView([fallback.latitude, fallback.longitude], 12, { animate: false });
-      map.panBy([0, (cover.bottom - cover.top) / 2], { animate: false });
+      map.show(fallback, 12);
+      map.panBy(-cover.left / 2, (cover.bottom - cover.top) / 2);
     }
-    map.fire('moveend');
-  }, [listItems, fitKey, fallback]);
+    map.settle();
+  }, [map, listItems, fitKey, fallback]);
 
   // The pins: tickets under marks under rings, and Heads-ups over everything.
   useEffect(() => {
-    const layer = layerRef.current;
-    if (!layer) return;
-    layer.clearLayers();
+    if (!map) return;
+    const marks: Mark[] = [];
     elements.current.clear();
     const now = Date.now();
     const sky: Sky = { float, sun };
@@ -306,31 +329,26 @@ export default function PulseMap({ pins, listItems, fitKey, fallback, layoutKey,
       }
       elements.current.set(pin.key, el);
       const headsUp = pin.type === 'mark' && pin.mark.heads_up;
-      const marker = L.marker([pin.point.latitude, pin.point.longitude], {
-        icon: L.divIcon({
-          html: el,
-          className: 'rp-leaflet-icon' + (size ? '' : ' rp-leaflet-free'),
-          iconSize: size ?? undefined,
-          iconAnchor: size ? [size[0] / 2, size[1] / 2] : undefined,
-        }),
-        zIndexOffset: lit?.pins.has(pin.key) ? 4000 : headsUp ? 3000 : pin.type === 'ring' || pin.type === 'kept' || pin.type === 'explore' ? 2000 : pin.type === 'mark' ? 1000 : 0,
-        keyboard: true,
+      marks.push({
+        point: pin.point,
+        el,
+        size,
+        className: 'rp-leaflet-icon' + (size ? '' : ' rp-leaflet-free'),
+        z: lit?.pins.has(pin.key) ? 4000 : headsUp ? 3000 : pin.type === 'ring' || pin.type === 'kept' || pin.type === 'explore' ? 2000 : pin.type === 'mark' ? 1000 : 0,
         title: pinTitle(pin),
+        onClick: () => latest.current.onPick(pin.key),
       });
-      marker.on('click', () => latest.current.onPick(pin.key));
-      marker.addTo(layer);
     }
-  }, [pins, float, sun, lit]);
+    map.draw('pins', marks);
+  }, [map, pins, float, sun, lit]);
 
   // Listen to the town: a small mark at each place sound; moving across the map plays the nearest one, louder nearer,
   // one at a time, and stops when the pointer leaves it. On a phone, where nothing moves without a finger down, a tap on
   // a mark (drawn as a badge at the top right of its Moment's pin, above the pins) or near it plays that sound once, and
   // a second tap stops it. Nothing plays until the reader turned Listen on.
   useEffect(() => {
-    const map = mapRef.current;
-    const layer = soundRef.current;
-    if (!map || !layer) return undefined;
-    layer.clearLayers();
+    if (!map) return undefined;
+    map.draw('sounds', []);
     if (!sounds?.length) return undefined;
     let playing: { id: string; audio: HTMLAudioElement; tapped?: boolean } | null = null;
     const stop = () => {
@@ -350,26 +368,38 @@ export default function PulseMap({ pins, listItems, fitKey, fallback, layoutKey,
       void audio.play().catch(() => playing?.audio === audio && stop());
     };
     const tapOn = (s: PlaceSound) => (playing?.tapped && playing.id === s.moment_id ? stop() : play(s, true));
-    for (const s of sounds)
-      L.marker([s.latitude, s.longitude], {
-        icon: L.divIcon({ html: '<span class="rp-sound" aria-hidden="true">♪</span>', className: 'rp-leaflet-icon', iconSize: [26, 26], iconAnchor: [-6, 32] }),
-        title: 'Hear this place',
-        // Above every pin, lit ones included (they go up to 4000), so a tap on the badge always reaches it.
-        zIndexOffset: 5000,
-        keyboard: true,
-      })
-        .on('click', () => tapOn(s))
-        .addTo(layer);
-    const nearest = (at: L.Point) => {
+    map.draw(
+      'sounds',
+      sounds.map((s) => {
+        const el = document.createElement('span');
+        el.className = 'rp-sound';
+        el.setAttribute('aria-hidden', 'true');
+        el.textContent = '♪';
+        return {
+          point: { latitude: s.latitude, longitude: s.longitude },
+          el,
+          size: [26, 26] as [number, number],
+          anchor: [-6, 32] as [number, number],
+          className: 'rp-leaflet-icon',
+          // Above every pin, lit ones included (they go up to 4000), so a tap on the badge always reaches it.
+          z: 5000,
+          title: 'Hear this place',
+          onClick: () => tapOn(s),
+        };
+      }),
+    );
+    const nearest = (at: Spot) => {
       let best: { s: PlaceSound; d: number } | null = null;
       for (const s of sounds) {
-        const d = map.latLngToContainerPoint([s.latitude, s.longitude]).distanceTo(at);
+        const p = map.spot({ latitude: s.latitude, longitude: s.longitude });
+        if (!p) continue;
+        const d = Math.hypot(p.x - at.x, p.y - at.y);
         if (d <= HEAR_PX && (!best || d < best.d)) best = { s, d };
       }
       return best;
     };
-    const hear = (e: L.LeafletMouseEvent) => {
-      const best = nearest(e.containerPoint);
+    const hear = (at: Spot) => {
+      const best = nearest(at);
       if (!best) return stop();
       const volume = Math.max(0.15, 1 - best.d / HEAR_PX);
       if (playing?.id === best.s.moment_id) {
@@ -379,35 +409,23 @@ export default function PulseMap({ pins, listItems, fitKey, fallback, layoutKey,
       play(best.s, false, volume);
       return undefined;
     };
-    const tap = (e: L.LeafletMouseEvent) => {
-      const best = nearest(e.containerPoint);
+    const tap = (at: Spot) => {
+      const best = nearest(at);
       return best ? tapOn(best.s) : stop();
     };
-    map.on('mousemove', hear);
-    map.on('mouseout', stop);
-    map.on('click', tap);
+    const off = map.onPointer(hear, stop, tap);
     return () => {
-      map.off('mousemove', hear);
-      map.off('mouseout', stop);
-      map.off('click', tap);
+      off();
       stop();
     };
-  }, [sounds]);
+  }, [map, sounds]);
 
   // Live beams: a faint line from each capture to where they all looked, and a glow there. Not tappable.
   useEffect(() => {
-    const layer = beamRef.current;
-    if (!layer) return;
-    layer.clearLayers();
+    if (!map) return;
     const night = (sun?.elevation_deg ?? 30) <= 0;
-    const color = night ? '#fde68a' : '#38bdf8';
-    for (const beam of beams || []) {
-      const to: L.LatLngTuple = [beam.target.latitude, beam.target.longitude];
-      for (const f of beam.from)
-        L.polyline([[f.latitude, f.longitude], to], { color, weight: 3, opacity: 0.45, interactive: false, className: 'rp-beam' }).addTo(layer);
-      L.circleMarker(to, { radius: 9, color, weight: 0, fillColor: color, fillOpacity: 0.35, interactive: false, className: 'rp-beam-target' }).addTo(layer);
-    }
-  }, [beams, sun]);
+    map.beams(beams || [], night ? '#fde68a' : '#38bdf8');
+  }, [map, beams, sun]);
 
   useEffect(() => {
     elements.current.forEach((el, key) => el.classList.toggle('rp-pin-selected', key === selected));
@@ -417,25 +435,23 @@ export default function PulseMap({ pins, listItems, fitKey, fallback, layoutKey,
   // map stays in the middle of the open part, once the list has finished moving.
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      const map = mapRef.current;
+      const map = mapNow.current;
       if (!map || !fitted.current) return;
       const before = insets.current, after = coveredInsets(ref.current);
       insets.current = after;
       const dy = (after.bottom - after.top - (before.bottom - before.top)) / 2;
-      if (Math.abs(dy) > 2) map.panBy([0, dy], { animate: false });
+      const dx = -(after.left - before.left) / 2;
+      if (Math.abs(dy) > 2 || Math.abs(dx) > 2) map.panBy(dx, dy);
     }, 300);
     return () => window.clearTimeout(timer);
   }, [layoutKey]);
 
   useEffect(() => {
-    const map = mapRef.current;
+    const map = mapNow.current;
     if (!flyTo || !map) return;
     // Centre the place in the part of the map left open.
     const cover = coveredInsets(ref.current);
-    const zoom = flyTo.keepZoom ? map.getZoom() : Math.max(map.getZoom(), 15);
-    const at = map.project([flyTo.latitude, flyTo.longitude], zoom).add([0, (cover.bottom - cover.top) / 2]);
-    if (flyTo.keepZoom) map.panTo(map.unproject(at, zoom), { duration: 0.45 });
-    else map.flyTo(map.unproject(at, zoom), zoom, { duration: 0.6 });
+    map.flyTo(flyTo, Math.max(map.zoom(), 15), (cover.bottom - cover.top) / 2, !!flyTo.keepZoom, cover.left / 2);
   }, [flyTo]);
 
   return (

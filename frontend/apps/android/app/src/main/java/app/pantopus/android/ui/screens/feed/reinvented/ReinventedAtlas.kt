@@ -69,6 +69,7 @@ internal fun ReinventedAtlasList(
     onMore: () -> Unit,
     onRetry: () -> Unit,
     modifier: Modifier = Modifier,
+    search: (@Composable () -> Unit)? = null,
 ) {
     val moments = state.moments
     if (moments == null) {
@@ -101,6 +102,8 @@ internal fun ReinventedAtlasList(
         horizontalArrangement = Arrangement.spacedBy(Spacing.s1),
         verticalArrangement = Arrangement.spacedBy(Spacing.s1),
     ) {
+        // Atlas search (phase 4, `feed/living/LivingAtlasSearch.kt`): the field, and its results while a search shows.
+        search?.let { item(span = { GridItemSpan(maxLineSpan) }, key = "search") { it() } }
         item(span = { GridItemSpan(maxLineSpan) }, key = "intro") {
             Text(
                 text = if (moments.isEmpty()) ATLAS_EMPTY else ATLAS_INTRO,

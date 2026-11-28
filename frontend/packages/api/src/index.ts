@@ -311,10 +311,10 @@ export { getMagicDraft, getBasicDraft, magicPost, undoTask, getTemplateLibrary, 
 export { streamChat, draftListing, draftListingFromImages, draftPost, summarizeMail, getPlaceBrief, getConversations as getAIConversations, deleteConversation as deleteAIConversation } from './endpoints/ai';
 
 // Convenience exports from Mail Compose
-export { sendComposedMail, searchRecipients, getRecipientHomeContext, requestAISuggestion, uploadVoicePostscript, getEscrowedMailPublic, claimEscrowedMail, withdrawEscrowedMail } from './endpoints/mailCompose';
+export { sendComposedMail, searchRecipients, getRecipientHomeContext, requestAISuggestion, uploadVoicePostscript, getEscrowedMailPublic, openEscrowedCardGuest, claimEscrowedMail, withdrawEscrowedMail } from './endpoints/mailCompose';
 
 // Types from Mail Compose
-export type { SendMailResponse, RecipientSearchResult, HomeContext, EscrowedMailView, EscrowClaimErrorCode, ClaimEscrowedMailResponse, CardLinkFront } from './endpoints/mailCompose';
+export type { SendMailResponse, RecipientSearchResult, HomeContext, EscrowedMailView, GuestOpenCardResponse, EscrowClaimErrorCode, ClaimEscrowedMailResponse, CardLinkFront } from './endpoints/mailCompose';
 
 // Types from Magic Task
 export type { MagicDraftRequest, MagicDraftResponse, MagicTaskDraft, MagicPostRequest, MagicPostResponse, SmartTemplate, SavedTaskTemplate, MagicSettings, ClarifyingQuestion, TaskItem, ScheduleType, PayType, TaskSourceFlow, PrivacyLevel, LocationMode } from '@pantopus/types';

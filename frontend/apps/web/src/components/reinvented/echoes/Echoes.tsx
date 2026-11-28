@@ -10,6 +10,14 @@ import { Sparkles } from 'lucide-react';
 import { get } from '@pantopus/api/client';
 import './echoes.css';
 
+/** Who else, when both chose to show names (9e's `names`): "With Maya", "With Maya and Sam", "With Maya, Sam and Lee". */
+export function withNames(names: string[] | null | undefined): string | null {
+  const list = (names || []).map((n) => (typeof n === 'string' ? n.trim() : '')).filter(Boolean);
+  if (!list.length) return null;
+  if (list.length === 1) return `With ${list[0]}`;
+  return `With ${list.slice(0, -1).join(', ')} and ${list[list.length - 1]}`;
+}
+
 interface Echo {
   moment_id: string;
   kind: 'sunset' | 'convergence' | 'place';
@@ -65,11 +73,13 @@ export default function Echoes({ account, onOpen }: { account: string; onOpen?(m
             ) : (
               <span>{x.line}</span>
             )}
+            {withNames(x.names) && <small className="ec-names">{withNames(x.names)}</small>}
           </li>
         ))}
         {e.twins.map((t) => (
           <li key={`t:${t.card}`}>
             <span>{t.line}</span>
+            {withNames(t.names) && <small className="ec-names">{withNames(t.names)}</small>}
           </li>
         ))}
       </ul>

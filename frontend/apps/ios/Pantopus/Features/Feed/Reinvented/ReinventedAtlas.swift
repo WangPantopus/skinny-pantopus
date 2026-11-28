@@ -142,6 +142,7 @@ struct ReinventedAtlasView: View {
 
     private var loaded: some View {
         LazyVStack(alignment: .leading, spacing: Spacing.s3) {
+            ReinventedAtlasSearch() // phase 4: Atlas search (CONTRACT 9b)
             Text("My Atlas: every Moment you take is kept here for you alone, after it fades for everyone else.")
                 .font(.system(size: 13))
                 .foregroundStyle(Theme.Color.appTextSecondary)

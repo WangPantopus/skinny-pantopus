@@ -13,7 +13,11 @@ import { mailbox } from '@pantopus/api';
 import { SERIF } from './cardArt';
 import CardPhotoViewer, { LiveMark, type PhotoOrigin } from './CardPhotoViewer';
 
-export type PrintSource = { own: string } | { sent: string; fileId: string } | { piece: string; fileId: string };
+export type PrintSource =
+  | { own: string }
+  | { sent: string; fileId: string }
+  | { piece: string; fileId: string }
+  | { claim: string; token: string; fileId: string };
 
 /** The photo's bytes as an object URL (null while loading, or `failed`), for as long as the caller shows it. */
 export function useCardMediaUrl(source: PrintSource | null): { url: string | null; failed: boolean } {

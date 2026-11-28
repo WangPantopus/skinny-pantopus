@@ -8,6 +8,7 @@ import android.location.Location
 import android.os.Build
 import android.util.Base64
 import androidx.core.content.ContextCompat
+import app.pantopus.android.data.location.awaitLocationOrNull
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import com.google.android.gms.tasks.CancellationTokenSource
@@ -89,7 +90,7 @@ class HomeLocationProof
                     LocationServices
                         .getFusedLocationProviderClient(context)
                         .getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, cancellation.token)
-                        .await()
+                        .awaitLocationOrNull()
                 }?.toReading()
             } catch (_: SecurityException) {
                 null
