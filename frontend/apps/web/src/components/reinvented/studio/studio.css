@@ -245,13 +245,13 @@
 }
 .st-looks button {
   flex: none;
-  height: 34px;
+  height: 32px;
   padding: 0 13px;
   border: 1px solid var(--st-line);
   border-radius: 17px;
   background: var(--st-soft);
   color: #fff;
-  font-size: 15px;
+  font-size: 13px;
   line-height: 1;
   white-space: nowrap;
 }
@@ -294,7 +294,7 @@
 }
 .st-done {
   justify-self: end;
-  height: 34px;
+  height: 32px;
   padding: 0 16px;
   border: 0;
   border-radius: 17px;
@@ -344,7 +344,7 @@
 }
 .st-start p {
   margin: 0 0 8px;
-  font-size: 18px;
+  font-size: 15px;
   font-weight: 700;
   line-height: 24px;
 }
@@ -431,7 +431,7 @@
   line-height: 18px;
 }
 .st-chip {
-  height: 34px;
+  height: 32px;
   padding: 0 15px;
   border: 1px solid var(--st-line);
   border-radius: 17px;
@@ -457,7 +457,7 @@
 .st-when {
   flex: 1;
   min-width: 0;
-  height: 48px;
+  height: 44px;
   padding: 0 14px;
   border: 1px solid var(--st-line);
   border-radius: 24px;
@@ -491,13 +491,13 @@
 .st-post {
   flex: none;
   min-width: 92px;
-  height: 48px;
+  height: 44px;
   padding: 0 16px;
   border: 0;
   border-radius: 24px;
   background: var(--st-blue);
   color: #fff;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 700;
   display: inline-flex;
   align-items: center;
@@ -544,7 +544,7 @@
 }
 .st-panel h3 {
   margin: 0;
-  font-size: 18px;
+  font-size: 15px;
 }
 .st-panel p {
   margin: 0;
@@ -616,7 +616,7 @@
 }
 .st-drawer h2 {
   margin: 0;
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 700;
 }
 .st-drawer fieldset {
@@ -768,7 +768,7 @@
 }
 .st-tray h2 {
   margin: 0;
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 700;
 }
 .st-tray-head {
@@ -1129,4 +1129,30 @@
 .st-studio[data-dragging] :is(.st-top, .st-rail, .st-foot, .st-toolpanel) {
   opacity: 0.3;
   pointer-events: none;
+}
+/* PHASE-6 F3: the details are a real sheet on a narrow screen: a grabber over the summary line, which a drag up opens, and
+   one on the drawer's header, which a drag down closes. The browser leaves those drags to the Studio. */
+.st-grabber {
+  display: block;
+  width: 36px;
+  height: 5px;
+  margin: -4px auto 0;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.35);
+  touch-action: none;
+}
+.st-studio:not([data-wide]) .st-bar .st-row,
+.st-drawer-head {
+  touch-action: none;
+}
+.st-drawer header.st-drawer-head {
+  position: relative;
+  padding-top: 10px;
+  cursor: grab;
+}
+.st-drawer-head .st-grabber {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  margin: 0 0 0 -18px;
 }

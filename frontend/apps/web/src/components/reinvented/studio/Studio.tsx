@@ -154,6 +154,58 @@ function useWide() {
   return wide;
 }
 
+/**
+ * A drag that means one thing (PHASE-6 F3): the Studio's details are a real sheet, opened by dragging the summary line up
+ * and closed by dragging its header down. A tap stays the control's own; only a clear vertical drag does `act`.
+ */
+function useDragTo(direction: 'up' | 'down', act: () => void) {
+  const skipClick = useRef(false);
+  const stop = useRef<(() => void) | null>(null);
+  const latest = useRef(act);
+  latest.current = act;
+  useEffect(() => () => stop.current?.(), []);
+  return {
+    // The press is followed on the window from the moment it lands, so a long mouse drag that leaves the summary line or
+    // the header still counts (LEAD-7's look, 05:26); a tap stays the control's own click.
+    onPointerDown: (e: React.PointerEvent) => {
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      stop.current?.();
+      const id = e.pointerId,
+        x0 = e.clientX,
+        y0 = e.clientY;
+      const move = (ev: PointerEvent) => {
+        if (ev.pointerId !== id) return;
+        const dy = ev.clientY - y0,
+          dx = Math.abs(ev.clientX - x0);
+        if ((direction === 'up' ? -dy : dy) > 28 && Math.abs(dy) > dx * 1.5) {
+          end();
+          skipClick.current = true;
+          window.setTimeout(() => (skipClick.current = false), 300);
+          latest.current();
+        }
+      };
+      const up = (ev: PointerEvent) => ev.pointerId === id && end();
+      const end = () => {
+        window.removeEventListener('pointermove', move);
+        window.removeEventListener('pointerup', up);
+        window.removeEventListener('pointercancel', up);
+        stop.current = null;
+      };
+      window.addEventListener('pointermove', move);
+      window.addEventListener('pointerup', up);
+      window.addEventListener('pointercancel', up);
+      stop.current = end;
+    },
+    // The click that ends a drag is not a tap.
+    onClickCapture: (e: React.MouseEvent) => {
+      if (!skipClick.current) return;
+      skipClick.current = false;
+      e.stopPropagation();
+      e.preventDefault();
+    },
+  };
+}
+
 function Chip({ on, children, ...rest }: { on: boolean; children: ReactNode } & React.ButtonHTMLAttributes<HTMLButtonElement>) {
   return (
     <button type="button" className="st-chip" aria-pressed={on} {...rest}>
@@ -369,6 +421,8 @@ export default function Studio({
     window.addEventListener('pointerup', end, true);
     window.addEventListener('pointercancel', end, true);
   };
+  const dragOpen = useDragTo('up', () => setDrawerOpen(true));
+  const dragClose = useDragTo('down', () => setDrawerOpen(false));
   // The eyedropper waits for one tap only while Text or Draw stays open.
   useEffect(() => setPicking(false), [tool]);
   // Undo: the lines as they were before the last line or rub; else today's step, the last line off.
@@ -1639,7 +1693,8 @@ export default function Studio({
       aria-label="Post settings"
       data-wide={wide || undefined}
     >
-      <header>
+      <header className={wide ? undefined : 'st-drawer-head'} {...(wide ? {} : dragClose)}>
+        {!wide && <span className="st-grabber" aria-hidden="true" />}
         <h2>Post settings</h2>
         {!wide && (
           <button type="button" className="st-done" onClick={() => setDrawerOpen(false)}>
@@ -2293,7 +2348,7 @@ export default function Studio({
                   aria-pressed={tool === 'resize'}
                   onClick={() => setTool(tool === 'resize' ? null : 'resize')}
                 >
-                  <Crop size={21} aria-hidden="true" />
+                  <Crop size={20} aria-hidden="true" />
                 </button>
               </div>
               {canLoop && (
@@ -2313,7 +2368,7 @@ export default function Studio({
                       setLoopOpen(!loopOpen);
                     }}
                   >
-                    <Repeat size={21} aria-hidden="true" />
+                    <Repeat size={20} aria-hidden="true" />
                   </button>
                 </div>
               )}
@@ -2352,7 +2407,7 @@ export default function Studio({
                       setSoundOpen(!soundOpen);
                     }}
                   >
-                    <Mic size={21} aria-hidden="true" />
+                    <Mic size={20} aria-hidden="true" />
                   </button>
                 </div>
               )}
@@ -2371,7 +2426,7 @@ export default function Studio({
                       setBlurOn(!blurOn);
                     }}
                   >
-                    <EyeOff size={21} aria-hidden="true" />
+                    <EyeOff size={20} aria-hidden="true" />
                   </button>
                 </div>
               )}
@@ -3048,8 +3103,10 @@ export default function Studio({
                   )}
                   <div className="st-bar">
                     {/* The details as one line (PHASE-5 A4): where, how long and who sees it; a tap opens the drawer
-                        (who sees it is chosen at its top). Nothing of them covers the picture until asked. */}
-                    <div className="st-row">
+                        (who sees it is chosen at its top). Nothing of them covers the picture until asked. The line is
+                        also the sheet's handle: a drag up opens the details (PHASE-6 F3). */}
+                    {!wide && <span className="st-grabber" aria-hidden="true" {...dragOpen} />}
+                    <div className="st-row" {...(wide ? {} : dragOpen)}>
                       <button
                         type="button"
                         className="st-when st-summary"
