@@ -126,10 +126,19 @@ extension MomentsComposerModel {
         return false
     }
 
-    /// The photo, as today's post photo.
+    /// The photo, as today's post photo. A Live Photo whose motion is kept (PHASE-5 C, CONTRACT 10b's last part) goes
+    /// with its clip paired exactly as today's Pulse composer pairs one: a second file and `slots` with `liveVideoIndex`,
+    /// so readers get today's `live_photo` and `media_live_urls`. Nothing new on the server.
     private func sendStudioPhoto(_ photo: Data, postId: String) async -> Bool {
-        let file = MultipartFile(fieldName: "files", filename: "studio.jpg", mimeType: "image/jpeg", data: photo)
-        return await (try? MultipartUploader.shared.uploadPostMedia(postId: postId, files: [file])) != nil
+        var files = [MultipartFile(fieldName: "files", filename: "studio.jpg", mimeType: "image/jpeg", data: photo)]
+        var slot = ["fileIndex": 0]
+        if studioKeepsMotion, PulseReinventedFlags.shared.isOn, let clip = studioMotionClip,
+           let motion = try? Data(contentsOf: clip.file) {
+            slot["liveVideoIndex"] = files.count
+            files.append(MultipartFile(fieldName: "files", filename: "live-0.mp4", mimeType: "video/mp4", data: motion))
+        }
+        let media = files.count > 1 ? (try? JSONEncoder().encode([slot])).flatMap { String(bytes: $0, encoding: .utf8) } : nil
+        return await (try? MultipartUploader.shared.uploadPostMedia(postId: postId, files: files, media: media)) != nil
     }
 
     /// Today's post body for what the Studio holds.
