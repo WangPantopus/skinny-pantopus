@@ -182,20 +182,28 @@ fun ReinventedPulseScreen(
         list = list,
     )
     ReinventedCardSheets(viewModel.cards, cards, actions.onQuotePost)
-    // The following list's posts have their own cards, so their menus and Repost sheets too.
-    val followCards by followModel.cards.cards.collectAsStateWithLifecycle()
-    val followToast by followModel.toast.collectAsStateWithLifecycle()
-    ReinventedCardSheets(followModel.cards, followCards, actions.onQuotePost)
+    FollowCardSheets(followModel, actions.onQuotePost)
     ReinventedAtlasItem(atlasState, atlasModel::close, atlasModel::askDelete, atlasModel::keep, atlasModel::deleteForGood)
     // Phase 3 (CONTRACT 8e): the Retake opened from the list, and the Studio it asks for.
     MomentRetakeListSheet()
     MomentConvergenceListSheet()
     TogetherStudioOpener(actions.onCompose)
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
-        ReinventedToast(toast ?: followToast, onDismiss = {
-            viewModel.dismissToast()
-            followModel.dismissToast()
-        })
+        ReinventedToast(toast, onDismiss = viewModel::dismissToast)
+    }
+}
+
+/** The following list's posts have their own cards (PHASE-6 B): their menus, Repost sheets and toast. */
+@Composable
+private fun FollowCardSheets(
+    followModel: ReinventedFollowViewModel,
+    onQuotePost: ((String) -> Unit)?,
+) {
+    val cards by followModel.cards.cards.collectAsStateWithLifecycle()
+    val toast by followModel.toast.collectAsStateWithLifecycle()
+    ReinventedCardSheets(followModel.cards, cards, onQuotePost)
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
+        ReinventedToast(toast, onDismiss = followModel::dismissToast)
     }
 }
 
@@ -455,7 +463,7 @@ private fun ReinventedListPane(
  */
 @Composable
 // What the layout shows, its height, and where each part's taps go; the phone's and the wide window's parts, built once.
-@Suppress("LongParameterList", "LongMethod")
+@Suppress("LongParameterList", "LongMethod", "CyclomaticComplexMethod")
 private fun ReinventedPulseLayout(
     height: ReinventedHeight,
     onHeight: (ReinventedHeight) -> Unit,
