@@ -209,7 +209,8 @@ export default function ReinventedPulse() {
   // Try again".
   const lastGood = useRef<InfiniteData<ListPage, unknown> | undefined>(undefined);
   if (list.data && !list.isPlaceholderData) lastGood.current = list.data;
-  const waiting = list.isFetching || list.isPaused;
+  // A read of this area out (not the next page of it, which has its own "Loading more…").
+  const waiting = (list.isFetching && !list.isFetchingNextPage) || list.isPaused;
   const [slow, setSlow] = useState(false);
   useEffect(() => {
     if (!waiting) {
@@ -1040,8 +1041,10 @@ export default function ReinventedPulse() {
                     {onlyHeadsUps
                       ? `Nothing else matches these filters ${reach === 'close' ? 'in your circle' : 'around you'} right now. Safety notices always show.`
                       : filtered
-                      ? `Nothing matches these filters ${reach === 'close' ? 'in your circle' : 'around you'} right now.`
-                      : reach === 'close'
+                      ? `Nothing matches these filters ${following ? 'on this part of the map' : reach === 'close' ? 'in your circle' : 'around you'} right now.`
+                      : following
+                        ? 'Nothing on this part of the map right now. Move the map, or turn on No place.'
+                        : reach === 'close'
                         ? 'Nothing from your circle right now. Their Moments and posts show here as they share them.'
                         : 'Nothing around you right now. Post the first Moment, or ask something.'}
                   </p>
