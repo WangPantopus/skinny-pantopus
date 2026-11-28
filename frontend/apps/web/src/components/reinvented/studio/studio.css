@@ -1129,6 +1129,7 @@
 .st-studio[data-dragging] :is(.st-top, .st-rail, .st-foot, .st-toolpanel) {
   opacity: 0.3;
   pointer-events: none;
+}
 /* PHASE-6 F3: the details are a real sheet on a narrow screen: a grabber over the summary line, which a drag up opens, and
    one on the drawer's header, which a drag down closes. The browser leaves those drags to the Studio. */
 .st-grabber {
