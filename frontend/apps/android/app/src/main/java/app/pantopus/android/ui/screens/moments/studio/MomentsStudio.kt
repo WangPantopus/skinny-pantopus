@@ -304,6 +304,8 @@ internal fun MomentsStudioStep(
             StudioGuessLine(state)
             // A whole photo: Fill or Fit, and Reset (PHASE-5 A).
             StudioWholeRow(state, whole, wholeLive, onPlaceWhole, Modifier.padding(start = Spacing.s4, bottom = Spacing.s3))
+            // A motion photo: "Keep the motion" (PHASE-5 C).
+            StudioMotionRow(state, Modifier.padding(start = Spacing.s4, bottom = Spacing.s3))
             // A caption goes with a photo or a video; a text card is its own words.
             if (state.media != null) {
                 // After "@" at the end of the caption: the author's connections (never under a made-up name).

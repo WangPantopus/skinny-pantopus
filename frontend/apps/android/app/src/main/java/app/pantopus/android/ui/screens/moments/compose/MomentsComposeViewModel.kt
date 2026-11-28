@@ -64,6 +64,7 @@ import app.pantopus.android.ui.screens.moments.compose.marks.MomentPlacementPain
 import app.pantopus.android.ui.screens.moments.compose.marks.shape
 import app.pantopus.android.ui.screens.moments.map.metersBetween
 import app.pantopus.android.ui.screens.moments.studio.StudioMention
+import app.pantopus.android.ui.screens.moments.studio.StudioMotion
 import app.pantopus.android.ui.screens.moments.studio.StudioPair
 import app.pantopus.android.ui.screens.moments.studio.holdsStudioChoices
 import app.pantopus.android.ui.screens.moments.studio.sentBackdrop
@@ -1399,6 +1400,8 @@ class MomentsComposeViewModel
                         else -> {
                             val latitude = pinned?.let { moment.latitude ?: it.first }
                             posting.start(moment, media, latitude, pinned?.let { moment.longitude ?: it.second })
+                            // "Pulse, reinvented"'s Studio: a motion photo's kept clip follows its photo up (PHASE-5 C).
+                            StudioMotion.posted(moment.id)
                             // The photo that posts carries its marks: the one as it came isn't needed any more.
                             marksKeeper.drop()
                         }
