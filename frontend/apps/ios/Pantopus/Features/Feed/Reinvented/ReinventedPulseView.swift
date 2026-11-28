@@ -3,9 +3,10 @@
 //  Pantopus
 //
 //  "Pulse, reinvented" phase 1 (PHASE-1 §2 pieces 2 to 5; board B1): Pulse as it opens while `pulse_reinvented` is on.
-//  The top row (the side menu, the scope pill with the town's name, the chat button), the List | Map switch, the chips
-//  the place has, and the list resting over the map at three heights: the middle (the map across the top third, the
-//  list below: how it opens), List (full screen) and Map (full screen). A Moment that fades is borderless and full
+//  The top row (the side menu, the scope pill with the town's name, the chat button), the Map | Atlas switch, the chips
+//  the place has, and the list over the map. Phase 6 (PHASE-6 §2 A3): on a phone the list is a sheet with three rests
+//  (peek, half: how it opens, full), moved only by its header (`ReinventedPulseSheet`); the List button is gone, the
+//  sheet is the list. A Moment that fades is borderless and full
 //  width with its time left; a post that stays is today's Pulse card with a status line. Bands mark the distance; the
 //  list ends "Caught up around you. Keep exploring?". Built beside today's feed (`FeedView`), which shows whenever the
 //  switch is off.
@@ -15,8 +16,11 @@ import MapKit
 import SwiftUI
 
 struct ReinventedPulseView: View {
+    /// The sheet's rests on a phone (PHASE-6 A3). Side by side: half shows both, full the list alone, peek the map.
     enum Height {
-        case middle, list, map
+        case peek, half, full
+
+        static let phone: [Height] = [.peek, .half, .full]
     }
 
     let onOpenPost: (String) -> Void
@@ -24,8 +28,7 @@ struct ReinventedPulseView: View {
     @State private var model = ReinventedPulseModel()
     @State private var map = ReinventedMapModel()
     @State private var strip = ReinventedStripModel()
-    @State private var height: Height = .middle
-    @State private var dragged: CGFloat = 0
+    @State private var height: Height = .half
     @State private var showsDial = false
     /// My Atlas (CONTRACT 6e, `ReinventedAtlas`): the switch's third choice, and the kept Moment opened from it.
     @State private var atlas = ReinventedAtlasModel()
@@ -78,13 +81,20 @@ struct ReinventedPulseView: View {
 
     /// One camera (PHASE-1 §2.11): + opens the Studio. Its "+ Ask / Kind" comes with that piece.
     private var addButton: some View {
+        addButton(small: false)
+    }
+
+    /// `small`: in the sheet's header at full (PHASE-6 A4), still 44 pt to the finger.
+    private func addButton(small: Bool) -> some View {
         Button {
             ReinventedStudioPresenter.shared.composing = MomentsComposeRequest(model: MomentsComposerModel(), studio: true)
         } label: {
-            Icon(.plus, size: 26, strokeWidth: 2.6, color: .white)
-                .frame(width: 58, height: 58)
+            Icon(.plus, size: small ? 18 : 26, strokeWidth: 2.6, color: .white)
+                .frame(width: small ? 32 : 58, height: small ? 32 : 58)
                 .background(Circle().fill(Theme.Color.primarySolid))
-                .shadow(color: .black.opacity(0.25), radius: 6, y: 3)
+                .shadow(color: .black.opacity(small ? 0 : 0.25), radius: 6, y: 3)
+                .frame(width: small ? 44 : 58, height: small ? 44 : 58)
+                .contentShape(Circle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Add a Moment")
@@ -147,14 +157,11 @@ struct ReinventedPulseView: View {
         }
     }
 
-    /// The big List | Map switch (the middle height reads as List; side by side, as List and Map).
+    /// Map | Atlas (PHASE-6 A1: the List button is gone, the sheet is the list).
     private func viewSwitch(sideBySide: Bool) -> some View {
         HStack(spacing: 4) {
-            switchButton("List", icon: .list, on: !inAtlas && height != .map) { pick(.list, sideBySide: sideBySide) }
-            switchButton("Map", icon: .map, on: !inAtlas && (sideBySide ? height != .list : height == .map)) {
-                pick(.map, sideBySide: sideBySide)
-            }
-            switchButton("Atlas", icon: .bookmark, on: inAtlas) { show(atlas: true, at: sideBySide ? .middle : .list) }
+            switchButton("Map", icon: .map, on: !inAtlas) { pick(.peek, sideBySide: sideBySide) }
+            switchButton("Atlas", icon: .bookmark, on: inAtlas) { show(atlas: true, at: sideBySide ? .half : .full) }
         }
         .padding(4)
         .background(Capsule().fill(Theme.Color.appSurface))
@@ -228,60 +235,15 @@ struct ReinventedPulseView: View {
         withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) { height = next }
     }
 
-    /// Under the top row, the switch and the chips.
+    /// Under the top row, the switch and the chips: where the sheet's top stops at full.
     private static let header: CGFloat = 150
 
-    /// Where the panel's top rests for a height.
-    private func rest(_ height: Height, in geo: GeometryProxy) -> CGFloat {
-        switch height {
-        case .list: Self.header
-        case .middle: Self.header + geo.size.height / 3
-        case .map: geo.size.height - 64
-        }
-    }
-
-    private func panelTop(in geo: GeometryProxy) -> CGFloat {
-        rest(height, in: geo)
-    }
-
-    private func panel(in geo: GeometryProxy) -> some View {
-        VStack(spacing: 0) {
-            Capsule()
-                .fill(Theme.Color.appBorder)
-                .frame(width: 40, height: 5)
-                .padding(.vertical, Spacing.s2)
-                .frame(maxWidth: .infinity)
-                .contentShape(Rectangle())
-                .gesture(dragToRest(in: geo))
-                .accessibilityLabel(height == .map ? "Show the list" : "List height")
-                .accessibilityAddTraits(.isButton)
-                .onTapGesture { setHeight(height == .map ? .middle : height == .middle ? .list : .middle) }
-                .accessibilityIdentifier("reinventedPulse.handle")
-            panelContent
-        }
-        .frame(maxWidth: .infinity, alignment: .top)
-        .frame(height: max(geo.size.height - min(max(panelTop(in: geo) + dragged, 120), geo.size.height - 64), 64), alignment: .top)
-        .background(
-            UnevenRoundedRectangle(topLeadingRadius: height == .list ? 0 : 22, topTrailingRadius: height == .list ? 0 : 22)
-                .fill(Theme.Color.appBg)
-                .shadow(color: .black.opacity(height == .list ? 0 : 0.12), radius: 8, y: -2)
-                .ignoresSafeArea(edges: .bottom)
-        )
-        .frame(maxHeight: .infinity, alignment: .bottom)
-    }
-
-    /// Pull the panel up or down; it rests at the nearest of the three heights.
-    private func dragToRest(in geo: GeometryProxy) -> some Gesture {
-        DragGesture()
-            .onChanged { value in dragged = value.translation.height }
-            .onEnded { value in
-                let top = panelTop(in: geo) + value.translation.height
-                let nearest = [Height.list, .middle, .map].min {
-                    abs(rest($0, in: geo) - top) < abs(rest($1, in: geo) - top)
-                } ?? .middle
-                dragged = 0
-                setHeight(nearest)
-            }
+    /// The header's one line: how many things the map holds and when ("23 here · Live").
+    private var sheetLine: String {
+        let count = map.items.count
+        if inAtlas { return count == 1 ? "1 kept here" : "\(count) kept here" }
+        let when = ReinventedMapModel.times.first { $0.key == map.time }?.title ?? "Live"
+        return "\(count) here · \(when)"
     }
 
     /// The viewer opens from the Pulse tab's root (`ReinventedStudioCover`), outside the tab's navigation stack.
@@ -341,20 +303,18 @@ extension ReinventedPulseView {
     /// A phone, or a screen too narrow for both: the list rests over the map at three heights.
     @ViewBuilder
     private func overMap(in geo: GeometryProxy) -> some View {
-        panel(in: geo)
-        if height == .map {
-            ReinventedPeekDeck(model: map, onOpen: open)
-                .frame(maxHeight: .infinity, alignment: .bottom)
-                .padding(.bottom, 76)
-        } else {
-            addButton
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-                .padding(.trailing, Spacing.s4)
-                .padding(.bottom, 92)
+        ReinventedPulseSheet(
+            rest: $height,
+            height: geo.size.height,
+            fullTop: Self.header,
+            line: sheetLine,
+            content: panelContent
+        ) { small in
+            addButton(small: small)
         }
         header(sideBySide: false)
             .padding(.bottom, Spacing.s2)
-            .background(height == .list ? Theme.Color.appBg : Color.clear)
+            .background(height == .full ? Theme.Color.appBg : Color.clear)
     }
 
     /// An iPad or the open iPhone Duo held sideways (PHASE-1 §2.2): the list and the map side by side.
@@ -374,9 +334,9 @@ extension ReinventedPulseView {
     private func header(sideBySide: Bool) -> some View {
         VStack(spacing: Spacing.s2) {
             // Over the map the buttons float; side by side they stand on the list's background but at the Map height.
-            topRow(floating: sideBySide ? height == .map : height != .list)
+            topRow(floating: sideBySide ? height == .peek : height != .full)
             viewSwitch(sideBySide: sideBySide)
-            if height == .map, !inAtlas {
+            if height == .peek, !inAtlas {
                 ReinventedTimeRow(model: map)
                 ReinventedAskBar(map: map) // phase 4: Ask the map
             } else if model.reach != "explore", !inAtlas {
@@ -402,15 +362,15 @@ extension ReinventedPulseView {
         }
     }
 
-    /// List or Map from the switch. Side by side the middle height shows both: the lit one tapped again goes back to
-    /// both, and from My Atlas List goes back to both.
+    /// Map from the switch. On a phone the sheet lowers to its peek to show the map. Side by side, Map shows the map
+    /// alone, and tapped again both.
     private func pick(_ next: Height, sideBySide: Bool) {
         if !sideBySide {
             show(atlas: false, at: next)
         } else if inAtlas {
-            show(atlas: false, at: next == .map ? .map : .middle)
+            show(atlas: false, at: .half)
         } else {
-            show(atlas: false, at: height == next ? .middle : next)
+            show(atlas: false, at: height == next ? .half : next)
         }
     }
 }

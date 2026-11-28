@@ -4,9 +4,9 @@
 //
 //  "Pulse, reinvented" phase 1 (PHASE-1 §2.2): on an iPad and the open iPhone Duo held sideways, List and Map sit
 //  side by side. Pulse opens with the list in a phone-wide column on the left (the top row, the switch and the chips
-//  over it) and the map filling the rest, with the time row over the map. List fills the window with the list in the
-//  reading column; Map fills it with the map, the top row and the switch at the top left and the deck along the
-//  bottom. Tapping the lit List or Map again goes back to both. The column is the one "Verified homes nearby" puts
+//  over it) and the map filling the rest, with the time row over the map. Map fills the window with the map, the top
+//  row and the switch at the top left and the deck along the bottom; tapping the lit Map again goes back to both.
+//  (The list alone, the full rest, is reached from My Atlas.) The column is the one "Verified homes nearby" puts
 //  beside its map (`SideBySideColumnWidth.nearby`), so a screen too narrow for it (a phone, the Duo upright, an iPad
 //  window beside another app) keeps the list resting over the map (`ReinventedPulseView`). Only drawn while
 //  `pulse_reinvented` is on.
@@ -34,7 +34,7 @@ enum ReinventedPulseColumns {
 
     /// Where the map starts: past the column and its line while both show, at the screen's edge otherwise.
     static func mapInset(_ height: ReinventedPulseView.Height, sideBySide: Bool) -> CGFloat {
-        sideBySide && height == .middle ? column + 1 : 0
+        sideBySide && height == .half ? column + 1 : 0
     }
 }
 
@@ -51,9 +51,9 @@ struct ReinventedPulseSideBySide<Header: View, Content: View, Add: View>: View {
 
     var body: some View {
         switch height {
-        case .middle: both
-        case .list: listAlone
-        case .map: mapAlone
+        case .half: both
+        case .full: listAlone
+        case .peek: mapAlone
         }
     }
 
