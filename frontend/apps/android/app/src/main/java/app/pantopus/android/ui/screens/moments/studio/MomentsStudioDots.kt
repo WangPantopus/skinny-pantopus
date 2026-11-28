@@ -140,6 +140,7 @@ internal fun StudioDotLayer(
                 modifier =
                     Modifier
                         .offset { IntOffset((cx - dotPx / 2).roundToInt(), (cy - dotPx / 2).roundToInt()) }
+                        .studioItemDrag()
                         .pointerInput(dot.id, enabled) {
                             if (!enabled) return@pointerInput
                             detectTapGestures { onOpen(dot.id) }
@@ -153,8 +154,8 @@ internal fun StudioDotLayer(
                                             it
                                         } else {
                                             it.copy(
-                                                x = dotX(it.x + amount.x / frame.width, reach),
-                                                y = dotY(it.y + amount.y / frame.height, reach),
+                                                x = dotX(it.x + amount.x / frame.width, reach, dotPx / 2 / frame.width),
+                                                y = dotY(it.y + amount.y / frame.height, reach, dotPx / 2 / frame.height),
                                             )
                                         }
                                     },
@@ -396,13 +397,18 @@ private fun Hint(words: String) {
     Text(words, color = PantopusColors.studioPillSecondary, fontSize = 13.sp)
 }
 
-/** A dot's middle across: anywhere on the whole stage's canvas ([reach]), else inside the picture as before. */
+/**
+ * A dot's middle across: anywhere on the whole stage's canvas ([reach]) with 24 dp of it ([half] each side, a share of the
+ * frame) on the canvas, else inside the picture as before.
+ */
 private fun dotX(
     x: Double,
     reach: StudioReach?,
-): Double = reach?.x(x) ?: x.coerceIn(0.04, 0.96)
+    half: Float,
+): Double = reach?.x(x, half.toDouble()) ?: x.coerceIn(0.04, 0.96)
 
 private fun dotY(
     y: Double,
     reach: StudioReach?,
-): Double = reach?.y(y) ?: y.coerceIn(0.04, 0.96)
+    half: Float,
+): Double = reach?.y(y, half.toDouble()) ?: y.coerceIn(0.04, 0.96)

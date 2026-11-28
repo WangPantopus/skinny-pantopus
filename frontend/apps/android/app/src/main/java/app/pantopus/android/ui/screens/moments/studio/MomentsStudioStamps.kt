@@ -417,6 +417,7 @@ private fun StudioPlacedStamp(
             Modifier
                 .stampPlaced(placement, frame)
                 .onSizeChanged { measured = it }
+                .studioItemDrag()
                 .then(
                     if (!enabled) {
                         Modifier
@@ -424,7 +425,7 @@ private fun StudioPlacedStamp(
                         Modifier.stampGestures(placement.kind, onTap = { onPick(if (isPicked) null else latest.kind) }) { pan, zoom, turn ->
                             val now = latest
                             val moved =
-                                reachNow?.let { now.movedFree(pan.x, pan.y, zoom, turn, onFrame, it) }
+                                reachNow?.let { now.movedFree(pan.x, pan.y, zoom, turn, measured, onFrame, it) }
                                     ?: now.moved(pan.x, pan.y, zoom, turn, measured, onFrame, inside)
                             onStamps(stamps.map { if (it.kind == now.kind) moved else it })
                             onPick(now.kind)
@@ -505,23 +506,27 @@ private fun Modifier.pickedFrame(): Modifier =
 
 /**
  * On the whole stage (PHASE-6 F): a stamp moved by [panX], [panY] (screen pixels), sized by [zoom] (0.25 to 4) and
- * turned by [turn] degrees, its middle anywhere on the canvas ([reach]); nothing pulls it back toward the middle.
+ * turned by [turn] degrees, anywhere on the canvas ([reach]) with 24 dp of its own box ([measured]) still on it (K2);
+ * nothing pulls it back toward the middle.
  */
 private fun MomentStampPlacement.movedFree(
     panX: Float,
     panY: Float,
     zoom: Float,
     turn: Float,
+    measured: IntSize,
     frame: Rect,
     reach: StudioReach,
 ): MomentStampPlacement {
+    val sized = (scale * zoom).coerceIn(0.25, 4.0)
+    val grown = sized / scale
     var degrees = rotation + turn
     while (degrees > 180) degrees -= 360
     while (degrees < -180) degrees += 360
     return copy(
-        x = reach.x(x + panX / max(frame.width, 1f)),
-        y = reach.y(y + panY / max(frame.height, 1f)),
-        scale = (scale * zoom).coerceIn(0.25, 4.0),
+        x = reach.x(x + panX / max(frame.width, 1f), measured.width * grown / 2 / max(frame.width, 1f)),
+        y = reach.y(y + panY / max(frame.height, 1f), measured.height * grown / 2 / max(frame.height, 1f)),
+        scale = sized,
         rotation = degrees,
     )
 }

@@ -31,6 +31,7 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
@@ -41,6 +42,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -55,6 +57,8 @@ import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -212,29 +216,19 @@ internal fun MomentsStudioStep(
         // A photo shows whole, on its own colours (PHASE-5 A); a video, a text card and before and after as before.
         val whole = rememberStudioWhole(state, lookPicture, read = onTrayOpen, onWhole = onWhole)
         val wholeLive = remember { mutableStateOf<MomentPlacement?>(null) }
+        // The canvas fits between the status bar and the bottom bar, which never covers it (PHASE-6 K1).
+        var barHeight by remember { mutableIntStateOf(0) }
+        val room = StudioRoom(top = WindowInsets.statusBars.getTop(LocalDensity.current).toFloat(), bottom = barHeight.toFloat())
         StudioPictureAndLayers(
             whole = whole,
             state = state,
             live = wholeLive,
             onPlace = onPlaceWhole,
+            room = room,
             picture = { if (pair != null) StudioBeforeAfterPicture(pair) else StudioPicture(state) },
         ) {
             TogetherStudioGhost(state)
             if (pair == null) StudioCutoutPress(state, onLift = onLiftCutout)
-            // The stamps sit on the picture, under the X, the tools, the caption and the bar.
-            StudioStampLayer(state = state, onStamps = onStamps)
-            StudioDotLayer(state.dots, rememberStudioPicture(state), enabled = !state.posting, onDots = onDots) { id ->
-                pickedDot = id
-                illuminate = true
-            }
-            StudioPlayLayer(state.items, rememberStudioPicture(state), enabled = !state.posting, onItems = onItems) { id ->
-                // Moving words open their own form; a poll or a countdown opens the play form.
-                val words = state.items.any { it.id == id && it.movingWords }
-                wordsItem = id.takeIf { words }
-                wordsForm = words
-                playItem = id.takeUnless { words }
-                playForm = !words
-            }
         }
         // The fades keep the rail and the caption readable over a bright picture.
         Box(
@@ -258,7 +252,8 @@ internal fun MomentsStudioStep(
             enabled = state.canRetake,
             card = state.media == null,
             onClick = onBack,
-            modifier = Modifier.statusBarsPadding().padding(start = Spacing.s4, top = 11.dp),
+            // While an item is dragged the X and the tools fade and take no touches (PHASE-6 K3).
+            modifier = Modifier.fadesWhileAnItemMoves().statusBarsPadding().padding(start = Spacing.s4, top = 11.dp),
         )
         // Text, Draw and Resize change a photo or a video; Stamps and Play reads the spot, so it needs a place (a text
         // card has only Stamps and Play).
@@ -273,8 +268,30 @@ internal fun MomentsStudioStep(
                     onTrayOpen()
                 }.takeIf { !state.noLocationOn },
             onIlluminate = { illuminate = true }.takeIf { state.media != null },
-            modifier = Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(end = Spacing.s4, top = 11.dp),
+            modifier =
+                Modifier
+                    .align(Alignment.TopEnd)
+                    .fadesWhileAnItemMoves()
+                    .statusBarsPadding()
+                    .padding(end = Spacing.s4, top = 11.dp),
         )
+        // The items on the picture: over the X and the tools, so an item under one gets the touch (PHASE-6 K3), and under
+        // the caption and the bar.
+        StudioItemsOver(whole, state, room) {
+            StudioStampLayer(state = state, onStamps = onStamps)
+            StudioDotLayer(state.dots, rememberStudioPicture(state), enabled = !state.posting, onDots = onDots) { id ->
+                pickedDot = id
+                illuminate = true
+            }
+            StudioPlayLayer(state.items, rememberStudioPicture(state), enabled = !state.posting, onItems = onItems) { id ->
+                // Moving words open their own form; a poll or a countdown opens the play form.
+                val words = state.items.any { it.id == id && it.movingWords }
+                wordsItem = id.takeIf { words }
+                wordsForm = words
+                playItem = id.takeUnless { words }
+                playForm = !words
+            }
+        }
         Column(
             modifier =
                 Modifier
@@ -328,15 +345,17 @@ internal fun MomentsStudioStep(
                 )
                 Spacer(Modifier.height(Spacing.s4))
             }
-            StudioBar(
-                state = state,
-                homeNoteDue = gate.homeNoteDue,
-                onHomeNoteShown = gate::homeNoteShown,
-                postAs = postAs,
-                refused = refused,
-                onOpenDrawer = { drawer = true },
-                onPost = onPost,
-            )
+            Box(modifier = Modifier.onSizeChanged { barHeight = it.height }) {
+                StudioBar(
+                    state = state,
+                    homeNoteDue = gate.homeNoteDue,
+                    onHomeNoteShown = gate::homeNoteShown,
+                    postAs = postAs,
+                    refused = refused,
+                    onOpenDrawer = { drawer = true },
+                    onPost = onPost,
+                )
+            }
         }
         // The drawer: today's Post sheet, without what the bar already holds (who sees it, the caption, Post).
         AnimatedVisibility(visible = drawer, enter = fadeIn(), exit = fadeOut()) {

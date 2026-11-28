@@ -18,6 +18,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
@@ -249,6 +250,7 @@ internal fun StudioPictureAndLayers(
     state: MomentsComposeUiState,
     live: MutableState<MomentPlacement?>,
     onPlace: (MomentPlacement?, IntSize) -> Unit,
+    room: StudioRoom,
     picture: @Composable () -> Unit,
     layers: @Composable () -> Unit,
 ) {
@@ -256,16 +258,95 @@ internal fun StudioPictureAndLayers(
         picture()
         layers()
     } else {
-        StudioWholeStage(state, whole, live, onPlace, layers)
+        StudioWholeStage(state, whole, live, onPlace, room, layers)
     }
 }
 
-/** The canvas's frame on a screen [screen] px: 9:16, as large as fits, in the middle. */
-private fun canvasOn(screen: Size): Rect {
-    val width = min(screen.width, screen.height * MomentPlacement.CANVAS_SHAPE)
-    val height = width / MomentPlacement.CANVAS_SHAPE
-    return Rect(Offset((screen.width - width) / 2, (screen.height - height) / 2), Size(width, height))
+/**
+ * The items on the picture (stamps, dots, moving words, playable items), drawn over the Studio's small controls so that
+ * where one lies under the close button or the tool rail the item gets the touch (PHASE-6 K3): on a whole photo's stage,
+ * over the photo's own part of the canvas, as [StudioWholeStage] lays it out; else over the whole screen as before.
+ */
+@Composable
+internal fun StudioItemsOver(
+    whole: StudioWholeView?,
+    state: MomentsComposeUiState,
+    room: StudioRoom,
+    items: @Composable () -> Unit,
+) {
+    if (whole == null || (state.media as? MomentMediaFile.Photo) == null) {
+        Box(modifier = Modifier.fillMaxSize()) { items() }
+        return
+    }
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        val (canvas, pictureBox) = wholeGeometry(state, whole, Size(constraints.maxWidth.toFloat(), constraints.maxHeight.toFloat()), room)
+        val keep = KEEP_ON_CANVAS_DP * LocalDensity.current.density
+        CompositionLocalProvider(LocalStudioReach provides studioReach(canvas, pictureBox, keep)) {
+            AtRect(pictureBox) { items() }
+        }
+    }
 }
+
+/**
+ * The room the canvas may take on the Studio's screen, in px (PHASE-6 K1): under the status bar ([top]) and above the
+ * bottom bar ([bottom], its measured height), so the bar never covers the canvas. Readers have no bar.
+ */
+@Immutable
+internal data class StudioRoom(
+    val top: Float = 0f,
+    val bottom: Float = 0f,
+)
+
+/** At least this much of an item's own box stays on the canvas (PHASE-6 F2, K2). */
+private const val KEEP_ON_CANVAS_DP = 24f
+
+/** The canvas's frame on a screen [screen] px: 9:16, as large as fits in [room], in its middle. */
+private fun canvasOn(
+    screen: Size,
+    room: StudioRoom,
+): Rect {
+    val top = room.top.coerceIn(0f, screen.height / 2)
+    val tall = (screen.height - top - room.bottom).coerceAtLeast(screen.height / 2)
+    val width = min(screen.width, tall * MomentPlacement.CANVAS_SHAPE)
+    val height = width / MomentPlacement.CANVAS_SHAPE
+    return Rect(Offset((screen.width - width) / 2, top + (tall - height) / 2), Size(width, height))
+}
+
+/** The canvas on [screen] and the photo's own box on it: the box is the canvas once the photo is placed. */
+private fun wholeGeometry(
+    state: MomentsComposeUiState,
+    view: StudioWholeView,
+    screen: Size,
+    room: StudioRoom,
+): Pair<Rect, Rect> {
+    val canvas = canvasOn(screen, room)
+    val fit = FitBox(view.shape)
+    val pictureBox =
+        if (state.placement == null) {
+            Rect(
+                Offset(canvas.left + fit.left * canvas.width, canvas.top + fit.top * canvas.height),
+                Size(fit.width * canvas.width, fit.height * canvas.height),
+            )
+        } else {
+            canvas
+        }
+    return canvas to pictureBox
+}
+
+/** The items on the photo may go anywhere on the canvas, in shares of the photo's own frame, [keep] px of each on it. */
+private fun studioReach(
+    canvas: Rect,
+    pictureBox: Rect,
+    keep: Float,
+): StudioReach =
+    StudioReach(
+        left = ((canvas.left - pictureBox.left) / pictureBox.width).toDouble(),
+        top = ((canvas.top - pictureBox.top) / pictureBox.height).toDouble(),
+        right = ((canvas.right - pictureBox.left) / pictureBox.width).toDouble(),
+        bottom = ((canvas.bottom - pictureBox.top) / pictureBox.height).toDouble(),
+        keepX = (keep / pictureBox.width).toDouble(),
+        keepY = (keep / pictureBox.height).toDouble(),
+    )
 
 /**
  * The Studio's screen with a whole photo: the backdrop everywhere (the canvas's blend, carried on above and below it),
@@ -279,6 +360,7 @@ internal fun StudioWholeStage(
     view: StudioWholeView,
     live: MutableState<MomentPlacement?>,
     onPlace: (MomentPlacement?, IntSize) -> Unit,
+    room: StudioRoom,
     layers: @Composable () -> Unit,
 ) {
     val photo = (state.media as? MomentMediaFile.Photo)?.file ?: return
@@ -293,7 +375,7 @@ internal fun StudioWholeStage(
         }
     }
     BoxWithConstraints(modifier = Modifier.fillMaxSize().testTag("moments.studio.whole")) {
-        val canvas = canvasOn(Size(constraints.maxWidth.toFloat(), constraints.maxHeight.toFloat()))
+        val (canvas, pictureBox) = wholeGeometry(state, view, Size(constraints.maxWidth.toFloat(), constraints.maxHeight.toFloat()), room)
         val top = Color(view.backdrop.top)
         val bottom = Color(view.backdrop.bottom)
         Box(
@@ -304,16 +386,6 @@ internal fun StudioWholeStage(
                     .clearAndSetSemantics {},
         )
         // The layers lie over the photo as the view model holds it: whole as taken, or on the canvas.
-        val fit = FitBox(view.shape)
-        val pictureBox =
-            if (state.placement == null) {
-                Rect(
-                    Offset(canvas.left + fit.left * canvas.width, canvas.top + fit.top * canvas.height),
-                    Size(fit.width * canvas.width, fit.height * canvas.height),
-                )
-            } else {
-                canvas
-            }
         WholeCanvasTouch(state, view, live, onPlace, canvas) {
             val moving = live.value
             if (moving != null) {
@@ -322,13 +394,7 @@ internal fun StudioWholeStage(
             }
         }
         // The items on the photo may go anywhere on the canvas, in shares of the photo's own frame.
-        val reach =
-            StudioReach(
-                left = ((canvas.left - pictureBox.left) / pictureBox.width).toDouble(),
-                top = ((canvas.top - pictureBox.top) / pictureBox.height).toDouble(),
-                right = ((canvas.right - pictureBox.left) / pictureBox.width).toDouble(),
-                bottom = ((canvas.bottom - pictureBox.top) / pictureBox.height).toDouble(),
-            )
+        val reach = studioReach(canvas, pictureBox, KEEP_ON_CANVAS_DP * LocalDensity.current.density)
         AtRect(pictureBox) {
             if (live.value == null) {
                 AsyncImage(
