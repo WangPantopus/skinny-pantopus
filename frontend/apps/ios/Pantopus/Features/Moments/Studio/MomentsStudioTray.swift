@@ -28,6 +28,8 @@ struct MomentsStudioTray: View {
         .task { if stamps.reading != .read { await stamps.read(model: model) } }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("moments.studio.tray")
+        // What is inside scrolls at every rest; the sheet moves only by its grabber (PHASE-6 G).
+        .presentationContentInteraction(.scrolls)
     }
 
     private var content: some View {

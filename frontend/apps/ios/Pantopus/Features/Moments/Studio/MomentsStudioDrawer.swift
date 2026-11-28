@@ -50,6 +50,8 @@ struct MomentsStudioDrawer: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("moments.studio.drawer")
+        // What is inside scrolls at every rest; the sheet moves only by its grabber (PHASE-6 G).
+        .presentationContentInteraction(.scrolls)
         // The short list of names, and the place picker it can open, as on today's Post sheet.
         .sheet(isPresented: Binding(get: { model.picksPlace || model.findsPlace }, set: { if !$0 { model.closePlaceSheets() } })) {
             Group {
