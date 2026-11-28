@@ -8,8 +8,9 @@
 //  "Add your piece" opens the Studio with the prompt in its drawer. A tap on a piece plays that piece in the viewer, and
 //  closing the viewer comes back to the board (LEAD-8, 11-28 10:37): from the list, the board steps aside for the Pulse
 //  tab's own viewer (`ReinventedStudioCover`; a cover presented from inside the tab's stack closed again as the viewer
-//  turned the screen dark) and opens again after it; over a viewer, the piece plays over the board. Only while the
-//  switch is on. Words as the web's.
+//  turned the screen dark) and opens again once that viewer has gone; over a viewer, the piece plays in a full-height
+//  sheet over the board (a cover would take the viewer under it out of the window, and it would close the board as it
+//  came back). Only while the switch is on. Words as the web's.
 //
 
 import Observation
@@ -155,12 +156,16 @@ final class PinboardPrompt {
         ReinventedViewerPresenter.shared.watching = session
     }
 
-    /// The Pulse tab's viewer closed: back to the board its piece came from.
+    /// The Pulse tab's viewer closed: back to the board its piece came from, once the viewer has gone (a sheet presented
+    /// while it leaves would keep its dark).
     func viewerClosed() {
         piece = nil
         guard let board = returnTo else { return }
         returnTo = nil
-        fromList = board
+        Task {
+            try? await Task.sleep(for: .milliseconds(500))
+            fromList = board
+        }
     }
 
     /// The piece over a board open over a viewer closed: the board is there again.
@@ -253,7 +258,7 @@ struct MomentPinboardView: View {
         .task(id: id) { await read() }
         .accessibilityIdentifier("together.pinboard")
         // Over a viewer the piece plays over the board (from the list it plays in the Pulse tab's viewer instead).
-        .fullScreenCover(item: Binding(get: { prompt.overBoard }, set: { if $0 == nil { prompt.closeOverBoard() } })) { session in
+        .sheet(item: Binding(get: { prompt.overBoard }, set: { if $0 == nil { prompt.closeOverBoard() } })) { session in
             MomentsViewer(
                 session: session,
                 systemScheme: colorScheme,
@@ -262,6 +267,8 @@ struct MomentPinboardView: View {
                 onShowAuthor: { _ in },
                 onClose: { prompt.closeOverBoard() }
             )
+            .presentationDetents([.large])
+            .presentationBackground(.black)
         }
     }
 
