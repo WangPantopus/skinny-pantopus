@@ -175,6 +175,9 @@ internal fun MomentsStudioStep(
     onWhole: (MomentPlacementPainter.Backdrop) -> Unit = {},
     onPlaceWhole: (MomentPlacement?, IntSize) -> Unit = { _, _ -> },
     onTrim: (LongRange?) -> Unit = {},
+    waitingPicked: StateFlow<List<android.net.Uri>> = MutableStateFlow(emptyList()),
+    onPickNext: (android.net.Uri) -> Unit = {},
+    onLeaveOut: (android.net.Uri) -> Unit = {},
     gate: MomentsStudioGateViewModel = hiltViewModel(),
     penNames: PenNameChoiceViewModel = hiltViewModel(),
 ) {
@@ -333,6 +336,8 @@ internal fun MomentsStudioStep(
             StudioMotionRow(state, Modifier.padding(start = Spacing.s4, bottom = Spacing.s3))
             // A video: the part of it that posts (PHASE-5 A).
             StudioTrimRow(state, onTrim, Modifier.padding(horizontal = Spacing.s4).padding(bottom = Spacing.s3))
+            // Several picked together: which posts next, or one left out (PHASE-5 A5).
+            StudioPickedRow(state, waitingPicked, onPickNext, onLeaveOut, Modifier.padding(start = Spacing.s4).padding(bottom = Spacing.s3))
             // A caption goes with a photo or a video; a text card is its own words.
             if (state.media != null) {
                 // After "@" at the end of the caption: the author's connections (never under a made-up name).

@@ -767,6 +767,28 @@ class MomentsComposeViewModel
 
         /** The ones picked together that haven't had the sheet yet. */
         private var waiting: List<Uri> = emptyList()
+            set(value) {
+                field = value
+                // "Pulse, reinvented"'s Studio row (PHASE-5 A5) shows them.
+                waitingFlow.value = value
+            }
+
+        private val waitingFlow = MutableStateFlow<List<Uri>>(emptyList())
+
+        /** "Pulse, reinvented"'s Studio row (PHASE-5 A5): the ones picked together still waiting, in order. Only the Studio reads it. */
+        val waitingPicked: StateFlow<List<Uri>> = waitingFlow.asStateFlow()
+
+        /** "Pulse, reinvented"'s Studio row (PHASE-5 A5): [uri], still waiting, posts next; the one on screen stays as it is. */
+        fun pickNext(uri: Uri) {
+            if (uri in waiting) waiting = listOf(uri) + (waiting - uri)
+        }
+
+        /** "Pulse, reinvented"'s Studio row (PHASE-5 A5): [uri], still waiting, is left out and never posts. */
+        fun leaveOut(uri: Uri) {
+            if (uri !in waiting) return
+            waiting = waiting - uri
+            _state.update { it.copy(pickedTogether = it.pickedTogether - 1) }
+        }
 
         /**
          * A Moment was made for the one on the sheet: the next one picked with it takes the sheet (one that can't be
