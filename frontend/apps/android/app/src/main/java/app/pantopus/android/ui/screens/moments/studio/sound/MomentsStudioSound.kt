@@ -103,6 +103,18 @@ class MomentsStudioSoundViewModel
         val ui: StateFlow<StudioSoundUi> = _ui.asStateFlow()
         private var recorder: MomentSoundRecorder? = null
 
+        init {
+            // The switch reads off: the Studio gives way to today's Post screen, and a sound waiting for the Moment goes now.
+            viewModelScope.launch {
+                feature.on.collect { on ->
+                    if (!on) {
+                        recorder?.stop()
+                        MomentsStudioSounds.clear()
+                    }
+                }
+            }
+        }
+
         /** Three seconds of the microphone, written as an .m4a, kept for the Moment being made. */
         fun record(context: Context) {
             if (_ui.value.recording || _ui.value.working) return

@@ -29,6 +29,9 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import app.pantopus.android.data.api.models.moments.MomentDto
 import app.pantopus.android.data.moments.sound.MomentSoundDto
 import app.pantopus.android.ui.theme.PantopusIcon
@@ -42,6 +45,8 @@ import app.pantopus.android.ui.theme.PantopusIconImage
  */
 @Composable
 fun MomentPlaceSound(moment: MomentDto?) {
+    // A photo's only: a video Moment keeps its own sound exactly as today.
+    if (moment?.kind == "video") return
     val sound = moment?.sound?.takeIf { it.kind == MomentSoundDto.PLACE && !it.url.isNullOrBlank() } ?: return
     val url = sound.url ?: return
     var player by remember(moment.id) { mutableStateOf<MediaPlayer?>(null) }
@@ -66,10 +71,21 @@ fun MomentPlaceSound(moment: MomentDto?) {
                 }
             }.getOrNull()
     }
-    // Once as the Moment opens; it stops when the Moment changes or the viewer closes.
-    DisposableEffect(moment.id, url) {
+    // Once as the Moment opens; it stops when the Moment changes, the viewer closes or the app goes to the background.
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    DisposableEffect(moment.id, url, lifecycle) {
         play()
+        val away =
+            LifecycleEventObserver { _, event ->
+                if (event == Lifecycle.Event.ON_STOP) {
+                    player?.release()
+                    player = null
+                    playing = false
+                }
+            }
+        lifecycle.addObserver(away)
         onDispose {
+            lifecycle.removeObserver(away)
             player?.release()
             player = null
             playing = false
