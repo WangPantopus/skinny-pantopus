@@ -611,7 +611,7 @@ internal fun StudioStampTray(
                     if (strip > 0) StudioPhotostripRow(more = strip, onMake = onPhotostrip)
                     if (looks) StudioYourCutoutsRow(account = cutoutsAccount, onPlace = onPlaceCutout)
                     StudioBeforeAfterRow(pair, offersPair, beforeAfter.make, beforeAfter.words, beforeAfter.takeApart)
-                    StudioPlaySection(onMovingWords, onPlayKind)
+                    StudioPlaySection(onMovingWords, onPlayKind, onPhoto = state.media is MomentMediaFile.Photo && pair == null)
                 }
             } else {
                 null

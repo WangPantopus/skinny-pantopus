@@ -119,6 +119,9 @@ internal val MomentsComposeUiState.sentItems: List<MomentPlayItemDto>
                         ?.copy(text = MomentMovingWords.cut(item.text.orEmpty()).trim())
                         ?.takeIf { it.text.orEmpty().isNotEmpty() }
                         ?.also { words++ }
+                } else if (item.kind == MomentPlayKinds.FOG || item.kind == MomentPlayKinds.SWATCH) {
+                    // Fog-wipe and the swatch slider (CONTRACT 7g): on a photo only.
+                    item.takeIf { onPhoto }?.sentPhotoLayer()
                 } else {
                     // A poll or a countdown (CONTRACT 7b): on a photo or a video.
                     item.takeIf { media != null }?.sentCard()

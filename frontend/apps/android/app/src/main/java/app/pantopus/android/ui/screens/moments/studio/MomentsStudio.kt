@@ -278,6 +278,11 @@ internal fun MomentsStudioStep(
         // The items on the picture: over the X and the tools, so an item under one gets the touch (PHASE-6 K3), and under
         // the caption and the bar.
         StudioItemsOver(whole, state, room) {
+            // A swatch slider's part of the photo (CONTRACT 7g), under the stamps and items.
+            StudioSwatchBoxLayer(state.items, rememberStudioPicture(state), enabled = !state.posting, onItems = onItems) { id ->
+                playItem = id
+                playForm = true
+            }
             StudioStampLayer(state = state, onStamps = onStamps)
             StudioDotLayer(state.dots, rememberStudioPicture(state), enabled = !state.posting, onDots = onDots) { id ->
                 pickedDot = id
