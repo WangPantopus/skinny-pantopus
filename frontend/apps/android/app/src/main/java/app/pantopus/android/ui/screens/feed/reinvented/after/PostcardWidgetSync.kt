@@ -6,9 +6,12 @@ import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import app.pantopus.android.core.LaunchFeatures
+import app.pantopus.android.core.security.AppLockManager
+import app.pantopus.android.data.api.models.mailbox.MailItem
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.safeApiCall
 import app.pantopus.android.data.api.services.MailboxApi
+import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.pulse.PulseReinventedFeature
 import app.pantopus.android.widget.PostcardWidgetProvider
 import app.pantopus.android.widget.PostcardWidgetSnapshot
@@ -20,6 +23,8 @@ import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -41,7 +46,9 @@ import kotlin.math.max
  * picture are removed (a widget placed before shows "Open Pantopus"). It reads the Mail only when a postcard widget is
  * placed (no request otherwise), never in the app's first five seconds, at most every five minutes, one read at a time:
  * the newest letter "A postcard from …" through today's `GET /api/mailbox`, its first enclosed picture through today's
- * enclosure link, a 700 px copy kept in the app's own files. The widget fetches nothing and holds no token.
+ * enclosure link, a 700 px copy kept in the app's own files. The widget fetches nothing and holds no token. The kept
+ * letter is the signed-in person's only: another account or a sign-out removes it at once. While that person's app lock
+ * is on (today's lock covers the whole app, the Mail with it), nothing but "A postcard is waiting" is kept or drawn.
  */
 @Singleton
 @OptIn(FlowPreview::class)
@@ -52,6 +59,8 @@ class PostcardWidgetSync
         private val feature: PulseReinventedFeature,
         private val mailbox: MailboxApi,
         private val store: PostcardWidgetStore,
+        private val auth: AuthRepository,
+        private val appLock: AppLockManager,
     ) {
         private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         private val reading = Mutex()
@@ -68,6 +77,32 @@ class PostcardWidgetSync
             // Settled first: at launch the switch reads off for a moment before the account's kept answer, and a widget's
             // receiver turned off even briefly could take a placed widget away.
             scope.launch { feature.on.debounce(SETTLE_MS).collect { on -> follow(on && LaunchFeatures.mailbox) } }
+            // Another account (or none): the first one's letter goes at once, and the next read isn't held back.
+            scope.launch { auth.state.map(::person).distinctUntilChanged().collect { id -> followPerson(id) } }
+            // The app lock turned on: the name and picture go at once; turned off: read again.
+            scope.launch { appLock.preferenceEnabled.collect { locked -> followLock(locked) } }
+        }
+
+        private suspend fun followPerson(id: String?) {
+            val kept = store.read() ?: return
+            if (kept.owner == id) return
+            store.clearLetter()
+            PostcardWidgetProvider.redraw(context)
+            readAt = 0L
+            refresh()
+        }
+
+        private suspend fun followLock(locked: Boolean) {
+            val kept = store.read() ?: return
+            if (kept.hidden == locked) return
+            if (locked) {
+                store.clearLetter()
+                store.write(kept.copy(title = "", day = "", picture = null, hidden = true))
+                PostcardWidgetProvider.redraw(context)
+            } else {
+                readAt = 0L
+                refresh()
+            }
         }
 
         /** The app came to the foreground: read again if a widget is placed (and it's been five minutes). */
@@ -117,15 +152,33 @@ class PostcardWidgetSync
         }
 
         private suspend fun read() {
+            val owner = person(auth.state.value) ?: return
             val list = (safeApiCall { mailbox.list(limit = LETTERS) } as? NetworkResult.Success)?.data?.mail ?: return
+            // Signed out or another account while it read: not this person's letter.
+            if (person(auth.state.value) != owner) return
             val letter = list.filter { it.subject.orEmpty().startsWith(POSTCARD) }.maxByOrNull { it.createdAt }
-            if (letter == null) {
-                // None (or the last one was deleted from Mail): the empty face.
-                store.clear()
-                store.setOn(feature.on.value)
-                PostcardWidgetProvider.redraw(context)
-                return
+            when {
+                letter == null -> {
+                    // None (or the last one was deleted from Mail): the empty face.
+                    store.clear()
+                    store.setOn(feature.on.value)
+                    PostcardWidgetProvider.redraw(context)
+                }
+                appLock.preferenceEnabled.value -> {
+                    // The app lock is on: only that one is waiting, and nothing of it is fetched or kept.
+                    store.clearLetter()
+                    store.write(PostcardWidgetSnapshot(letter.id, "", "", null, owner, hidden = true))
+                    PostcardWidgetProvider.redraw(context)
+                }
+                else -> keep(letter, owner)
             }
+        }
+
+        /** The letter's words and a small copy of its first picture, kept while it is still this person's and open. */
+        private suspend fun keep(
+            letter: MailItem,
+            owner: String,
+        ) {
             val detail = (safeApiCall { mailbox.detail(letter.id) } as? NetworkResult.Success)?.data?.mail
             val enclosure = detail?.enclosures.orEmpty().firstOrNull { it.mimeType.orEmpty().startsWith("image/") }
             val picture =
@@ -133,8 +186,11 @@ class PostcardWidgetSync
                     val link = (safeApiCall { mailbox.enclosureLink(letter.id, found.id) } as? NetworkResult.Success)?.data?.url
                     link?.let { keepPicture(it) }
                 }
-            if (!feature.on.value) return
-            store.write(PostcardWidgetSnapshot(letter.id, letter.subject.orEmpty(), day(letter.createdAt), picture))
+            if (!feature.on.value || person(auth.state.value) != owner || appLock.preferenceEnabled.value) {
+                store.pictureFile.delete()
+                return
+            }
+            store.write(PostcardWidgetSnapshot(letter.id, letter.subject.orEmpty(), day(letter.createdAt), picture, owner))
             PostcardWidgetProvider.redraw(context)
         }
 
@@ -152,6 +208,8 @@ class PostcardWidgetSync
                 bitmap.recycle()
                 store.pictureFile.path
             }.getOrNull()
+
+        private fun person(state: AuthRepository.State): String? = (state as? AuthRepository.State.SignedIn)?.user?.id
 
         /** "Today", "Yesterday" or "Nov 27". */
         private fun day(iso: String): String {

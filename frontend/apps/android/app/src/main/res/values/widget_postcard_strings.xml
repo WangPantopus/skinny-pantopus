@@ -5,4 +5,6 @@
     <string name="widget_postcard_description">The newest postcard from the people closest to you, from your Mail.</string>
     <string name="widget_postcard_empty">Postcards from the people closest to you show here.</string>
     <string name="widget_postcard_open">Open Pantopus</string>
+    <!-- With the app lock on: no name and no picture on the home screen. -->
+    <string name="widget_postcard_waiting">A postcard is waiting</string>
 </resources>

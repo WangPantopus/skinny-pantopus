@@ -47,7 +47,8 @@ class PostcardWidgetProvider : AppWidgetProvider() {
         on: Boolean,
     ): RemoteViews {
         val views = RemoteViews(context.packageName, R.layout.widget_postcard)
-        val picture = snapshot?.picture?.let { File(it) }?.takeIf { it.exists() }?.let { BitmapFactory.decodeFile(it.path) }
+        val kept = snapshot?.picture?.takeUnless { snapshot.hidden }?.let { File(it) }?.takeIf { it.exists() }
+        val picture = kept?.let { BitmapFactory.decodeFile(it.path) }
         if (picture != null) {
             views.setImageViewBitmap(R.id.postcardWidgetPicture, picture)
             views.setViewVisibility(R.id.postcardWidgetPicture, View.VISIBLE)
@@ -58,6 +59,8 @@ class PostcardWidgetProvider : AppWidgetProvider() {
             when {
                 !on -> context.getString(R.string.widget_postcard_open)
                 snapshot == null -> context.getString(R.string.widget_postcard_empty)
+                // The app lock is on: only that one is waiting (no name, no day, no picture).
+                snapshot.hidden -> context.getString(R.string.widget_postcard_waiting)
                 else -> listOf(snapshot.title, snapshot.day).filter { it.isNotBlank() }.joinToString(" · ")
             }
         views.setTextViewText(R.id.postcardWidgetLine, line)
@@ -101,12 +104,17 @@ class PostcardWidgetProvider : AppWidgetProvider() {
     }
 }
 
-/** What the widget draws: the letter, its words, and a small copy of its picture on the phone. */
+/**
+ * What the widget draws: the letter, its words, and a small copy of its picture on the phone, for [owner] only. [hidden]:
+ * the app lock is on, so nothing but "A postcard is waiting" is kept or drawn.
+ */
 data class PostcardWidgetSnapshot(
     val mailId: String,
     val title: String,
     val day: String,
     val picture: String?,
+    val owner: String,
+    val hidden: Boolean = false,
 )
 
 /** The snapshot, kept in the app's own files only while the switch is on; [clear] removes it all. */
@@ -127,7 +135,14 @@ class PostcardWidgetStore
         fun read(): PostcardWidgetSnapshot? {
             val id = prefs.getString(MAIL, null) ?: return null
             val title = prefs.getString(TITLE, "").orEmpty()
-            return PostcardWidgetSnapshot(id, title, prefs.getString(DAY, "").orEmpty(), prefs.getString(PICTURE, null))
+            return PostcardWidgetSnapshot(
+                id,
+                title,
+                prefs.getString(DAY, "").orEmpty(),
+                prefs.getString(PICTURE, null),
+                prefs.getString(OWNER, "").orEmpty(),
+                prefs.getBoolean(HIDDEN, false),
+            )
         }
 
         fun write(snapshot: PostcardWidgetSnapshot) =
@@ -136,11 +151,19 @@ class PostcardWidgetStore
                 .putString(TITLE, snapshot.title)
                 .putString(DAY, snapshot.day)
                 .putString(PICTURE, snapshot.picture)
+                .putString(OWNER, snapshot.owner)
+                .putBoolean(HIDDEN, snapshot.hidden)
                 .apply()
 
         /** Off, signed out or another account: nothing of a letter stays on the phone. */
         fun clear() {
             prefs.edit().clear().apply()
+            pictureFile.delete()
+        }
+
+        /** Another account or the app lock turned on: the letter and its picture go; whether the widget is on stays. */
+        fun clearLetter() {
+            prefs.edit().remove(MAIL).remove(TITLE).remove(DAY).remove(PICTURE).remove(OWNER).remove(HIDDEN).apply()
             pictureFile.delete()
         }
 
@@ -151,5 +174,7 @@ class PostcardWidgetStore
             const val TITLE = "title"
             const val DAY = "day"
             const val PICTURE = "picture"
+            const val OWNER = "owner"
+            const val HIDDEN = "hidden"
         }
     }
