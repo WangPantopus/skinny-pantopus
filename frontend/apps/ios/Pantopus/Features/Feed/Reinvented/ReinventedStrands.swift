@@ -194,7 +194,7 @@ struct ReinventedWentBecauseOfYou: View {
             HStack(spacing: Spacing.s3) {
                 HStack(spacing: -10) {
                     ForEach(group.people.prefix(3), id: \.id) { person in
-                        MomentAvatar(author: person, size: 30)
+                        MomentAvatar(author: person, size: 28)
                             .overlay(Circle().stroke(Theme.Color.appSurface, lineWidth: 2))
                     }
                 }

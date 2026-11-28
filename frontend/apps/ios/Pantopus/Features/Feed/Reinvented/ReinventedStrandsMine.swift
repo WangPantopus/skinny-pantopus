@@ -238,7 +238,7 @@ struct ReinventedStrandsYoureIn: View {
     private func row(_ strand: ReinventedMyStrandDTO) -> some View {
         HStack(spacing: Spacing.s3) {
             if let author = strand.author {
-                MomentAvatar(author: author, size: 30).accessibilityHidden(true)
+                MomentAvatar(author: author, size: 28).accessibilityHidden(true)
             }
             Text(Self.words(strand))
                 .pulseFont(14)

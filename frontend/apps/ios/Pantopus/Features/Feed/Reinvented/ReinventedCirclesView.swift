@@ -36,7 +36,7 @@ struct ReinventedCircleFaces: View {
     var body: some View {
         HStack(spacing: -10) {
             ForEach(people.prefix(5), id: \.id) { person in
-                MomentAvatar(author: person, size: 30)
+                MomentAvatar(author: person, size: 28)
                     .overlay(Circle().stroke(Theme.Color.appSurface, lineWidth: 2))
             }
         }
