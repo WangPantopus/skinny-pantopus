@@ -676,6 +676,7 @@ fun MomentsViewerScreen(
                                 if (studio) MomentStampsOverlay(load.moment)
                                 if (studio) MomentDotsLayer(load.moment, mine)
                                 if (studio) MomentPinsOverlay(load.moment)
+                                if (studio) app.pantopus.android.ui.screens.moments.viewer.sound.MomentPlaceSound(load.moment)
                             }
                         }
                     ViewerLoad.Loading -> Unit
