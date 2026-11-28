@@ -481,41 +481,38 @@
 .rp-count[data-dim] {
   opacity: 0.5;
 }
-.rp-retry {
-  position: relative;
-  min-height: 28px;
-  padding: 0 10px;
+/* "Couldn't refresh · Try again" and "No place" (CONTRACT 11b) in the sheet's header: 44 px tall boxes to the finger, the
+   28 px pill drawn inside (LEAD-7's look of 05:26 measured No place at 74 by 42). */
+.rp-retry,
+.rp-noplace {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0;
   border: 0;
-  border-radius: 14px;
-  background: color-mix(in srgb, #b45309 14%, transparent);
-  color: #92400e;
+  background: none;
   font-size: 12px;
   font-weight: 600;
   white-space: nowrap;
 }
-.rp-retry::before {
-  content: '';
-  position: absolute;
-  inset: -8px -2px;
-}
-/* "No place" in the sheet's header (CONTRACT 11b): a small switch, 28 px drawn, 44 px to the finger. */
-.rp-noplace {
-  position: relative;
+.rp-retry > span,
+.rp-noplace > span {
+  display: inline-flex;
+  align-items: center;
   min-height: 28px;
   padding: 0 10px;
-  border: 1px solid var(--rp-line);
   border-radius: 14px;
+}
+.rp-retry > span {
+  background: color-mix(in srgb, #b45309 14%, transparent);
+  color: #92400e;
+}
+.rp-noplace > span {
+  border: 1px solid var(--rp-line);
   background: var(--rp-paper);
   color: var(--rp-muted);
-  font-size: 12px;
-  font-weight: 600;
 }
-.rp-noplace::before {
-  content: '';
-  position: absolute;
-  inset: -8px -2px;
-}
-.rp-noplace[aria-checked='true'] {
+.rp-noplace[aria-checked='true'] > span {
   border-color: var(--rp-ink);
   background: var(--rp-ink);
   color: var(--rp-paper);

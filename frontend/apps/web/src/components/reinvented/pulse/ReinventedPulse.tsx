@@ -639,9 +639,15 @@ export default function ReinventedPulse() {
       setSelectedRow(rowKey(row));
       if (!wide && rest === 'peek') setRest('half');
       if (wide && folded) setFolded(false);
-      requestAnimationFrame(() =>
-        scroller.current?.querySelector(`[data-row="${CSS.escape(rowKey(row))}"]`)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }),
-      );
+      // Only the list scrolls to the row: scrollIntoView also scrolled the board itself (LEAD-7's look, 05:26).
+      requestAnimationFrame(() => {
+        const list = scroller.current,
+          el = list?.querySelector<HTMLElement>(`[data-row="${CSS.escape(rowKey(row))}"]`);
+        if (!list || !el) return;
+        const r = el.getBoundingClientRect(),
+          box = list.getBoundingClientRect();
+        if (r.top < box.top || r.bottom > box.bottom) list.scrollTo({ top: list.scrollTop + r.top - box.top - 8, behavior: 'smooth' });
+      });
     },
     [pins, openPin, following, shown, selected, wide, rest, folded],
   );
@@ -745,7 +751,16 @@ export default function ReinventedPulse() {
 
   const placeName =
     reach === 'explore' ? 'Explore' : reach === 'close' ? circle?.name || 'Your circle' : first?.place?.label || (first?.needs_place ? 'No place yet' : 'Near you');
-  const fitKey = `${reach}|${miles}|${filterKey}|${point?.latitude ?? ''}|${point?.longitude ?? ''}|${(reach === 'explore' ? explore.dataUpdatedAt : list.dataUpdatedAt) ? 'read' : ''}`;
+  // The map fits what is listed once: when the page first has something to show for this reach (and the place the person
+  // shared), never because the list was read again for another area (LEAD-7's look, 05:26: a fit on each read undid every
+  // pan, zoom and fly). Around me follows the map, so its filters don't move the map; Close circle fits again on new filters.
+  const fitBase = `${reach}|${reach === 'around' ? '' : filterKey}|${point?.latitude ?? ''}|${point?.longitude ?? ''}`;
+  const firstShown = reach === 'explore' ? !!explore.data : !!list.data && !list.isPlaceholderData;
+  const [fitFor, setFitFor] = useState<string | null>(null);
+  useEffect(() => {
+    if (firstShown) setFitFor(fitBase);
+  }, [firstShown, fitBase]);
+  const fitKey = `${fitBase}|${fitFor === fitBase ? 'read' : ''}`;
   const fallback = point ?? (home ? { latitude: home.lat, longitude: home.lng } : null);
   let prevBand: string | null = null;
 
@@ -916,12 +931,12 @@ export default function ReinventedPulse() {
             <>
               {trouble && (
                 <button type="button" className="rp-retry" onClick={() => void list.refetch()}>
-                  Couldn’t refresh · Try again
+                  <span>Couldn’t refresh · Try again</span>
                 </button>
               )}
               {reach === 'around' && (
                 <button type="button" className="rp-noplace" role="switch" aria-checked={noPlace} onClick={() => setNoPlace((on) => !on)}>
-                  No place
+                  <span>No place</span>
                 </button>
               )}
             </>
