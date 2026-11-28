@@ -17,9 +17,12 @@ public enum ReinventedEndpoints {
         chip: String,
         at point: (latitude: Double, longitude: Double)?,
         cursor: String?,
-        circle: String? = nil
+        circle: String? = nil,
+        filters: [String: String]? = nil
     ) -> Endpoint {
-        var query = ["reach": reach, "chip": chip, "limit": "20"]
+        var query = ["reach": reach, "limit": "20"]
+        // The filters (CONTRACT 10a: kinds, when, from, state, since) instead of the chip; with none on, today's chip.
+        if let filters { query.merge(filters) { _, new in new } } else { query["chip"] = chip }
         // One of the person's circles inside Close circle (CONTRACT 8d): only its people who are in.
         if let circle { query["circle"] = circle }
         if let miles { query["miles"] = String(miles) }
@@ -32,20 +35,25 @@ public enum ReinventedEndpoints {
     }
 
     /// `GET /api/reinvented/map` (CONTRACT 6b): rings, marks, tickets and kept Moments for a box and a time (`live`,
-    /// `today`, `week`, `all`, `tonight`, `weekend`). Route `backend/routes/reinvented.js:71` (map).
-    static func map(south: Double, west: Double, north: Double, east: Double, time: String) -> Endpoint {
-        Endpoint(
-            method: .get,
-            path: "/api/reinvented/map",
-            query: [
-                "south": String(format: "%.5f", south),
-                "west": String(format: "%.5f", west),
-                "north": String(format: "%.5f", north),
-                "east": String(format: "%.5f", east),
-                "time": time
-            ],
-            cachePolicy: .reloadIgnoringLocalCacheData
-        )
+    /// `today`, `week`, `all`, `tonight`, `weekend`), with the filters (CONTRACT 10a: kinds, from, state, since) when any
+    /// is on. Route `backend/routes/reinvented.js:71` (map).
+    static func map(
+        south: Double,
+        west: Double,
+        north: Double,
+        east: Double,
+        time: String,
+        filters: [String: String]? = nil
+    ) -> Endpoint {
+        var query = [
+            "south": String(format: "%.5f", south),
+            "west": String(format: "%.5f", west),
+            "north": String(format: "%.5f", north),
+            "east": String(format: "%.5f", east),
+            "time": time
+        ]
+        if let filters { query.merge(filters) { old, _ in old } }
+        return Endpoint(method: .get, path: "/api/reinvented/map", query: query, cachePolicy: .reloadIgnoringLocalCacheData)
     }
 
     /// `GET /api/reinvented/strip` (CONTRACT 6c): Alive right now. Route `backend/routes/reinvented.js:91` (strip).
