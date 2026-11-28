@@ -1389,6 +1389,8 @@ class MomentsComposeViewModel
             return when (val result = TogetherCreate.create(body, current) ?: repository.create(body)) {
                 is NetworkResult.Success -> {
                     val moment = result.data
+                    // "Pulse, reinvented" (CONTRACT 7e): the Studio's sound goes up for this Moment; switch on, own name only.
+                    app.pantopus.android.data.moments.sound.MomentsStudioSounds.send(moment, current.madeUp, pulse.on.value)
                     val video = videos?.firstOrNull()
                     when {
                         media == null -> posting.posted(moment)
