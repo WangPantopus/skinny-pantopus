@@ -230,53 +230,23 @@ enum HolidayCardWords {
         switch arrival {
         case .nextMorning:
             return ("With the morning mail", "\(day), about 7 a.m. where \(name) lives. They can open it right away.")
-        case .sealedChristmas where recipient.isLink && cards.improved:
-            return (
-                "Sealed until Christmas",
-                "It waits with a “Do not open until Christmas” seal and opens on December 25. "
-                    + "They can save it to their mailbox anytime."
-            )
-        case .sealedChristmas where recipient.isEmail && cards.improved:
-            return (
-                "Sealed until Christmas",
-                "They get an email now with a “Do not open until Christmas” seal, and a reminder on Christmas morning when it opens."
-            )
-        case .sealedChristmas where recipient.isLink:
-            return (
-                "Sealed until Christmas",
-                "Whoever opens your link and joins gets it now, with a “Do not open until Christmas” seal. It opens on December 25."
-            )
-        case .sealedChristmas where recipient.isEmail:
-            return (
-                "Sealed until Christmas",
-                "They get an email now. Once they join with that address, it waits in their mailbox with a “Do not open "
-                    + "until Christmas” seal. It opens on December 25."
-            )
         case .sealedChristmas:
-            return (
-                "Sealed until Christmas",
-                "It comes with the \(day) morning mail and waits in their mailbox with a “Do not open until Christmas” seal. "
-                    + "It opens on December 25."
-            )
+            return sealedChoice(recipient, cards: cards, day: day)
         case .christmasMorning:
             return ("On Christmas morning", "\(shortDay(cards.christmasMorningAt, calendar: calendar)), with the 7 a.m. mail.")
         case .now:
             // One person on Pantopus, right away (cards-next 3.3; only offered with `improved`).
             if case .person = recipient { return ("Right away", "Drops into their mailbox now, with a gentle notice.") }
             if recipient.isLink {
-                return ("Right away", cards.improved
-                    ? "Whoever opens your link can open and read the card right away — no account needed."
-                    : "Whoever opens your link can open the card as soon as they join.")
+                return (
+                    "Right away",
+                    cards.improved
+                        ? "Whoever opens your link can open and read the card right away — no account needed."
+                        : "Whoever opens your link can open the card as soon as they join."
+                )
             }
             return rightAwayByEmail(cards)
         }
-    }
-
-    /// "Right away, by email": with `improved` they read it in their browser before joining.
-    private static func rightAwayByEmail(_ cards: HolidayCardsResponse) -> (title: String, detail: String) {
-        ("Right away, by email", cards.improved
-            ? "They get an email now and can open and read it right in their browser — no account needed."
-            : "They get an email now and can open it once they join with that address.")
     }
 
     /// A list's one choice, as each card reads it: every person's by their
@@ -407,5 +377,77 @@ enum HolidayCardWords {
     static func captionSentence(_ caption: String?) -> String {
         let text = MailPieceModel.firstText(caption) ?? "A Christmas picture"
         return text.last.map { ".!?".contains($0) } == true ? text : text + "."
+    }
+}
+
+// MARK: - Sealed until Christmas, and right away by email
+
+extension HolidayCardWords {
+    /// "Sealed until Christmas" for one card, by how it reaches them (with `improved`, a link or email card opens
+    /// before they join).
+    static func sealedChoice(
+        _ recipient: HolidayCardRecipient,
+        cards: HolidayCardsResponse,
+        day: String
+    ) -> (title: String, detail: String) {
+        let title = "Sealed until Christmas"
+        if recipient.isLink, cards.improved {
+            return (
+                title,
+                "It waits with a “Do not open until Christmas” seal and opens on December 25. "
+                    + "They can save it to their mailbox anytime."
+            )
+        }
+        if recipient.isEmail, cards.improved {
+            return (
+                title,
+                "They get an email now with a “Do not open until Christmas” seal, and a reminder on Christmas morning when it opens."
+            )
+        }
+        if recipient.isLink {
+            return (
+                title,
+                "Whoever opens your link and joins gets it now, with a “Do not open until Christmas” seal. It opens on December 25."
+            )
+        }
+        if recipient.isEmail {
+            return (
+                title,
+                "They get an email now. Once they join with that address, it waits in their mailbox with a “Do not open "
+                    + "until Christmas” seal. It opens on December 25."
+            )
+        }
+        return (
+            title,
+            "It comes with the \(day) morning mail and waits in their mailbox with a “Do not open until Christmas” seal. "
+                + "It opens on December 25."
+        )
+    }
+
+    /// "Right away, by email": with `improved` they read it in their browser before joining.
+    static func rightAwayByEmail(_ cards: HolidayCardsResponse) -> (title: String, detail: String) {
+        (
+            "Right away, by email",
+            cards.improved
+                ? "They get an email now and can open and read it right in their browser — no account needed."
+                : "They get an email now and can open it once they join with that address."
+        )
+    }
+
+    /// Under "Send it by link": with `improved` it opens before they join.
+    static func linkLine(improved: Bool) -> String {
+        improved
+            ? "Text it, or paste it anywhere. They can open it right away, and save it to keep it."
+            : "Text it, or paste it anywhere. The first person to open it keeps the card."
+    }
+
+    /// Under their email address: with `improved` they read it before joining.
+    static func emailLine(improved: Bool) -> String {
+        guard improved else {
+            return "They get an email saying you sent them a Christmas card. They join Pantopus with this address to open it. "
+                + "The email never shows your note."
+        }
+        return "They get an email saying you sent them a Christmas card. They can open and read it right away — no account "
+            + "needed — and join free anytime to keep it or write back. The email never shows your note."
     }
 }

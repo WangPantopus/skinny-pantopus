@@ -85,23 +85,6 @@ struct HolidayCardToStep: View {
         }
     }
 
-    /// Under "Send it by link": with `improved` it opens before they join.
-    private var linkLine: String {
-        viewModel.improved
-            ? "Text it, or paste it anywhere. They can open it right away, and save it to keep it."
-            : "Text it, or paste it anywhere. The first person to open it keeps the card."
-    }
-
-    /// Under their email address: with `improved` they read it before joining.
-    private var emailLine: String {
-        guard viewModel.improved else {
-            return "They get an email saying you sent them a Christmas card. They join Pantopus with this address to open it. "
-                + "The email never shows your note."
-        }
-        return "They get an email saying you sent them a Christmas card. They can open and read it right away — no account "
-            + "needed — and join free anytime to keep it or write back. The email never shows your note."
-    }
-
     /// Under the search: with `improved` they can read it before joining (Wave 1).
     private var joinLine: String {
         viewModel.improved
@@ -187,7 +170,7 @@ struct HolidayCardToStep: View {
                                 .font(.system(size: 15, weight: .semibold))
                                 .foregroundStyle(MailPaper.wax)
                         }
-                        Text(linkLine)
+                        Text(HolidayCardWords.linkLine(improved: viewModel.improved))
                             .font(.system(size: 13))
                             .foregroundStyle(HolidayCardDesk.muted(scheme))
                             .multilineTextAlignment(.center)
@@ -355,10 +338,10 @@ struct HolidayCardToStep: View {
                 )
                 .accessibilityLabel("Their email address")
                 .accessibilityIdentifier("sendCardEmail")
-            Text(emailLine)
-            .font(.system(size: 14))
-            .foregroundStyle(HolidayCardDesk.muted(scheme))
-            .fixedSize(horizontal: false, vertical: true)
+            Text(HolidayCardWords.emailLine(improved: viewModel.improved))
+                .font(.system(size: 14))
+                .foregroundStyle(HolidayCardDesk.muted(scheme))
+                .fixedSize(horizontal: false, vertical: true)
             HolidayCardWaxButton(
                 title: many ? "Add to the list" : "Continue",
                 isEnabled: viewModel.emailIsValid && !(many && viewModel.listIsFull)
