@@ -162,7 +162,9 @@ struct HolidayCardFlowView: View {
         }
         // Stamps bought (or spent elsewhere): whether a photo and greeting can go, read again without leaving the step.
         .onChange(of: viewModel.stamps.balance?.paidRemaining) { old, _ in
-            guard old != nil, viewModel.cards?.media?.boughtStamp != nil else { return }
+            guard old != nil else { return }
+            viewModel.boughtStampsChanged()
+            guard viewModel.cards?.media?.boughtStamp != nil else { return }
             Task { await viewModel.rereadCards() }
         }
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)

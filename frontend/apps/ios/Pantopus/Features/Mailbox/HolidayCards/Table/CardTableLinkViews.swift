@@ -213,7 +213,45 @@ struct CardTableLinkPagePicture: View {
         .fixedSize(horizontal: false, vertical: true)
     }
 
+    @ViewBuilder
     private var actions: some View {
+        if page.guestOpen {
+            guestActions
+        } else {
+            signInActions
+        }
+    }
+
+    /// The page with guest opening on (the card round): open and read it right there, or save it (the web's words).
+    private var guestActions: some View {
+        VStack(spacing: 10) {
+            Text(page.sealed ? "Peek at the envelope" : "Open your card")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(MailPaper.tableNight)
+                .frame(maxWidth: .infinity, minHeight: 48)
+                .background(MailPaper.tableCream, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            Text(guestLine)
+                .font(.system(size: 14))
+                .foregroundStyle(MailPaper.tableCreamSoft)
+            Text(page.sealed ? "Save for Christmas morning" : "Save to my mailbox")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(MailPaper.tableCream)
+                .frame(maxWidth: .infinity, minHeight: 48)
+                .background(MailPaper.tableGlass, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(MailPaper.tableGlassLine, lineWidth: 1))
+        }
+        .multilineTextAlignment(.center)
+        .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private var guestLine: String {
+        guard page.sealed else { return "Open and read it right here — no account needed." }
+        return page.sentTo.isEmpty
+            ? "Save it to your mailbox so it’s waiting for you on Christmas morning."
+            : "We’ll email you on Christmas morning when the seal lifts — or save it to your mailbox now."
+    }
+
+    private var signInActions: some View {
         VStack(spacing: 10) {
             Text("Open your card")
                 .font(.system(size: 17, weight: .semibold))

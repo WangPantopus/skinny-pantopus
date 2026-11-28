@@ -81,7 +81,7 @@ struct HolidayCardSealStep: View {
                 store: viewModel.stamps,
                 design: design.id,
                 count: recipient.entries?.count ?? 1,
-                media: recipient.entries == nil && viewModel.carriesMedia
+                media: viewModel.mediaSpendsBoughtStamp
             )
             .padding(.top, Spacing.s3)
         }
@@ -259,7 +259,7 @@ struct HolidayCardSealFooter: View {
     }
 
     private var needsBoughtStamp: Bool {
-        recipient.entries == nil && viewModel.carriesMedia && viewModel.boughtStampsLeft == 0
+        viewModel.mediaNeedsBoughtStamp
     }
 
     /// The stamp books, saying how many more a list's cards need.
