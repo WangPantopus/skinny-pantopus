@@ -88,13 +88,13 @@ final class ReinventedMapAsk {
     func ask(_ text: String, items: [ReinventedMapModel.Item]) {
         let q = String(text.trimmingCharacters(in: .whitespacesAndNewlines).prefix(100))
         guard q.count >= 2, let region = ReinventedLivingMap.shared.region else { return }
-        let half = (lat: region.span.latitudeDelta / 2, lng: region.span.longitudeDelta / 2)
+        let box = ReinventedMapBox(region) // inside the world, as the map's own read
         let body = ReinventedMapAskBody(
             q: q,
-            south: region.center.latitude - half.lat,
-            west: region.center.longitude - half.lng,
-            north: region.center.latitude + half.lat,
-            east: region.center.longitude + half.lng,
+            south: box.south,
+            west: box.west,
+            north: box.north,
+            east: box.east,
             time: ReinventedLivingMap.shared.time
         )
         task?.cancel()

@@ -417,9 +417,15 @@ public struct MomentLayersDTO: Sendable, Hashable {
     public let deck: MomentDeckDTO?
     /// A loop on a video (CONTRACT 7j, `MomentLoopDTOs.swift`): the span the new viewers repeat, nil for any other.
     public let loop: MomentLoopDTO?
+    /// The picture is its author's composed whole (CONTRACT 10c): the new viewers fit it, never cut, on its backdrop.
+    public let whole: Bool
+    /// A whole video's place on the 9:16 canvas (CONTRACT 10c), nil for a photo or a video posted as taken.
+    public let placement: MomentWholePlacementDTO?
+    /// The two colours around a whole picture (CONTRACT 10c), nil when the viewer makes them from the picture.
+    public let backdrop: MomentBackdropDTO?
 
     private enum CodingKeys: String, CodingKey {
-        case play, mentions, dots, sound, deck, loop
+        case play, mentions, dots, sound, deck, loop, whole, placement, backdrop
     }
 
     init(from decoder: any Decoder) {
@@ -430,6 +436,9 @@ public struct MomentLayersDTO: Sendable, Hashable {
         sound = try? c?.decodeIfPresent(MomentSoundDTO.self, forKey: .sound)
         deck = try? c?.decodeIfPresent(MomentDeckDTO.self, forKey: .deck)
         loop = try? c?.decodeIfPresent(MomentLoopDTO.self, forKey: .loop)
+        whole = (try? c?.decodeIfPresent(Bool.self, forKey: .whole)).flatMap { $0 } ?? false
+        placement = try? c?.decodeIfPresent(MomentWholePlacementDTO.self, forKey: .placement)
+        backdrop = try? c?.decodeIfPresent(MomentBackdropDTO.self, forKey: .backdrop)
     }
 
     /// The before and after on a photo, if it has one (one at most).
@@ -443,4 +452,19 @@ public struct MomentLayersDTO: Sendable, Hashable {
 public enum MomentMovingWordsColor {
     public static let white = "#FFFFFF"
     public static let all = [white, "#FDE68A", "#111827", "#38BDF8"]
+}
+
+/// CONTRACT 10c: where a whole video sits on the 9:16 canvas (Resize's own model): its width as a share of the canvas's
+/// width before turning, its middle on the canvas (0 to 1), and degrees clockwise.
+public struct MomentWholePlacementDTO: Codable, Sendable, Hashable {
+    public let width: Double
+    public let x: Double
+    public let y: Double
+    public let turn: Double
+}
+
+/// CONTRACT 10c: the two colours of the backdrop a whole picture sits on, `#RRGGBB` upper-case.
+public struct MomentBackdropDTO: Codable, Sendable, Hashable {
+    public let top: String
+    public let bottom: String
 }

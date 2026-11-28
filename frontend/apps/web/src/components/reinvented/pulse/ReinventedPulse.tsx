@@ -29,6 +29,7 @@ import ExploreView from './ExploreView';
 import AtlasView, { AtlasItem, dropFromAtlas } from './AtlasView';
 import AliveStrip from './AliveStrip';
 import { useLinkedMoment, useLinkedSky } from './momentLinks';
+import { useHandBackToMoments } from '../handBack';
 import { readBeams, readSounds } from './mapLight';
 import AskTheMap, { type Lit } from './AskTheMap';
 import FollowedPlaces, { useFollow } from './FollowedPlaces';
@@ -72,6 +73,8 @@ export default function ReinventedPulse() {
   const router = useRouter();
   const client = useQueryClient();
   const reread = useRereadSwitch();
+  // The "+" Studio's words go to today's Moments if the switch is found off while it is open (handBack.ts).
+  const handBack = useHandBackToMoments();
   const me = useMe();
   const account = me.data?.id ?? null;
   const home = useMyHomeCenter();
@@ -1047,6 +1050,7 @@ export default function ReinventedPulse() {
       {creating && account && (
         <Composer
           account={account}
+          onHandBack={handBack}
           onClose={() => setCreating(false)}
           onDone={(msg) => {
             setCreating(false);

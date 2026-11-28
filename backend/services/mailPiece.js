@@ -95,9 +95,12 @@ function present(mail, { timeZone = FALLBACK_TIME_ZONE } = {}) {
   // The mark that a card carries its own photo or voice (it spent a bought stamp) is the server's alone: a sealed card
   // never says what's inside. So is where a card by email's email got to (services/cardEmail).
   // A travelling card's stored journey (its parent's id, who heard of it) is the server's too: apps read card.travel.
+  // The same goes for the marks of a card on one of its sender's free photo or voice cards (media_free and how many
+  // they have, media_free_limit; the card round of November 28).
   if (rest.mail_extracted?.card?.media_stamp !== undefined || rest.mail_extracted?.card?.email !== undefined
-    || rest.mail_extracted?.card?.travel !== undefined) {
-    const { media_stamp: _mediaStamp, email: _email, travel: _storedTravel, ...card } = rest.mail_extracted.card;
+    || rest.mail_extracted?.card?.travel !== undefined || rest.mail_extracted?.card?.media_free !== undefined) {
+    const { media_stamp: _mediaStamp, media_free: _mediaFree, media_free_limit: _mediaFreeLimit, email: _email,
+      travel: _storedTravel, ...card } = rest.mail_extracted.card;
     rest.mail_extracted = { ...rest.mail_extracted, card };
   }
   return {

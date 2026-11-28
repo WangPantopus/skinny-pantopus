@@ -98,11 +98,36 @@ function cardEmailRemindersEnabled(env = process.env) {
   return env.NODE_ENV === 'production';
 }
 
+// The Christmas card round of November 28, 2026 (docs/product/card-improvements-2026-11-28/CONTRACT.md), all of it
+// behind this one switch: opening a card before signing up, the sealed card's Christmas-morning reminder, the code
+// email's return link, two free photo or voice cards, a photo or voice on a list, and what follows them. On unless
+// CARD_IMPROVEMENTS=0. Off is sending and receiving cards exactly as before that round: the same answers (no new
+// fields), refusals, emails and timing. The reads a screen draws from say `improved: true` while it is on, and the
+// apps draw the new experience only from such a read. Cards already sent keep working either way: off changes what
+// can be done next, never what was done. Changing it takes a restart of the API and worker.
+function cardImprovementsOn(env = process.env) {
+  return isOn(env, 'CARD_IMPROVEMENTS');
+}
+
 // Guest open-before-signup for unsealed Christmas card links and emails: recipients open the card on the browser table
 // before creating an account, then join to save it, write back or pass it on. Ordinary letters, bills and sealed cards
-// stay gated. On by default; CARD_GUEST_OPEN=0 is its emergency off.
+// stay gated. Part of the card round (cardImprovementsOn): it counts only while that is on, where CARD_GUEST_OPEN=0 is
+// its own emergency off.
 function cardGuestOpenEnabled(env = process.env) {
-  return isOn(env, 'CARD_GUEST_OPEN');
+  return cardImprovementsOn(env) && isOn(env, 'CARD_GUEST_OPEN');
+}
+
+// A card's own photo or voice greeting is free on a person's first cards that carry one (founder, November 28, 2026:
+// two); past them each such card spends a bought stamp, as every one did before. How many: CARD_MEDIA_FREE_LIMIT
+// (a whole number from 0 up; unset or unreadable, 2). CARD_MEDIA_FREE=0 is its emergency off (none are free). Part of
+// the card round: none are free while cardImprovementsOn is off.
+const DEFAULT_CARD_MEDIA_FREE_LIMIT = 2;
+const MAX_CARD_MEDIA_FREE_LIMIT = 1000;
+function cardMediaFreeLimit(env = process.env) {
+  if (!cardImprovementsOn(env) || !isOn(env, 'CARD_MEDIA_FREE')) return 0;
+  const raw = String(env.CARD_MEDIA_FREE_LIMIT ?? '').trim();
+  if (!/^\d+$/.test(raw)) return DEFAULT_CARD_MEDIA_FREE_LIMIT;
+  return Math.min(Number.parseInt(raw, 10), MAX_CARD_MEDIA_FREE_LIMIT);
 }
 
 // First-launch scope (founder direction, 2026-09-27). These features are
@@ -302,7 +327,9 @@ module.exports = {
   guidanceCardsEnabled,
   todayHouseEnabled,
   cardEmailRemindersEnabled,
+  cardImprovementsOn,
   cardGuestOpenEnabled,
+  cardMediaFreeLimit,
   LAUNCH_FEATURE_KEYS,
   isLaunchFeatureEnabled,
   areLaunchFeaturesEnabled,

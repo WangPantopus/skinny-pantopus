@@ -77,6 +77,10 @@ data class ReinventedMapState(
     val focused: String? = null,
     /** Guess the spot in the area (CONTRACT 5d): a list under the time row, never marks. */
     val guessSpots: List<MomentGuessSpotDto> = emptyList(),
+    /** Rings float on the living map (phase 4, `feed/living/LivingMap.kt`): the answer said `heights_on` and `float_on`. */
+    val floats: Boolean = false,
+    /** My Atlas's map (the person's own kept Moments): no live beams on it (phase 4). */
+    val atlas: Boolean = false,
 ) {
     /** Heads-ups last, so they draw over everything else. */
     val drawOrder: List<ReinventedMapItem> get() = items.filterNot { it.headsUp } + items.filter { it.headsUp }
@@ -181,7 +185,16 @@ class ReinventedMapViewModel
                             }
                     val spots = map.guessSpots.filter { it.momentId != null }
                     _state.update {
-                        if (it.time == time) it.copy(items = items, deck = arrange(it.deck, items, area), guessSpots = spots) else it
+                        if (it.time == time) {
+                            it.copy(
+                                items = items,
+                                deck = arrange(it.deck, items, area),
+                                guessSpots = spots,
+                                floats = map.heightsOn && map.floatOn,
+                            )
+                        } else {
+                            it
+                        }
                     }
                 }
         }

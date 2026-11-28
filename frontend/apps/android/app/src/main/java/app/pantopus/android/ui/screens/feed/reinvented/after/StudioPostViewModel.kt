@@ -202,6 +202,7 @@ class StudioPostViewModel
                     },
                 "elevation" to elevation?.let { mapOf("meters" to it.meters, "accuracy_m" to it.accuracyM, "speed_mps" to it.speedMps) },
                 "explore" to true.takeIf { draft.explore && kind.mayGoToExplore },
+                "eyes_on" to true.takeIf { draft.eyesOn && kind == StudioPostKind.ASK && !state.madeUp },
                 "taken_at" to state.takenAt?.takeIf { photo }?.toString(),
                 "taken_here" to true.takeIf { takenHere },
                 "fix" to fresh?.takeIf { takenHere }?.let { fixField(it) },

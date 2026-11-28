@@ -33,6 +33,7 @@ import PinLayer, { hasPins, holdsForPins, PinControls } from '../pins/PinLayer';
 import { loopOf } from '../loop/loop';
 import { LoopDriver } from '../loop/LoopDriver';
 import MotionPhoto, { motionOf } from '../motion/MotionPhoto';
+import { canvasBox, WholeBackdrop, wholeOf } from '../whole/Whole';
 import './studioViewer.css';
 
 type StudioMoment = Moment & { stamps?: ShownStamp[]; my_signal?: string | null; play?: PlayItem[]; dots?: unknown[] };
@@ -51,6 +52,8 @@ function ViewerStamps({ moment }: { moment: StudioMoment }) {
   // A before and after: the picture is the two photos side by side, and the reader sees one half's frame.
   const pair = moment.kind === 'photo' && moment.media_url ? beforeAfterOf(moment.play) : null;
   const paired = !!pair;
+  // A placed video (PHASE-5 A6): what the author placed sits on its 9:16 canvas, so the stamps do too.
+  const placed = moment.kind === 'video' && !!wholeOf(moment)?.placement;
   const liveUntil = Date.parse(moment.live_until || '');
   const wet = moment.taken_here === true && liveUntil > now;
   // The ink dries when "Live from here" turns to "Taken here", on the same kind of timer as today's pill.
@@ -81,6 +84,7 @@ function ViewerStamps({ moment }: { moment: StudioMoment }) {
         nh = media instanceof HTMLImageElement ? media.naturalHeight : media.videoHeight;
       }
       if (paired) nw /= 2;
+      if (placed) return setBox(canvasBox(sw, sh));
       if (!nw || !nh || !bw || !bh) return setBox(null);
       const scale = Math.min(bw / nw, bh / nh);
       const width = nw * scale,
@@ -97,7 +101,7 @@ function ViewerStamps({ moment }: { moment: StudioMoment }) {
       media?.removeEventListener('load', measure);
       media?.removeEventListener('loadedmetadata', measure);
     };
-  }, [stamps.length, playing, moment.media_url, moment.kind, paired]);
+  }, [stamps.length, playing, moment.media_url, moment.kind, paired, placed]);
   if (!stamps.length && !playing) return null;
   const values = new Map<StampKind, unknown>(stamps.map((s) => [s.kind, s.value]));
   return (
@@ -197,6 +201,7 @@ function SeenMark({ viewer }: { viewer: Viewer & { signal?: string | null } }) {
 export const studioViewer = {
   overPicture: (m: Moment) => (
     <>
+      <WholeBackdrop moment={m} />
       <LoopDriver moment={m} />
       <ViewerStamps moment={m as StudioMoment} />
       <DeckBar moment={m} />

@@ -28,12 +28,24 @@ object LossyListAdapterFactory : JsonAdapter.Factory {
         val rest = Types.nextAnnotations(annotations, Lossy::class.java) ?: return null
         if (rest.isNotEmpty() || Types.getRawType(type) != List::class.java) return null
         val element = Types.collectionElementType(type, List::class.java).let { if (it is WildcardType) it.upperBounds[0] else it }
-        return LossyListAdapter(moshi.adapter<Any>(element))
+        return LossyListAdapter(moshi.adapter<Any>(element), moshi)
     }
+}
+
+/**
+ * An item that reads more from its own JSON beside what its adapter read (a post's phase 3 keys, read beside today's
+ * post): [beside] gets the item's JSON value and returns the item to keep.
+ */
+interface ReadsBeside {
+    fun beside(
+        raw: Any?,
+        moshi: Moshi,
+    ): Any
 }
 
 private class LossyListAdapter(
     private val item: JsonAdapter<Any>,
+    private val moshi: Moshi,
 ) : JsonAdapter<List<Any>>() {
     override fun fromJson(reader: JsonReader): List<Any> {
         if (reader.peek() != JsonReader.Token.BEGIN_ARRAY) {
@@ -44,7 +56,10 @@ private class LossyListAdapter(
         reader.beginArray()
         while (reader.hasNext()) {
             val value = reader.readJsonValue()
-            runCatching { item.fromJsonValue(value) }.getOrNull()?.let(out::add)
+            runCatching { item.fromJsonValue(value) }
+                .getOrNull()
+                ?.let { read -> (read as? ReadsBeside)?.let { runCatching { it.beside(value, moshi) }.getOrNull() } ?: read }
+                ?.let(out::add)
         }
         reader.endArray()
         return out

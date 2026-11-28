@@ -98,6 +98,8 @@ export function useKeptFilters(account: string | null, time: MapTime, setTime: (
   useEffect(() => {
     if (!account || loaded.current === account) return;
     loaded.current = account;
+    const last = store.read(`pantopus.pulse.visit.${account}`);
+    const lastVisit = last && Number.isFinite(Date.parse(last)) ? last : null;
     try {
       const kept = JSON.parse(store.read(`pantopus.pulse.filters.${account}`) || 'null') as Partial<Filters & { time: MapTime }> | null;
       if (kept && typeof kept === 'object') {
@@ -105,15 +107,15 @@ export function useKeptFilters(account: string | null, time: MapTime, setTime: (
           kinds: Array.isArray(kept.kinds) ? kept.kinds.filter(isKind) : [],
           from: kept.from === 'connections' ? 'connections' : 'everyone',
           state: Array.isArray(kept.state) ? kept.state.filter((s): s is FilterState => s === 'unanswered' || s === 'room') : [],
-          fresh: kept.fresh === true,
+          // "New since your last visit" is on only while a last visit is kept here (it sends that time as `since`).
+          fresh: kept.fresh === true && !!lastVisit,
         });
         if (kept.time && TIMES.includes(kept.time)) setTime(kept.time);
       }
     } catch {
       /* nothing kept, or unreadable: no filters */
     }
-    const last = store.read(`pantopus.pulse.visit.${account}`);
-    setSince(last && Number.isFinite(Date.parse(last)) ? last : null);
+    setSince(lastVisit);
     store.write(`pantopus.pulse.visit.${account}`, new Date().toISOString());
     setReadFor(account);
   }, [account, setTime]);

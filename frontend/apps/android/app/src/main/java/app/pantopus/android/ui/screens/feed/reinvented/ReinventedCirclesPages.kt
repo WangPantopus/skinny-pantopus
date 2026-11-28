@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.sp
 import app.pantopus.android.data.api.models.reinvented.ReinventedCircleChangeBody
 import app.pantopus.android.data.api.models.reinvented.ReinventedCircleDto
 import app.pantopus.android.ui.components.keepsKeyboard
+import app.pantopus.android.ui.screens.feed.living.LivingCircleWindowChoice
 import app.pantopus.android.ui.screens.moments.components.MomentFace
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.Spacing
@@ -178,6 +179,8 @@ internal fun CirclePage(
             },
     )
     KeepRow(circle.myKeepFaded) { model.keep(circle, it) }
+    // Homes talk to homes (phase 4, `feed/living/LivingWindows.kt`): the member's own window for this circle.
+    LivingCircleWindowChoice(circle.id)
     if (circle.mine) OwnerTools(circle, ui, model, inviting) { inviting = it }
     ui.note?.let { Note(it) }
     Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s3)) {

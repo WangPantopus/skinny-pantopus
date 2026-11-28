@@ -258,6 +258,8 @@ private fun KindDetails(
             }
         StudioPostKind.LOST_FOUND -> LostFoundDetails(draft, viewModel)
         StudioPostKind.EVENT -> EventDetails(draft, viewModel)
+        // Eyes on (CONTRACT 8f): an Ask under the person's own name, about a picked public place.
+        StudioPostKind.ASK -> if (!state.madeUp) EyesOnAskRow(draft, viewModel)
         else -> Unit
     }
     // "Also show in Explore" (CONTRACT 6f): never at home, under a made-up name, without a place, or for the kinds tied to
@@ -387,3 +389,27 @@ private fun SheetField(
 private val CONTACTS = listOf("dm" to "Message me", "comment" to "Reply on the post", "phone" to "Call or text")
 private const val PHONE_MAX = 20
 private const val VENUE_MAX = 120
+
+/** "Eyes on: ask people who are there now" on a Question (CONTRACT 8f); the post must tag a picked place. */
+@Composable
+private fun EyesOnAskRow(
+    draft: StudioPostDraft,
+    viewModel: StudioPostViewModel,
+) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text("Eyes on: ask people who are there now", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            Text(
+                "For six hours, people at this place can answer with a Live photo. Nobody is told who is near it. " +
+                    "Pick the place in the list first.",
+                color = PantopusColors.studioPillSecondary,
+                fontSize = 13.sp,
+            )
+        }
+        Switch(
+            checked = draft.eyesOn,
+            onCheckedChange = { on -> viewModel.edit { it.copy(eyesOn = on) } },
+            modifier = Modifier.testTag("moments.studio.kind.eyesOn"),
+        )
+    }
+}

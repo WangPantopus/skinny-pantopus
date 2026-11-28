@@ -42,6 +42,7 @@ import app.pantopus.android.ui.screens.compose.placepicker.PostPlaceTag
 import app.pantopus.android.ui.screens.compose.pulse.MediaLocationAccess
 import app.pantopus.android.ui.screens.compose.pulse.PickedPlace
 import app.pantopus.android.ui.screens.compose.pulse.readPickedPlace
+import app.pantopus.android.ui.screens.feed.living.livingHeading
 import app.pantopus.android.ui.screens.feed.reinvented.after.TogetherCreate
 import app.pantopus.android.ui.screens.feed.reinvented.after.sentExplore
 import app.pantopus.android.ui.screens.moments.MomentsRoutes
@@ -1303,6 +1304,8 @@ class MomentsComposeViewModel
                         mentions = current.sentMentions,
                         play = current.sentPlay,
                         dots = current.sentDots,
+                        // Live beams (CONTRACT 9h): the compass nearest this Moment's own shot, with the Live mark and switch on only.
+                        heading = current.livingHeading(pulse.on.value, usable, now),
                     )
                 if (publish(body, current, videos, usable.latitude to usable.longitude, retried)) {
                     saveChoices(current)

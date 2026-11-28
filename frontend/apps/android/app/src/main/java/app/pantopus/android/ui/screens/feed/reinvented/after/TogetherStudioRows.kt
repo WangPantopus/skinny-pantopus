@@ -61,7 +61,11 @@ fun TogetherStudioRows(
     if (!on) return
     when (val opened = TogetherStudio.context.value) {
         is TogetherStudio.Context.RetakeFrame -> AddingRow(opened)
-        null -> if (state.offersRetake) StartRetakeRow()
+        is TogetherStudio.Context.EyesOnAnswer -> AnsweringRow(opened)
+        null -> {
+            if (state.offersSky) JoinSkyRow()
+            if (state.offersRetake) StartRetakeRow()
+        }
     }
 }
 
@@ -88,6 +92,42 @@ private fun AddingRow(frame: TogetherStudio.Context.RetakeFrame) {
                 tag = "together.studio.ghost",
             ) { TogetherStudio.ghostOn.value = it }
         }
+    }
+}
+
+/** "Answering “Is the fountain running?” with a Live photo". */
+@Composable
+private fun AnsweringRow(answer: TogetherStudio.Context.EyesOnAnswer) {
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.s5).padding(top = 6.dp).testTag("together.studio.answering"),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Text(
+            "Answering “${answer.question}” with a Live photo",
+            fontSize = 15.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = PantopusColors.appText,
+        )
+        Text(
+            "Take it here, now: a photo from the place the question is about.",
+            fontSize = 12.5.sp,
+            lineHeight = 16.sp,
+            color = PantopusColors.appTextSecondary,
+        )
+    }
+}
+
+/** "Join tonight's sky: your photo stays in the piece", on by default. */
+@Composable
+private fun JoinSkyRow() {
+    val on by TogetherStudio.joinsSky
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.s5).padding(top = 6.dp)) {
+        SwitchRow(
+            title = "Join tonight’s sky: your photo stays in the piece",
+            line = "Only if several people photograph a real sunset or a first snow here in the same minutes.",
+            on = on,
+            tag = "together.studio.sky",
+        ) { TogetherStudio.joinsSky.value = it }
     }
 }
 

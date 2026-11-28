@@ -51,6 +51,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.moments.MomentDto
 import app.pantopus.android.data.api.models.reinvented.MomentReplyDto
+import app.pantopus.android.data.api.models.reinvented.shownConvergence
 import app.pantopus.android.data.api.models.reinvented.shownRetake
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
@@ -78,8 +79,12 @@ internal object MomentRepliesState {
     /** The replies sheet is up. */
     val sheet = mutableStateOf(false)
 
-    /** The viewer holds still: the sheet is up, a pin is being dropped or one is open (8b), or the Retake is open (8e). */
-    val open: State<Boolean> = derivedStateOf { sheet.value || MomentPinsState.holds || MomentRetakeState.inViewer.value != null }
+    /** The viewer holds still: the sheet is up, a pin is being dropped or one is open (8b), or a Retake (8e) or sky piece (8h) is open. */
+    val open: State<Boolean> =
+        derivedStateOf {
+            val together = MomentRetakeState.inViewer.value != null || MomentConvergenceState.inViewer.value != null
+            sheet.value || MomentPinsState.holds || together
+        }
 }
 
 data class MomentRepliesUi(
@@ -198,13 +203,13 @@ fun MomentRepliesChip(
 ) {
     val state = moment.replies
     if (state == null) {
-        if (moment.shownRetake != null) Row(modifier = modifier) { MomentRetakeChip(moment, onClose) }
+        OtherChips(moment, onClose, modifier)
         return
     }
     val ui by viewModel.ui.collectAsStateWithLifecycle()
     val shown = ui.shown.takeIf { ui.momentId == moment.id } ?: state.shown
     if (!shown && !mine) {
-        if (moment.shownRetake != null) Row(modifier = modifier) { MomentRetakeChip(moment, onClose) }
+        OtherChips(moment, onClose, modifier)
         return
     }
     var open by MomentRepliesState.sheet
@@ -226,9 +231,24 @@ fun MomentRepliesChip(
         // Pins on the photo (8b), beside it, then the Retake it belongs to (8e).
         MomentPinsControls(moment, shown)
         MomentRetakeChip(moment, onClose, Modifier.padding(start = Spacing.s2))
+        MomentConvergenceChip(moment, Modifier.padding(start = Spacing.s2))
     }
     if (open) {
         RepliesSheet(moment, mine, shown, canReply = state.canReply && shown, ui = ui, viewModel = viewModel) { open = false }
+    }
+}
+
+/** The Retake's (8e) and the sky piece's (8h) chips on a Moment whose replies don't show. */
+@Composable
+private fun OtherChips(
+    moment: MomentDto,
+    onClose: () -> Unit,
+    modifier: Modifier,
+) {
+    if (moment.shownRetake == null && moment.shownConvergence == null) return
+    Row(modifier = modifier.horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically) {
+        MomentRetakeChip(moment, onClose)
+        MomentConvergenceChip(moment, Modifier.padding(start = Spacing.s2))
     }
 }
 
