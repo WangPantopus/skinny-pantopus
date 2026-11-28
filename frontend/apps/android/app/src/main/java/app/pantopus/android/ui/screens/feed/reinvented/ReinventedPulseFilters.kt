@@ -207,6 +207,15 @@ class ReinventedFiltersViewModel
             keptTime = kept?.time?.takeIf { t -> REINVENTED_TIMES.any { it.first == t } }
         }
 
+        private val _noPlace = MutableStateFlow(false)
+
+        /** "No place" in the sheet's header (PHASE-6 B): off at first, for this visit only. */
+        val noPlace: StateFlow<Boolean> = _noPlace.asStateFlow()
+
+        fun noPlace(on: Boolean) {
+            _noPlace.value = on
+        }
+
         fun set(
             next: ReinventedFilters,
             time: String,
@@ -223,6 +232,20 @@ class ReinventedFiltersViewModel
         }
 
         fun clear(time: String) = set(ReinventedFilters(), time)
+
+        /**
+         * The Filters card's kinds, most used first by this person's own taps here (LEAD-8 10:13: PHASE-5 B's quick taps live
+         * at the top of the card); the brief's order until there is a count, and for ties.
+         */
+        fun kindsMostUsed(): List<String> {
+            val uses = person?.let(store::uses).orEmpty()
+            return REINVENTED_KINDS.sortedByDescending { uses[it] ?: 0 }
+        }
+
+        /** A kind was turned on in the card: counted for its order. */
+        fun usedKind(kind: String) {
+            person?.let { store.used(it, kind) }
+        }
 
         fun update(
             time: String,
@@ -287,6 +310,7 @@ internal fun ReinventedFiltersButton(
 
 /** The sheet with What, When, From and State, and Clear and Done at its foot. */
 @Composable
+@Suppress("LongParameterList") // The choice, its callbacks, and the kinds in the person's order.
 internal fun ReinventedFiltersSheet(
     filters: ReinventedFilters,
     time: String,
@@ -295,6 +319,8 @@ internal fun ReinventedFiltersSheet(
     onTime: (String) -> Unit,
     onClear: () -> Unit,
     onDismiss: () -> Unit,
+    kinds: List<String> = REINVENTED_KINDS,
+    onUsed: (String) -> Unit = {},
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -320,9 +346,10 @@ internal fun ReinventedFiltersSheet(
                 modifier = Modifier.semantics { heading() },
             )
             Group("What") {
-                REINVENTED_KINDS.forEach { kind ->
+                kinds.forEach { kind ->
                     val on = kind in filters.kinds
                     Choice(reinventedChipTitle(kind), on, "reinventedPulse.filters.kind.$kind") {
+                        if (!on) onUsed(kind)
                         onFilters(filters.copy(kinds = if (on) filters.kinds - kind else filters.kinds + kind))
                     }
                 }
