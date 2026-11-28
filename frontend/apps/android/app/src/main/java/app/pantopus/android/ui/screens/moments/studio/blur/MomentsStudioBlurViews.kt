@@ -313,7 +313,7 @@ private fun StudioBlurSheet(
                 "Faces of people who didn't ask to be in it, licence plates, house numbers and mail labels. Found on your " +
                     "phone. The blur is drawn into the photo, so nobody can take it off.",
                 color = Color.White.copy(alpha = 0.75f),
-                fontSize = 13.sp,
+                fontSize = 12.sp,
             )
             BlurSpots(ui, viewModel)
             Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
