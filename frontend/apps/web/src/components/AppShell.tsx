@@ -310,9 +310,9 @@ function AppShellInner({ children, publicPage = false }: { children: React.React
   }, [collapsed]);
   const wasPulse = useRef(false);
   useEffect(() => {
-    if (wasPulse.current && !reinventedPulse && !document.querySelector('aside:hover')) sidebarDispatch({ type: 'SET_HOVER_EXPANDED', value: false });
+    if (wasPulse.current && !reinventedPulse) sidebarDispatch({ type: 'SET_HOVER_EXPANDED', value: Boolean(document.querySelector('aside:hover')) && (isTablet || (isDesktop && collapsed)) });
     wasPulse.current = reinventedPulse;
-  }, [reinventedPulse]);
+  }, [reinventedPulse, isTablet, isDesktop, collapsed]);
 
   // ── Close mobile drawer on route change ───────────────────
   useEffect(() => {
