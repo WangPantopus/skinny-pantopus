@@ -215,10 +215,15 @@ private fun ReadsFiltered(
     viewModel: ReinventedPulseViewModel,
     mapModel: ReinventedMapViewModel,
 ) {
-    remember(filtersModel) { filtersModel.keptTime?.let(mapModel::pickTime) }
-    val filters by filtersModel.filters.collectAsStateWithLifecycle()
-    val time by remember(mapModel) { mapModel.state.map { it.time }.distinctUntilChanged() }
+    // The kept time goes to the map once; until the map has it, the list's first read already carries it.
+    val kept = remember(filtersModel) { filtersModel.keptTime }
+    var taken by remember(filtersModel) { mutableStateOf(kept == null) }
+    LaunchedEffect(kept) { kept?.let(mapModel::pickTime) }
+    val mapTime by remember(mapModel) { mapModel.state.map { it.time }.distinctUntilChanged() }
         .collectAsStateWithLifecycle(mapModel.state.value.time)
+    LaunchedEffect(mapTime) { if (mapTime == kept) taken = true }
+    val time = if (taken || kept == null) mapTime else kept
+    val filters by filtersModel.filters.collectAsStateWithLifecycle()
     val listQuery = filters.query(time, filtersModel.since, list = true)
     val mapQuery = filters.query(time, filtersModel.since, list = false)
     val chip = filters.chip() ?: ReinventedPulseViewModel.ALL
