@@ -28,15 +28,21 @@ const enabled = (user) =>
     listed("MAIL_STAMPS_PREVIEW_USERS", user)) &&
   areLaunchFeaturesEnabled(["mailbox", "holiday_cards"]);
 const book = (id) => BOOKS.find((b) => b.id === id);
-// Stamps only send Christmas cards, which close when December 31 ends, so books stop selling when the last sales day
-// ends where the person lives. Receipts, balances and sending keep working after that.
+// Stamps only send cards. Christmas cards close when December 31 ends, so books stop selling for them when the last
+// sales day ends where the person lives. Receipts, balances and sending keep working after that.
+// While the card round is on (featureFlags cardImprovementsOn), books also stay on sale for as long as a thank-you
+// card can be sent there (founder, November 28: "Yes, keep selling"): the last sales day then ends the Christmas
+// sale only. With the round off there are no thank-you cards, and sales end exactly as before. No price, product or
+// way of buying changes: this only says whether books are on sale (GET /stamp-books `sales_open`, the checkout's
+// own check, and GET /cards `media.bought_stamp.state`).
 async function salesOpen(user, now = new Date()) {
   const zone =
     (await mailDelivery.personTimeZone(user)) ||
     mailDelivery.FALLBACK_TIME_ZONE;
   const lastDay = process.env.MAIL_STAMPS_SALES_LAST_DAY || "2026-12-26";
   const end = DateTime.fromISO(lastDay, { zone }).plus({ days: 1 }).startOf("day");
-  return holidayCards.seasonOpen(zone, now) && end.isValid && now < end.toJSDate();
+  if (holidayCards.seasonOpen(zone, now) && end.isValid && now < end.toJSDate()) return true;
+  return holidayCards.thankYouOpen(zone, now).length > 0;
 }
 const failure = (
   message = "Could not verify this purchase. Please try again.",

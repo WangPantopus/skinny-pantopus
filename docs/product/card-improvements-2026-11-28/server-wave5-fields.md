@@ -162,11 +162,13 @@ design's own link picture (`/holiday-cards/share/<design>-link.jpg`), which the 
 
 Nothing that blocks the apps. Three things to settle, and the default I am building:
 
-1. **Stamp books stop selling on December 26** (`MAIL_STAMPS_SALES_LAST_DAY`), and never sell once Christmas cards
-   close. So in the thank-you weeks nobody can buy stamps: a person sends with the free ones they have, and a third
-   photo or voice card can't be sent. The contract says stamps are unchanged, so I am leaving sales exactly as they
-   are. If the founder wants books on sale for thank-you cards, it is one setting plus a two-line change (sales follow
-   "a card can be sent" instead of "Christmas cards can be sent"); tell me and I add it.
+1. **Stamp books stay on sale while a thank-you card can be sent** (founder, November 28: "Yes, keep selling").
+   While the switch is on, sales are open when Christmas cards are on sale as today (through
+   `MAIL_STAMPS_SALES_LAST_DAY`, December 26) **or** a thank-you card can be sent where the person lives. So: open
+   through January 15, closed from January 16, and open again with `CARD_EVERYDAY`. With the switch off, sales end
+   after December 26 as today. The apps need no change: they read `sales_open` on `GET /api/mailbox/stamp-books` and
+   `media.bought_stamp.state` on `GET /api/mailbox/cards` (`buy` or `unavailable`), as today. This is the one place
+   a store build reads something new: from December 27 it too sees books on sale.
 2. **`holiday` stays `"christmas"` on a thank-you card.** Changing a field old builds read risks more than it gives;
    `kind` is the new field to read.
 3. **A thank-you design before its window is "unknown", not "not yet".** On December 20 nothing about it exists in any
