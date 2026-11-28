@@ -66,8 +66,8 @@ internal class ReinventedLayoutParts(
     val add: @Composable (Modifier) -> Unit,
     /** What + does, for the small + in the phone's sheet header at full. */
     val onAdd: () -> Unit,
-    /** The list (or My Atlas's). */
-    val list: @Composable (Modifier) -> Unit,
+    /** The list (or My Atlas's); following: what is on the map now (PHASE-6 B), else the reach's whole list. */
+    val list: @Composable (Modifier, following: Boolean) -> Unit,
 )
 
 /** List and Map side by side, or one of them alone, on a wide window. */
@@ -116,7 +116,7 @@ private fun ListColumn(
     Column(modifier = modifier.fillMaxHeight().background(PantopusColors.appBg)) {
         parts.header(Modifier)
         Box(Modifier.fillMaxWidth().weight(1f)) {
-            parts.list(Modifier.fillMaxSize())
+            parts.list(Modifier.fillMaxSize(), false)
             parts.add(Modifier.align(Alignment.BottomEnd))
         }
     }

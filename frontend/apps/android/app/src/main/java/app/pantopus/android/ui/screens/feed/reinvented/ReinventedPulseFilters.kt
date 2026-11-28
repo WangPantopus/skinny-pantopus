@@ -207,6 +207,15 @@ class ReinventedFiltersViewModel
             keptTime = kept?.time?.takeIf { t -> REINVENTED_TIMES.any { it.first == t } }
         }
 
+        private val _noPlace = MutableStateFlow(false)
+
+        /** "No place" in the sheet's header (PHASE-6 B): off at first, for this visit only. */
+        val noPlace: StateFlow<Boolean> = _noPlace.asStateFlow()
+
+        fun noPlace(on: Boolean) {
+            _noPlace.value = on
+        }
+
         fun set(
             next: ReinventedFilters,
             time: String,
