@@ -114,7 +114,8 @@ const esc = (value) => String(value ?? '')
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
 function codeEmail({ code, senderName, card, returnLink = null }) {
-  const thing = card ? 'Christmas card' : 'letter';
+  // `card`: true for a Christmas card, or what to call the card ("thank-you card"; holidayCards.cardWords).
+  const thing = typeof card === 'string' && card ? card : card ? 'Christmas card' : 'letter';
   const opening = card ? 'open' : 'read';
   const subject = `${code} is your Pantopus code`;
   const intro = `Enter this code on the page your ${thing}’s link opened to ${opening} the ${thing} ${senderName} sent you.`;

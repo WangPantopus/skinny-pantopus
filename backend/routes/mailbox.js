@@ -436,7 +436,8 @@ function guestEnvelopeName(card) {
 // shows no front (null), and neither does a picture that isn't on the list.
 function cardLinkFront(card, sealed = card?.arrival === 'sealed_christmas') {
   if (!card || sealed) return null;
-  const design = holidayCards.designById(card.design);
+  // A catalog card or a thank-you card; never the photo card, whose front is the sender's own (pictureDesign).
+  const design = holidayCards.pictureDesign(card.design);
   if (!design) return null;
   return { design: design.id, caption: design.caption, paper: design.paper, table: design.table || null, mood: design.mood || null };
 }
@@ -2116,8 +2117,15 @@ async function checkCardSender(senderId, body, now, { listRowIds = null } = {}) 
   const refuse = refuseCard;
   // The photo card is a design only while the card round is on; off, it is unknown like any other id.
   const photoCard = isPhotoCardSend(body);
-  const design = photoCard ? holidayCards.PHOTO_CARD : holidayCards.designById(body.design);
+  // A thank-you card (the card round, Wave 5) is a design only while the round is on; whether its days have come is
+  // told by the sender's clock, below, where the season is.
+  const thankYou = cardImprovementsOn() && holidayCards.isThankYouDesign(body.design);
+  const design = photoCard ? holidayCards.PHOTO_CARD
+    : thankYou ? holidayCards.designOf(body.design) : holidayCards.designById(body.design);
   if (!design) return refuse(400, 'Pick one of the Christmas cards.', 'CARD_DESIGN_UNKNOWN');
+  if (thankYou && body.travel === true) {
+    return refuse(400, 'A thank-you card doesn’t travel. Turn that off to send it.', 'CARD_THANK_YOU_NO_TRAVEL');
+  }
   // A photo card: its photo is the front, in one of three frames, with a line of the sender's own. It takes a still
   // photo, never travels, and nothing else has a front of its own.
   let front = null;
@@ -2178,11 +2186,17 @@ async function checkCardSender(senderId, body, now, { listRowIds = null } = {}) 
     .select('id, email, account_type').eq('id', senderId).maybeSingle();
   if (senderError) throw new Error(senderError.message);
   if (!sender || sender.account_type === 'business') {
-    return refuse(403, 'Christmas cards are sent from a personal account.', 'CARD_SENDER_NOT_PERSON');
+    return refuse(403, `${thankYou ? 'Thank-you cards' : 'Christmas cards'} are sent from a personal account.`, 'CARD_SENDER_NOT_PERSON');
   }
 
   const senderZone = (await mailDelivery.personTimeZone(senderId)) || mailDelivery.FALLBACK_TIME_ZONE;
-  if (!holidayCards.seasonOpen(senderZone, now)) return refuse(410, 'Christmas cards are done for this year.', 'CARDS_CLOSED');
+  if (thankYou) {
+    // Its collection's days, where the sender lives: before them (or while the collection isn't there at all) it is
+    // no design yet; after them, thank-you cards are over. Christmas cards closing doesn't close these.
+    const days = holidayCards.thankYouSendable(design.id, senderZone, now);
+    if (days === 'unknown') return refuse(400, 'Pick one of the Christmas cards.', 'CARD_DESIGN_UNKNOWN');
+    if (days !== 'open') return refuse(410, 'Thank-you cards are done for this season.', 'CARDS_CLOSED');
+  } else if (!holidayCards.seasonOpen(senderZone, now)) return refuse(410, 'Christmas cards are done for this year.', 'CARDS_CLOSED');
   if (!mailStamps.enabled(senderId) && (await cardsSentToday(senderId, senderZone, now)).length) {
     return refuse(429, 'You’ve sent today’s card. You can send another tomorrow.', 'CARD_DAILY_LIMIT');
   }
@@ -2249,7 +2263,10 @@ async function checkCardRecipient(senderId, body, now, from, { earlierAddresses 
   const toEmail = toUserId || byLink ? null : normalizeEscrowContact(body.to.email);
   const arrivalClosed = () => refuse(400, 'That choice isn’t open any more. Choose when it arrives again.', 'CARD_ARRIVAL_CLOSED');
   const card = {
-    design: design.id, caption: design.caption, holiday: holidayCards.SEASON.holiday, year: holidayCards.SEASON.year,
+    design: design.id, caption: design.caption, holiday: holidayCards.SEASON.holiday,
+    // A thank-you card carries the year it was sent, where its sender lives ("THANK YOU, 2027"); `holiday` stays what
+    // apps from before it read on every card.
+    year: holidayCards.isThankYouDesign(design.id) ? Number(mailDelivery.localDate(now, senderZone).slice(0, 4)) : holidayCards.SEASON.year,
     arrival, sealed_until: null, take_back_until: null, to_name: null,
   };
   // A card that travels (card_travel): a journey of its own when it starts one, or the pass-on's place in its journey.
@@ -2340,7 +2357,7 @@ async function checkCardRecipient(senderId, body, now, from, { earlierAddresses 
  * written now. An account older than that costs one read. Throws on a read failure (the caller leaves the strip out).
  */
 async function cardWelcome(userId, { now, timeZone }) {
-  if (!holidayCards.seasonOpen(timeZone, now)) return null;
+  if (!holidayCards.sendingOpen(timeZone, now)) return null;
   const { data: account, error: accountError } = await supabaseAdmin.from('User').select('created_at').eq('id', userId).maybeSingle();
   if (accountError) throw new Error(accountError.message);
   const joined = Date.parse(account?.created_at);
@@ -2409,6 +2426,7 @@ router.get('/cards', verifyToken, async (req, res) => {
     const saved = await savedRead;
     const freeMedia = await freeMediaRead;
     const welcome = await welcomeRead;
+    const thankYou = improved ? holidayCards.thankYouControls(timeZone, now) : null;
     return res.json({
       // The apps draw the round's experience only from an answer that says so (absent while it is off).
       ...(improved ? { improved: true } : {}),
@@ -2431,6 +2449,10 @@ router.get('/cards', verifyToken, async (req, res) => {
           ...(freeMedia ? { free_allowance: { limit: freeMedia.limit, remaining: freeMedia.remaining } } : {}),
           ...(freeMedia?.remaining > 0 ? {} : { bought_stamp: await boughtStampControls(senderId, postage, stamps) }) }
         : controls,
+      // Thank-you cards (the card round, Wave 5), while one can be sent now by their clock: the collections and
+      // designs (never among `collections` and `designs`, which stay Christmas alone), what to call one, what it
+      // prints, its envelope, its arrivals, and whether Christmas cards are over (`only`). Absent: none can be sent.
+      ...(thankYou ? { thank_you: thankYou } : {}),
       // The photo card (the card round, Wave 4.2), while a photo can be added at all: its design id (it is never among
       // `designs`), frames, the longest line under the photo and the shapes a photo is cropped to. Absent: no pill.
       ...(improved && controls.photo.usable ? { photo_card: holidayCards.photoCardControls() } : {}),
@@ -2555,6 +2577,10 @@ router.get('/cards/designs', (req, res) => {
       ({ id, number, slug, caption, paper, collection, table, mood, ...(verse ? { verse } : {}) })),
     // The shelves, a page per collection (launch key card_shelves). Absent: today's pages.
     ...(cardShelvesOn() ? { shelves: true } : {}),
+    // Thank-you cards (the card round, Wave 5), for the website's pages: every thank-you collection there is, each
+    // with its days and whether it is open now by Pacific time (nobody is signed in here), and their designs. The
+    // fields above stay Christmas alone. Absent while the round is off.
+    ...(holidayCards.thankYouPublic(mailDelivery.FALLBACK_TIME_ZONE) ? { thank_you: holidayCards.thankYouPublic(mailDelivery.FALLBACK_TIME_ZONE) } : {}),
     // With digital stamps on for everyone: the free cards an account starts with, for the pages' "first 7 are free".
     ...(mailStamps.enabled() ? { free_cards: mailStamps.FREE_CARDS } : {}),
   });
@@ -2810,7 +2836,8 @@ router.get('/cards/waiting', verifyToken, async (req, res) => {
       mailDelivery.personTimeZone(userId),
     ]);
     if (accountError) throw new Error(accountError.message);
-    if (!holidayCards.seasonOpen(timeZone || mailDelivery.FALLBACK_TIME_ZONE, now)) return none();
+    // While a card of any kind can be sent where they live (thank-you cards too, while the card round is on).
+    if (!holidayCards.sendingOpen(timeZone || mailDelivery.FALLBACK_TIME_ZONE, now)) return none();
     const joined = Date.parse(account?.created_at);
     if (!Number.isFinite(joined) || now.getTime() - joined > CARD_WAITING_JOINED_MS) return none();
     // Unopened as the Mailbox counts it: opened neither in a reader (opened_at) nor marked read (viewed).
@@ -2956,7 +2983,7 @@ async function storeCardOnce({ senderId, checked, requestId, rowId, digest, now,
   try {
     objectResult = await createMailObject({ senderId, objectPayload: {
       version: 'mailjson_v1', objectFormat: 'plain_text', mimeType: 'text/plain',
-      envelope: { type: 'letter', subject: holidayCards.SUBJECT, attachments: [] },
+      envelope: { type: 'letter', subject: holidayCards.subjectOf(card), attachments: [] },
       recipient: toUserId
         ? { mode: 'user', userId: toUserId, deliveryTargetType: 'user', deliveryTargetId: toUserId }
         : { mode: 'contact' },
@@ -2975,9 +3002,10 @@ async function storeCardOnce({ senderId, checked, requestId, rowId, digest, now,
     ...(linkRowId || rowId ? { id: linkRowId || rowId } : {}),
     sender_user_id: senderId, sender_entity_id: null, sender_display: checked.senderDisplay,
     sender_trust: 'pantopus_user', sender_business_name: null, sender_address: null,
-    type: 'letter', subject: holidayCards.SUBJECT, display_title: holidayCards.SUBJECT, content: '', content_excerpt: '',
+    // "A Christmas card", or "A thank-you card": what every list, and an app that doesn't know cards, shows.
+    type: 'letter', subject: holidayCards.subjectOf(card), display_title: holidayCards.subjectOf(card), content: '', content_excerpt: '',
     preview_text: null, attachments: [], payout_amount: null, category: holidayCards.CARD_TAG,
-    tags: [holidayCards.CARD_TAG, holidayCards.SEASON.tag], priority: 'normal', expires_at: null,
+    tags: [holidayCards.CARD_TAG, holidayCards.isThankYou(card) ? holidayCards.THANK_YOU.tag : holidayCards.SEASON.tag], priority: 'normal', expires_at: null,
     object_id: objectResult.objectId, mail_type: 'letter', primary_action: 'open', action_required: false,
     ack_required: false, ack_status: null, mail_object_type: 'envelope',
     // By email, where its email is (services/cardEmail): its first try starts once the card is settled, or at its 7 a.m.
@@ -3159,7 +3187,7 @@ async function cardLook(senderId, checked, now) {
   return {
     piece: {
       id: 'preview', kind: 'letter', type: 'letter', mail_object_type: 'envelope', sender_display: senderDisplay,
-      sender_trust: 'pantopus_user', sender_business_name: null, subject: holidayCards.SUBJECT, content: message,
+      sender_trust: 'pantopus_user', sender_business_name: null, subject: holidayCards.subjectOf(card), content: message,
       created_at: now.toISOString(), delivered_at: toEmail || byLink ? null : delivery.delivered_at,
       postmark: { town: null, date: mailDelivery.localDate(now, zone) },
       // Their own signature, photo and voice show here as their own note does, sealed or not, never covered; the photo
@@ -3723,7 +3751,7 @@ router.post('/cards/:id/reply', verifyToken, validate(replySchema), async (req, 
     try {
       objectResult = await createMailObject({ senderId: userId, objectPayload: {
         version: 'mailjson_v1', objectFormat: 'plain_text', mimeType: 'text/plain',
-        envelope: { type: 'letter', subject: holidayCards.REPLY_SUBJECT, attachments: [] },
+        envelope: { type: 'letter', subject: holidayCards.replySubjectOf(original.mail_extracted.card), attachments: [] },
         recipient: { mode: 'user', userId: toUserId, deliveryTargetType: 'user', deliveryTargetId: toUserId },
         body: { content: message, payload: { card_reply: data, ...(signature ? { signature } : {}) } },
         createdAt: now.toISOString(),
@@ -3734,8 +3762,8 @@ router.post('/cards/:id/reply', verifyToken, validate(replySchema), async (req, 
     }
     const stored = {
       id: rowId, sender_user_id: userId, sender_entity_id: null, sender_display: fromName, sender_trust: 'pantopus_user',
-      sender_business_name: null, sender_address: null, type: 'letter', subject: holidayCards.REPLY_SUBJECT,
-      display_title: holidayCards.REPLY_SUBJECT, content: '', content_excerpt: '', preview_text: null, attachments: [],
+      sender_business_name: null, sender_address: null, type: 'letter', subject: holidayCards.replySubjectOf(original.mail_extracted.card),
+      display_title: holidayCards.replySubjectOf(original.mail_extracted.card), content: '', content_excerpt: '', preview_text: null, attachments: [],
       payout_amount: null, category: holidayCards.REPLY_TAG, tags: [holidayCards.REPLY_TAG, holidayCards.SEASON.tag],
       priority: 'normal', expires_at: null, object_id: objectResult.objectId, mail_type: 'letter', primary_action: 'open',
       action_required: false, ack_required: false, ack_status: null, mail_object_type: 'envelope',
@@ -4584,6 +4612,8 @@ router.get('/:id', verifyToken, async (req, res) => {
             if (mail.card_media?.photo) mail.card_photo_covered = await cardMedia.photoCovered(userId, mail.sender_user_id);
             // Whether they joined for this card (the card round, Wave 4.1): the apps then hold their other notices.
             if (await holidayCards.joinedFor(mail, userId)) mail.card_joined_for = true;
+            // "Send a thank-you card" on a Christmas card they received, while one can be sent (Wave 5).
+            mail.card_send_thank_you = await holidayCards.sendThankYou(mail, userId);
           }
           if ((!mail.attachments || mail.attachments.length === 0) && Array.isArray(objectAttachments)) {
             mail.attachments = objectAttachments;
@@ -5466,11 +5496,13 @@ router.get('/claim/:mailId', async (req, res) => {
         senderName: sender.senderName,
         senderVerified: sender.senderVerified,
         senderKind: sender.senderKind,
-        subject: card ? holidayCards.SUBJECT : (mail.subject || mail.display_title || null),
+        subject: card ? holidayCards.subjectOf(card) : (mail.subject || mail.display_title || null),
         previewText,
         mailType: mail.mail_type || mail.type || null,
         outcomeDescription,
         card: card ? { holiday: card.holiday || holidayCards.SEASON.holiday, year: card.year || holidayCards.SEASON.year,
+          // A thank-you card: what it is, its name, the line under its picture and its envelope (none on a Christmas card).
+          ...holidayCards.kindFields(card),
           sealed: cardSealed,
           ...(improved && cardSealed && card.sealed_until ? { sealed_until: card.sealed_until } : {}),
           front: cardLinkFront(card, cardSealed),
@@ -5689,7 +5721,9 @@ router.post('/claim/:mailId/code', mailCodeNetworkLimiter, validate(mailCodeSche
     const returnLinkBase = cardImprovementsOn() && !holidayCards.isByLink(mail) && req.body.token
       ? cardEmail.escrowClaimLink(mail.id, req.body.token)
       : null;
-    const sent = await mailClaimCode.sendCode({ address, senderName, card, mailId, req, returnLinkBase });
+    // A thank-you card's code email names it (mailClaimCode.codeEmail); a Christmas card's is what it was.
+    const sent = await mailClaimCode.sendCode({ address, senderName,
+      card: card && holidayCards.isThankYou(mail) ? holidayCards.THANK_YOU.name : card, mailId, req, returnLinkBase });
     if (sent !== 'sent') {
       return res.status(503).json({
         error: sent === 'unavailable' ? 'Email can’t be sent just now. Try again in a few minutes.' : 'Couldn’t send your code. Try again in a moment.',
@@ -5870,7 +5904,7 @@ router.post('/claim/:mailId', verifyToken, async (req, res) => {
         await notificationService.createNotification(card ? {
           userId: mail.sender_user_id,
           type: 'holiday_card_claimed',
-          title: 'Your Christmas card arrived',
+          title: `Your ${holidayCards.cardWords(mail.mail_extracted?.card).name} arrived`,
           body: `${byLink ? `${claimerName || 'Someone'} opened your link and has your card.`
             : (claimerName ? `${claimerName} joined Pantopus and has your card.` : 'They joined Pantopus and have your card.')}${
             rewarded ? ' You gained one more free card to send.' : ''}`,

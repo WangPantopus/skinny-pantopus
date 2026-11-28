@@ -2057,7 +2057,8 @@ async function suggestCardNote({ design, to, count, hint, note, passedOver, user
     const response = await complete({
       client,
       model: DRAFT_MODEL,
-      system: prompts.cardNoteSystem({ limit: holidayCards.MESSAGE_LIMIT, target: cardNote.TARGET_LETTERS }),
+      system: prompts.cardNoteSystem({ limit: holidayCards.MESSAGE_LIMIT, target: cardNote.TARGET_LETTERS,
+        thankYou: holidayCards.isThankYouDesign(design?.id) }),
       messages: [{ role: 'user', content: cardNote.userContent({ design, to, count, hint, note, passedOver }) }],
       schema: cardNote.cardNoteClaudeSchema,
       effort: DRAFT_EFFORT,

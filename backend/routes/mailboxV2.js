@@ -696,6 +696,8 @@ router.get('/item/:id', verifyToken, async (req, res) => {
     }
     // Whether they joined for this card (the card round, Wave 4.1): the apps then hold their other notices.
     if (holidayCards.isCard(mail) && await holidayCards.joinedFor(mail, userId)) mail.card_joined_for = true;
+    // "Send a thank-you card" on a Christmas card they received, while one can be sent (Wave 5).
+    if (holidayCards.isCard(mail)) mail.card_send_thank_you = await holidayCards.sendThankYou(mail, userId);
     if (!mail.opened_at && !mail.removed && !holidayCards.isSealed(mail)) {
       const now = new Date().toISOString();
       const opened = { opened_at: now, viewed: true, viewed_at: mail.viewed_at || now,

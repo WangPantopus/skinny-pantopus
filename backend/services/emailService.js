@@ -341,22 +341,24 @@ function cardWaitingEmailContent({
     ? require('./holidayCards').emailPicture({ design, sealed: improved ? sealed && stillSealed : sealed }) : null;
   // The card's own front is in the picture: "this" card.
   const front = Boolean(shown?.caption);
-  const card = front ? 'this Christmas card' : 'a Christmas card';
+  // What to call it: a thank-you card says so (its design is one of the thank-you pictures; services/holidayCards).
+  const noun = /^thank-you-\d{2}$/.test(String(design || '')) ? 'thank-you card' : 'Christmas card';
+  const card = front ? `this ${noun}` : `a ${noun}`;
   const first = unsealedReminder
-    ? `${senderName}’s Christmas card is ready to open!`
+    ? `${senderName}’s ${noun} is ready to open!`
     : reminder
-      ? `${senderName}’s Christmas card is still waiting for you on Pantopus.`
+      ? `${senderName}’s ${noun} is still waiting for you on Pantopus.`
       : `${senderName} sent you ${card} on Pantopus.`;
   const subject = unsealedReminder
-    ? `${senderName}’s Christmas card is ready to open`
+    ? `${senderName}’s ${noun} is ready to open`
     : reminder
-      ? `${senderName}’s Christmas card is still waiting for you`
-      : `${senderName} sent you a Christmas card on Pantopus`;
+      ? `${senderName}’s ${noun} is still waiting for you`
+      : `${senderName} sent you a ${noun} on Pantopus`;
   const heading = unsealedReminder
-    ? 'Your Christmas card is ready to open'
+    ? `Your ${noun} is ready to open`
     : reminder
-      ? 'Your Christmas card is still waiting'
-      : 'You have a Christmas card';
+      ? `Your ${noun} is still waiting`
+      : `You have a ${noun}`;
   const lines = sealed && stillSealed
     ? [`${first} It’s sealed until Christmas morning.`,
       guestOpen
@@ -364,7 +366,7 @@ function cardWaitingEmailContent({
         : 'Join Pantopus with this email address to open it and keep it in your own Pantopus mailbox. A Pantopus account is free.']
     : guestOpen
       ? [unsealedReminder
-          ? `${senderName}’s Christmas card is ready to open, with a note on the back just for you.`
+          ? `${senderName}’s ${noun} is ready to open, with a note on the back just for you.`
           : `${first.slice(0, -1)}, with a note on the back just for you.`,
         `Open it right in your browser — no account or app needed. Join Pantopus free anytime to keep it in your mailbox or write back.`]
       : sealed

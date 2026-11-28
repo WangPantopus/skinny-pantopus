@@ -245,6 +245,9 @@ async function storeUpload({ userId, kind, buffer, mimeType, facts, ext: clipExt
   const row = {
     id,
     user_id: userId,
+    // Stamped by this server's clock, the one its 72 hours are counted by when it is sent (checkRefs), rather than
+    // left to the database's default: the two are the same moment in use, and one clock in a test on another date.
+    created_at: new Date().toISOString(),
     filename: key.slice(PREFIX.length),
     // Never the name it had on the phone.
     original_filename: { voice: 'card-voice.m4a', live: `card-live.${ext}` }[kind] || 'card-photo.jpg',
