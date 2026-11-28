@@ -4,6 +4,7 @@
 // put dots on them, each holding a note, a rating, a link, or "a thing to name" (a reader's tap reads its field card,
 // §7d). Up to eight. A thing needs a photo and the author's Pantopus AI on; a link isn't offered under a made-up name.
 
+import { useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { get } from '@pantopus/api/client';
 import { RecordButton } from '../sound/SoundPanel';
@@ -102,13 +103,19 @@ export function DotEditLayer({
   selected,
   onAdd,
   onSelect,
+  onMove,
 }: {
   dots: DotDraft[];
   active: boolean;
   selected: string | null;
   onAdd(x: number, y: number): void;
   onSelect(id: string): void;
+  /** A dot dragged to a new spot (PHASE-6 F2: an item goes where the finger takes it); unset while another tool is on. */
+  onMove?(id: string, x: number, y: number): void;
 }) {
+  // The dot being dragged, and whether the press moved it (then its click picks nothing).
+  const moving = useRef<{ id: string; x0: number; y0: number; on: boolean } | null>(null);
+  const moved = useRef(false);
   if (!dots.length && !active) return null;
   const sel = dots.find((d) => d.id === selected);
   return (
@@ -138,8 +145,35 @@ export function DotEditLayer({
           aria-label={`Dot ${d.id.replace('dot-', '')}: ${d.kind === 'thing' ? 'a thing to name' : d.kind}`}
           aria-pressed={selected === d.id}
           style={{ left: `${d.x * 100}%`, top: `${d.y * 100}%` }}
+          data-movable={onMove ? true : undefined}
+          onPointerDown={(e) => {
+            if (!onMove || (e.pointerType === 'mouse' && e.button !== 0)) return;
+            e.stopPropagation();
+            try {
+              e.currentTarget.setPointerCapture(e.pointerId);
+            } catch {
+              /* a pointer that is already gone */
+            }
+            moving.current = { id: d.id, x0: e.clientX, y0: e.clientY, on: false };
+            moved.current = false;
+          }}
+          onPointerMove={(e) => {
+            const m = moving.current;
+            if (!m || m.id !== d.id || !onMove) return;
+            if (!m.on && Math.hypot(e.clientX - m.x0, e.clientY - m.y0) < 4) return;
+            m.on = moved.current = true;
+            const b = (e.currentTarget.parentElement as HTMLElement).getBoundingClientRect();
+            onMove(d.id, clamp((e.clientX - b.left) / b.width, 0.03, 0.97), clamp((e.clientY - b.top) / b.height, 0.03, 0.97));
+          }}
+          onLostPointerCapture={() => {
+            moving.current = null;
+          }}
           onClick={(e) => {
             e.stopPropagation();
+            if (moved.current) {
+              moved.current = false;
+              return;
+            }
             onSelect(d.id);
           }}
         />

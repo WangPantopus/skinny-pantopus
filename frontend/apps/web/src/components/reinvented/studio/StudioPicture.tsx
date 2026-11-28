@@ -45,6 +45,46 @@ function arrow(from: XY, to: XY, width: number): XY[] {
   return [from, to, wing(0.5), to, wing(-0.5)];
 }
 
+let measurer: CanvasRenderingContext2D | null = null;
+/**
+ * The words' box as `paintOverlay` lays them out (the same font, the same wrapping), as shares of the frame: so a drag can
+ * tell a press on the words from one on the picture, and keep the words whole on the canvas.
+ */
+function wordsBox(a: Artwork): { w: number; h: number } | null {
+  if (!a.text.trim() || typeof document === 'undefined') return null;
+  measurer ??= document.createElement('canvas').getContext('2d');
+  const ctx = measurer;
+  if (!ctx) return null;
+  const size = W * a.size;
+  ctx.font = a.font
+    ? (a.font.style ? a.font.style + ' ' : '') + a.font.weight + ' ' + size + 'px ' + a.font.family
+    : '700 ' + size + 'px system-ui, sans-serif';
+  const lines: string[] = [];
+  for (const paragraph of a.text.split('\n')) {
+    let line = '';
+    for (const word of paragraph.split(/\s+/)) {
+      const next = line ? line + ' ' + word : word;
+      if (line && ctx.measureText(next).width > W * 0.88) {
+        lines.push(line);
+        line = word;
+      } else line = next;
+    }
+    lines.push(line);
+  }
+  const width = Math.min(W * 0.92, Math.max(...lines.map((l) => ctx.measureText(l).width)));
+  return { w: width / W, h: (lines.length * size * 1.17) / H };
+}
+/**
+ * Where the words' middle may go so the words stay whole on the canvas: nothing of them is cut off the posted picture or
+ * left under the Studio's controls (LEAD-7's look, 08:55: words dropped at the bottom ended under Fill / Turn / Reset).
+ */
+function keepWords(a: Artwork, at: XY): XY {
+  const b = wordsBox(a);
+  const hw = b ? Math.min(0.5, b.w / 2) : 0,
+    hh = b ? Math.min(0.5, b.h / 2) : 0;
+  return { x: clamp(at.x, hw, 1 - hw), y: clamp(at.y, hh, 1 - hh) };
+}
+
 /** How far a point is from a stroke, in the frame's pixels. */
 function distance(p: XY, stroke: Stroke) {
   const q = px(p);
@@ -107,7 +147,9 @@ export default function StudioPicture({
     [dimensions, setDimensions] = useState<{ w: number; h: number }>({ w: 9, h: 16 });
   const canvas = useRef<HTMLCanvasElement>(null),
     frame = useRef<HTMLDivElement>(null),
-    drag = useRef<{ from: XY; original: Artwork } | null>(null),
+    // `words`: the press landed on the words with no tool open, so it moves them, not the picture (section K: an item wins
+    // the press).
+    drag = useRef<{ from: XY; original: Artwork; words?: boolean } | null>(null),
     media = useRef<HTMLImageElement | HTMLVideoElement | null>(null),
     rubbed = useRef<XY | null>(null),
     fingers = useRef(new Map<number, XY>()),
@@ -171,6 +213,30 @@ export default function StudioPicture({
     return a && b ? angleOf(a, b) : 0;
   };
   const sizes = zoomRange(dimensions.w, dimensions.h);
+  // The wheel and a trackpad's pinch (ctrl and the wheel) size the picture and never the page: React's wheel handler is
+  // passive, so the listener is the canvas's own (LEAD-7's look, 08:55: a real pinch would have zoomed the page too).
+  const wheel = useRef<(e: WheelEvent) => void>(() => {});
+  wheel.current = (e: WheelEvent) => {
+    if (e.ctrlKey) e.preventDefault();
+    if (tool === 'text' || tool === 'draw') return;
+    e.preventDefault();
+    // Shift and the wheel turn it, five degrees a step, sticking at quarter turns; the wheel alone sizes it.
+    if (e.shiftKey) onChange({ ...art, rotation: stuckTurn(art.rotation + ((e.deltaY || e.deltaX) < 0 ? -5 : 5)) });
+    else onChange({ ...art, zoom: clamp(art.zoom * (e.deltaY < 0 ? 1.06 : 1 / 1.06), sizes.min, sizes.max) });
+  };
+  useEffect(() => {
+    const el = canvas.current;
+    if (!el) return undefined;
+    const on = (e: WheelEvent) => wheel.current(e);
+    el.addEventListener('wheel', on, { passive: false });
+    return () => el.removeEventListener('wheel', on);
+  }, []);
+  // A finger lifted or lost always leaves the count, so one finger never goes on sizing as if two were down.
+  const letGo = (id: number) => {
+    fingers.current.delete(id);
+    if (fingers.current.size < 2) pinch.current = null;
+    drag.current = null;
+  };
   // See the picture first (PHASE-5 A1): every picture opens whole, never cut, as it will look to readers; Fit / Fill,
   // Turn and Reset on the same screen (Studio.tsx), and dragging, zooming and turning here, change it. The picture is
   // whole and upright at zoom 1, then sized and turned to any angle (whole.ts, the same numbers as what is posted).
@@ -230,14 +296,10 @@ export default function StudioPicture({
             ? 'Draw on your Moment'
             : tool === 'text'
               ? 'Drag to move your words'
-              : 'Drag to move the picture'
+              : art.text.trim()
+                ? 'Drag your words to move them, or the picture to move it'
+                : 'Drag to move the picture'
         }
-        onWheel={(e) => {
-          if (tool === 'text' || tool === 'draw') return;
-          // Shift and the wheel turn it, five degrees a step, sticking at quarter turns; the wheel alone sizes it.
-          if (e.shiftKey) onChange({ ...art, rotation: stuckTurn(art.rotation + ((e.deltaY || e.deltaX) < 0 ? -5 : 5)) });
-          else onChange({ ...art, zoom: clamp(art.zoom * (e.deltaY < 0 ? 1.06 : 1 / 1.06), sizes.min, sizes.max) });
-        }}
         onPointerDown={(e) => {
           try {
             e.currentTarget.setPointerCapture(e.pointerId);
@@ -256,7 +318,10 @@ export default function StudioPicture({
             return;
           }
           const p = point(e);
-          drag.current = { original: art, from: p };
+          const box = !tool ? wordsBox(art) : null;
+          const onWords =
+            !!box && Math.abs(p.x - art.textAt.x) <= box.w / 2 + 0.03 && Math.abs(p.y - art.textAt.y) <= box.h / 2 + 0.02;
+          drag.current = { original: art, from: p, words: onWords };
           rubbed.current = null;
           if (tool === 'draw' && brush === 'eraser') {
             const kept = rub(p, art.strokes);
@@ -306,13 +371,10 @@ export default function StudioPicture({
                   { ...stroke, points: brush === 'arrow' ? arrow(from, p, stroke.width) : [...stroke.points, p] },
                 ],
               });
-          } else if (tool === 'text')
+          } else if (tool === 'text' || drag.current.words)
             onChange({
               ...art,
-              textAt: {
-                x: clamp(original.textAt.x + p.x - from.x, 0, 1),
-                y: clamp(original.textAt.y + p.y - from.y, 0, 1),
-              },
+              textAt: keepWords(art, { x: original.textAt.x + p.x - from.x, y: original.textAt.y + p.y - from.y }),
             });
           // The picture sticks at the middle (as Resize does on the phones), so it goes back there without a hunt.
           else
@@ -321,11 +383,9 @@ export default function StudioPicture({
               offset: { x: toMiddle(original.offset.x + p.x - from.x), y: toMiddle(original.offset.y + p.y - from.y) },
             });
         }}
-        onLostPointerCapture={(e) => {
-          fingers.current.delete(e.pointerId);
-          if (fingers.current.size < 2) pinch.current = null;
-          drag.current = null;
-        }}
+        onPointerUp={(e) => letGo(e.pointerId)}
+        onPointerCancel={(e) => letGo(e.pointerId)}
+        onLostPointerCapture={(e) => letGo(e.pointerId)}
       />
     </div>
   );

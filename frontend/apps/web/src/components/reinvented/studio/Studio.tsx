@@ -177,7 +177,8 @@ function useDragTo(direction: 'up' | 'down', act: () => void) {
         if (ev.pointerId !== id) return;
         const dy = ev.clientY - y0,
           dx = Math.abs(ev.clientX - x0);
-        if ((direction === 'up' ? -dy : dy) > 28 && Math.abs(dy) > dx * 1.5) {
+        // More up (or down) than sideways: a long drag that wanders off the header still counts (LEAD-7's look, 08:55).
+        if ((direction === 'up' ? -dy : dy) > 28 && Math.abs(dy) > dx) {
           end();
           skipClick.current = true;
           window.setTimeout(() => (skipClick.current = false), 300);
@@ -1578,6 +1579,31 @@ export default function Studio({
     setTrayOpen(false);
     setStamps([]);
     setPicked(null);
+    // Everything else placed on the discarded draft goes with it: its playable items, dots, blurs, sounds, loop, trim and
+    // look (LEAD-7's look, 08:55: a discarded poll came back on the next photo).
+    setPlay([]);
+    setMaking(null);
+    setPlayStart(null);
+    setDots([]);
+    setPickedDot(null);
+    setIlluminate(false);
+    setBlurs([]);
+    setAfterBlurs([]);
+    setAfterFile(null);
+    setSide('before');
+    setBlurOn(false);
+    setSoundOpen(false);
+    setVoiceRec(null);
+    setVoiceWords('');
+    setPlaceRec(null);
+    setLoopSpan(null);
+    setLoopOpen(false);
+    setTrimSpan(null);
+    setTrimOpen(false);
+    setLook('original');
+    setLookFile(null);
+    setPicking(false);
+    setMentioned([]);
     setGuessSpot(false);
     setKind(null);
     setKindMenu(false);
@@ -1609,7 +1635,16 @@ export default function Studio({
     else if (kindMenu) setKindMenu(false);
     else if (trayOpen) setTrayOpen(false);
     else if (picked) setPicked(null);
+    else if (picking) setPicking(false);
     else if (tool) setTool(null);
+    // The rail's own cards close before anything asks to discard (LEAD-7's look, 08:55: Escape in Sound and Blur asked to
+    // discard instead).
+    else if (blurOn) setBlurOn(false);
+    else if (soundOpen) setSoundOpen(false);
+    else if (loopOpen) setLoopOpen(false);
+    else if (trimOpen) setTrimOpen(false);
+    else if (pickedDot) setPickedDot(null);
+    else if (illuminate) setIlluminate(false);
     else if (drawerOpen && !wide) setDrawerOpen(false);
     else if (camera) setCamera(false);
     else closeOrBack();
@@ -2127,6 +2162,7 @@ export default function Studio({
         <div
           className="st-frame"
           data-tool={tool || undefined}
+          data-picking={picking || undefined}
           onDragOver={(e) => e.preventDefault()}
           onDrop={(e) => {
             e.preventDefault();
@@ -2235,6 +2271,7 @@ export default function Studio({
                   setTool(null);
                   setPickedDot(id);
                 }}
+                onMove={tool || busy ? undefined : (id, x, y) => setDots((all) => all.map((d) => (d.id === id ? { ...d, x, y } : d)))}
               />
             )}
           </div>
@@ -2536,7 +2573,12 @@ export default function Studio({
                         max="180"
                         step="1"
                         value={turnOf(art.rotation)}
-                        onChange={(e) => setArt({ ...art, rotation: stuckTurn(Number(e.target.value)) })}
+                        onChange={(e) => {
+                          // A keyboard's one-degree step is kept as it is (it snapped back to 0: LEAD-7's look, 08:55);
+                          // a pointer's jump still sticks at quarter turns.
+                          const v = Number(e.target.value);
+                          setArt({ ...art, rotation: Math.abs(v - turnOf(art.rotation)) <= 1 ? v : stuckTurn(v) });
+                        }}
                       />
                     </label>
                     <button type="button" className="st-chip" onClick={turnQuarter}>
