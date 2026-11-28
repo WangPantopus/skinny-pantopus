@@ -62,6 +62,22 @@ class ReinventedFilterStore
             return last
         }
 
+        /** How often [person] turned each kind on in the Filters card here, for its order (most used first). */
+        fun uses(person: String): Map<String, Int> =
+            prefs.getString("uses.$person", null).orEmpty().split(',').mapNotNull { part ->
+                val at = part.indexOf('=')
+                if (at <= 0) null else part.substring(0, at) to (part.substring(at + 1).toIntOrNull() ?: 0)
+            }.toMap()
+
+        /** [person] turned [kind] on once more. */
+        fun used(
+            person: String,
+            kind: String,
+        ) {
+            val next = uses(person).toMutableMap().apply { this[kind] = (this[kind] ?: 0) + 1 }
+            prefs.edit().putString("uses.$person", next.entries.joinToString(",") { "${it.key}=${it.value}" }).apply()
+        }
+
         private companion object {
             const val FILE = "pantopus_pulse_filters"
         }

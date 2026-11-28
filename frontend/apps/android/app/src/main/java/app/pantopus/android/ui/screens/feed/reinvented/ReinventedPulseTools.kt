@@ -10,6 +10,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
@@ -110,6 +111,8 @@ internal fun ReinventedFiltersHost(
     mapModel: ReinventedMapViewModel,
 ) {
     if (!tools.filtersOpen.value) return
+    // The kinds most used first, ordered as the card opens, so nothing moves under the finger while it is up.
+    val kinds = remember { tools.filtersModel.kindsMostUsed() }
     ReinventedFiltersSheet(
         filters = tools.filters,
         time = time,
@@ -118,6 +121,8 @@ internal fun ReinventedFiltersHost(
         onTime = mapModel::pickTime,
         onClear = { tools.clearFilters(mapModel) },
         onDismiss = { tools.filtersOpen.value = false },
+        kinds = kinds,
+        onUsed = tools.filtersModel::usedKind,
     )
 }
 
