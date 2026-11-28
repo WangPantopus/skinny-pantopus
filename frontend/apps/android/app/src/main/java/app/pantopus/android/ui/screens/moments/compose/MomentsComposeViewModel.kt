@@ -77,6 +77,7 @@ import app.pantopus.android.ui.screens.moments.studio.sentStamps
 import app.pantopus.android.ui.screens.moments.studio.sentWhole
 import app.pantopus.android.ui.screens.moments.studio.stampElevation
 import app.pantopus.android.ui.screens.moments.studio.studioPair
+import app.pantopus.android.ui.screens.moments.studio.studioTrimmedParts
 import app.pantopus.android.ui.screens.moments.studio.wholeMoved
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -263,6 +264,8 @@ data class MomentsComposeUiState(
     /** "Pulse, reinvented"'s Studio (PHASE-5 A, CONTRACT 10c): the photo posts whole, on these colours. Only the Studio sets it. */
     val whole: Boolean = false,
     val wholeBackdrop: MomentPlacementPainter.Backdrop? = null,
+    /** "Pulse, reinvented"'s Studio (PHASE-5 A): the part of the video that posts, in ms; null is all of it. Only the Studio sets it. */
+    val trim: LongRange? = null,
 ) {
     val kind: String
         get() =
@@ -649,17 +652,19 @@ class MomentsComposeViewModel
             // Text and Draw on the video go over every frame of every part, and so does where Resize placed it.
             val marks = _state.value.marks
             val placement = _state.value.placement
+            // "Pulse, reinvented"'s Studio: only the trimmed part posts (null everywhere else: all of it, as today).
+            val trim = _state.value.trim
             preparation =
                 viewModelScope.async {
                     val limits = limits()
-                    val parts = MomentMedia.parts(media.durationMs, limits)
+                    val parts = trim?.let { studioTrimmedParts(it, limits) } ?: MomentMedia.parts(media.durationMs, limits)
                     _state.update { if (it.media == media) it.copy(videoParts = parts.size) else it }
                     val made = mutableListOf<PreparedVideo>()
                     val ready =
                         try {
                             parts.forEachIndexed { at, part ->
                                 // A video posted as one Moment is exported whole (the camera's may go up as it is).
-                                val stretch = part.takeIf { parts.size > 1 }
+                                val stretch = part.takeIf { parts.size > 1 || trim != null }
                                 made +=
                                     MomentMedia.prepareVideo(context, media, stretch, limits.videoBytes, marks, placement) { done ->
                                         readyProgress = (at + done) / parts.size
@@ -1055,6 +1060,15 @@ class MomentsComposeViewModel
         /** "Pulse, reinvented"'s Studio: its playable items as they are now (added, moved, turned, removed). */
         fun setItems(items: List<MomentPlayItemDto>) = _state.update { it.copy(items = items) }
 
+        /** "Pulse, reinvented"'s Studio (PHASE-5 A): only [range] of the video posts (null: all of it); it is exported again. */
+        fun setTrim(range: LongRange?) {
+            val current = _state.value
+            val media = current.media as? MomentMediaFile.Video ?: return
+            if (current.posting || current.marking != null || current.trim == range) return
+            _state.update { it.copy(trim = range) }
+            prepare(media)
+        }
+
         /** "Pulse, reinvented"'s Studio (PHASE-5 A): the photo shows and posts whole, on [backdrop]'s two colours. */
         fun setWhole(backdrop: MomentPlacementPainter.Backdrop) =
             _state.update {
@@ -1176,7 +1190,9 @@ class MomentsComposeViewModel
         /** Another picture takes the sheet: it starts with no marks, as taken, and nothing kept for the last one stays. */
         private fun forgetMarks() {
             marksKeeper.drop()
-            _state.update { it.copy(marks = MomentMarks(), placement = null, marking = null, whole = false, wholeBackdrop = null) }
+            _state.update {
+                it.copy(marks = MomentMarks(), placement = null, marking = null, whole = false, wholeBackdrop = null, trim = null)
+            }
         }
 
         /** Post right after the editor's Done waits for the marks to be drawn in, so what uploads carries them. */

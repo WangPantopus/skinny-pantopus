@@ -174,6 +174,7 @@ internal fun MomentsStudioStep(
     // See the picture first (PHASE-5 A, CONTRACT 10c): the photo shows and posts whole on these colours; moved there.
     onWhole: (MomentPlacementPainter.Backdrop) -> Unit = {},
     onPlaceWhole: (MomentPlacement?, IntSize) -> Unit = { _, _ -> },
+    onTrim: (LongRange?) -> Unit = {},
     gate: MomentsStudioGateViewModel = hiltViewModel(),
     penNames: PenNameChoiceViewModel = hiltViewModel(),
 ) {
@@ -330,6 +331,8 @@ internal fun MomentsStudioStep(
             StudioWholeRow(state, whole, wholeLive, onPlaceWhole, Modifier.padding(start = Spacing.s4, bottom = Spacing.s3))
             // A motion photo: "Keep the motion" (PHASE-5 C).
             StudioMotionRow(state, Modifier.padding(start = Spacing.s4, bottom = Spacing.s3))
+            // A video: the part of it that posts (PHASE-5 A).
+            StudioTrimRow(state, onTrim, Modifier.padding(horizontal = Spacing.s4).padding(bottom = Spacing.s3))
             // A caption goes with a photo or a video; a text card is its own words.
             if (state.media != null) {
                 // After "@" at the end of the caption: the author's connections (never under a made-up name).
