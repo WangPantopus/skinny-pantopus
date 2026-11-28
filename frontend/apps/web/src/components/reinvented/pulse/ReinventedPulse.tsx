@@ -143,7 +143,7 @@ export default function ReinventedPulse() {
   const [viewing, setViewing] = useState<{ id: string; ids: string[] } | null>(null);
   const [time, setTime] = useState<MapTime>('live');
   // Filters (PHASE-5 B, CONTRACT 10a): kept on this device for this person; the time row is their When.
-  const { filters, setFilters, since, ready: filtersRead } = useKeptFilters(account, time, setTime);
+  const { filters, setFilters, since, ready: filtersRead, used: kindsUsed, countKind } = useKeptFilters(account, time, setTime);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const closeFilters = useCallback(() => setFiltersOpen(false), []);
   const filtered = filterCount(filters, time) > 0;
@@ -1442,7 +1442,16 @@ export default function ReinventedPulse() {
         />
       )}
       {filtersOpen && (
-        <FilterSheet filters={filters} time={time} since={since} onFilters={setFilters} onTime={setTime} onClose={closeFilters} />
+        <FilterSheet
+          filters={filters}
+          time={time}
+          since={since}
+          onFilters={setFilters}
+          onTime={setTime}
+          onClose={closeFilters}
+          used={kindsUsed}
+          onKindOn={countKind}
+        />
       )}
       {creating && account && (
         <Composer

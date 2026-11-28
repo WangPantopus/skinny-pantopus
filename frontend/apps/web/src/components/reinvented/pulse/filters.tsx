@@ -6,7 +6,7 @@
 // choice is kept on this device for this person; "New since your last visit" is the time this person last opened Pulse
 // here. Heads-ups always show, whatever is filtered (the server keeps them in).
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useDialogFocusTrap } from '@/lib/useDialogFocusTrap';
 import { SlidersHorizontal, X } from 'lucide-react';
 import { CHIP_WORDS, type Chip, type MapTime } from './listApi';
@@ -86,12 +86,19 @@ const store = {
   },
 };
 
+/** How often this person turned each kind on in the Filters card (kept on this device, per person). */
+export type KindsUsed = Partial<Record<Kind, number>>;
+
 /**
  * The filters and the When, kept on this device for this person, and the time they last opened Pulse here (read once,
- * then this visit is written as the next "last visit").
+ * then this visit is written as the next "last visit"). Also how often each kind was turned on, so the card's What lists
+ * the most used first (LEAD-8, 10:13: PHASE-5 B's quick taps live at the top of the Filters card, not on the map).
  */
 export function useKeptFilters(account: string | null, time: MapTime, setTime: (t: MapTime) => void) {
   const [filters, setFilters] = useState<Filters>(NO_FILTERS);
+  const [used, setUsed] = useState<KindsUsed>({});
+  const usedNow = useRef(used);
+  usedNow.current = used;
   const [since, setSince] = useState<string | null>(null);
   // Whose kept choice has been read: the list and the map wait for it, so the tab's first reads already carry it.
   const [readFor, setReadFor] = useState<string | null>(null);
@@ -116,6 +123,17 @@ export function useKeptFilters(account: string | null, time: MapTime, setTime: (
     } catch {
       /* nothing kept, or unreadable: no filters */
     }
+    let counts: KindsUsed = {};
+    try {
+      const u = JSON.parse(store.read(`pantopus.pulse.kinds-used.${account}`) || 'null') as Record<string, unknown> | null;
+      if (u && typeof u === 'object')
+        counts = Object.fromEntries(
+          Object.entries(u).filter(([k, v]) => isKind(k) && typeof v === 'number' && Number.isFinite(v) && v > 0),
+        ) as KindsUsed;
+    } catch {
+      /* nothing kept: the brief's order */
+    }
+    setUsed(counts);
     setSince(lastVisit);
     store.write(`pantopus.pulse.visit.${account}`, new Date().toISOString());
     setReadFor(account);
@@ -124,7 +142,16 @@ export function useKeptFilters(account: string | null, time: MapTime, setTime: (
     if (!account || loaded.current !== account) return;
     store.write(`pantopus.pulse.filters.${account}`, JSON.stringify({ ...filters, time }));
   }, [account, filters, time]);
-  return { filters, setFilters, since, ready: !!account && readFor === account };
+  // A kind turned on in the card counts once more for this person.
+  const countKind = useCallback(
+    (k: Kind) => {
+      const next = { ...usedNow.current, [k]: (usedNow.current[k] || 0) + 1 };
+      setUsed(next);
+      if (account) store.write(`pantopus.pulse.kinds-used.${account}`, JSON.stringify(next));
+    },
+    [account],
+  );
+  return { filters, setFilters, since, ready: !!account && readFor === account, used, countKind };
 }
 
 const toggle = <T,>(list: T[], v: T) => (list.includes(v) ? list.filter((x) => x !== v) : [...list, v]);
@@ -192,6 +219,8 @@ export function FilterSheet({
   onFilters,
   onTime,
   onClose,
+  used = {},
+  onKindOn,
 }: {
   filters: Filters;
   time: MapTime;
@@ -199,7 +228,12 @@ export function FilterSheet({
   onFilters(f: Filters): void;
   onTime(t: MapTime): void;
   onClose(): void;
+  /** How often each kind was turned on here: What lists the most used first (ties in the brief's order). */
+  used?: KindsUsed;
+  onKindOn?(k: Kind): void;
 }) {
+  // The order is taken when the card opens, so the chips never move under the pointer while it is open.
+  const [kindOrder] = useState(() => [...KINDS].sort((a, b) => (used[b] || 0) - (used[a] || 0)));
   // Escape closes it, Tab stays inside it while it is open, and the focus goes back where it was (LEAD-7's look, 08:39: Tab
   // left the card for the tab bar).
   const sheet = useDialogFocusTrap<HTMLDivElement>(onClose);
@@ -221,7 +255,12 @@ export function FilterSheet({
         <section role="group" aria-label="What">
           <h3>What</h3>
           <div className="rp-filter-chips">
-            {KINDS.map((k) => chip(filters.kinds.includes(k), CHIP_WORDS[k], () => onFilters({ ...filters, kinds: toggle(filters.kinds, k) })))}
+            {kindOrder.map((k) =>
+              chip(filters.kinds.includes(k), CHIP_WORDS[k], () => {
+                if (!filters.kinds.includes(k)) onKindOn?.(k);
+                onFilters({ ...filters, kinds: toggle(filters.kinds, k) });
+              }),
+            )}
           </div>
         </section>
         <section role="group" aria-label="When">
