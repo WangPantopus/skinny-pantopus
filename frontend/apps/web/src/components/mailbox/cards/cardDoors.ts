@@ -48,7 +48,14 @@ export function daysToChristmas(now: Date): number {
 export function useOpenCards({ enabled = true, staleTime }: { enabled?: boolean; staleTime?: number } = {}): HolidayCards | null {
   const on = launchFeatures.holidayCards && launchFeatures.mailbox;
   const { data } = useHolidayCards({ enabled: on && enabled, ...(staleTime ? { staleTime } : {}) });
-  return on && enabled && data?.open ? data : null;
+  // Thank-you cards (Wave 5, only while `improved`): a card can be sent while the read carries `thank_you`, after
+  // Christmas cards close too.
+  return on && enabled && data && (data.open || (data.improved && data.thank_you)) ? data : null;
+}
+
+/** The way in's words: "Send a Christmas card", or the server's `thank_you.entry` once only thank-you cards are open. */
+export function cardEntry(cards: HolidayCards | null | undefined): string {
+  return cards && cards.improved && cards.thank_you?.only ? cards.thank_you.entry : 'Send a Christmas card';
 }
 
 // The app's chrome (the tab and the sidebar) asks less often than the Mail screen does.
@@ -60,9 +67,10 @@ export function useChristmasMail(): boolean {
   return Boolean(cards) && isChristmasMailSeason(cardToday());
 }
 
-/** The sidebar's "Send a Christmas card": cards are open. */
-export function useCardsOpenInChrome(): boolean {
-  return Boolean(useOpenCards({ staleTime: CHROME_STALE_MS }));
+/** The sidebar's "Send a Christmas card" (or the thank-you entry, Wave 5): its words while a card can be sent, else null. */
+export function useCardsOpenInChrome(): string | null {
+  const cards = useOpenCards({ staleTime: CHROME_STALE_MS });
+  return cards ? cardEntry(cards) : null;
 }
 
 /**

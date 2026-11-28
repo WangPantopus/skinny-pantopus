@@ -156,6 +156,20 @@ export interface MailCard {
   /** A card that travels (server key card_travel), for the person it went to. Absent: an ordinary card. */
   travel?: CardTravel | null;
   /**
+   * A thank-you card (Wave 5, only while the card improvements are on): `kind` 'thank_you', what to call it
+   * ("thank-you card"), what prints under its picture ("THANK YOU, 2026", the year it was sent) and its envelope
+   * ('cream'). A Christmas card has none of them and is drawn exactly as before.
+   */
+  kind?: 'thank_you';
+  name?: string;
+  strip?: string;
+  envelope?: 'cream';
+  /**
+   * Wave 5: "Send a thank-you card" on a Christmas card the reader received and opened, while they can send one; it
+   * opens the send flow at the thank-you shelf with the card's sender chosen.
+   */
+  send_thank_you?: { label: string; to: { user_id: string; name: string } };
+  /**
    * Wave 4.1 (only while the card improvements are on): the reader got it from an email or a link and joined in the
    * last 14 days. While it's on screen no briefing notice or guidance card shows.
    */
@@ -203,6 +217,9 @@ export interface CardTravel {
 export interface MailCardReply {
   card_id: string;
   design: string | null;
+  /** A reply to a thank-you card (Wave 5). */
+  kind?: 'thank_you';
+  name?: string;
   number: number | null;
   caption: string | null;
   paper: string;

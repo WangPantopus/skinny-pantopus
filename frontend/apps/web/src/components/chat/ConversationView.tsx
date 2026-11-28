@@ -31,7 +31,7 @@ import { readCachedChatAccountId, type ChatDraftCommit } from './chatStorage';
 import { queryKeys } from '@/lib/query-keys';
 import { NavIcons } from '@/lib/icons';
 import { useCardArrivals } from '@/lib/mailbox-queries';
-import { useOpenCards } from '@/components/mailbox/cards/cardDoors';
+import { cardEntry, useOpenCards } from '@/components/mailbox/cards/cardDoors';
 import { sendOneBackPath } from '@/components/mailbox/cards/sendOneBack';
 
 // ============================================================
@@ -595,7 +595,7 @@ export default function ConversationView({
                     className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover-bg-app transition-colors text-left text-sm font-medium text-app-text-strong"
                   >
                     <NavIcons.christmasMail className="w-5 h-5 flex-shrink-0" aria-hidden />
-                    Send a Christmas card
+                    {cardEntry(openCards)}
                   </button>
                 </div>
               ) : null}

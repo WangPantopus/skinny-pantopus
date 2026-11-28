@@ -19,6 +19,7 @@ import { playCardSound, preloadCardSounds } from './cardSounds';
 import type { CardPhoto, CardSignature, CardVoice, CardTravel } from '@pantopus/api';
 import CardPrint, { useCardMediaUrl, type PrintSource } from './CardPrint';
 import { PhotoFrontContext, type PhotoFront } from './PhotoCardFront';
+import { CardStripContext, cardKindName, cardKindTitle, isThankYouCard } from './cardKind';
 import CardGreeting, { spokenLength } from './CardGreeting';
 import { PaperBack, PaperFront, PaperLeaf, useNoteLeaves } from './CardPaper';
 import { CardTableEngine, type TableState } from './cardTableEngine';
@@ -74,6 +75,11 @@ export type TableCard = {
   travel?: Pick<CardTravel, 'postmarks' | 'miles' | 'towns'> | null;
   /** A photo card (Wave 4.2): its `photo` is its front, in this frame. Null while sealed. */
   front?: { frame: 'heirloom' | 'midnight' | 'arch'; caption: string | null } | null;
+  /** A thank-you card (Wave 5): what to call it, what it prints under its picture, its cream envelope. */
+  kind?: 'thank_you';
+  name?: string;
+  strip?: string;
+  envelope?: 'cream';
 };
 
 /** A line in the ⋯ menu, or a quiet button under the card. A quiet button may also carry its short words (used when two
@@ -297,6 +303,7 @@ export default function CardTable({
   const frontSource = frontPhoto && mediaFrom && (!frontPhoto.covered || frontUncovered) ? mediaFrom(frontPhoto.file_id) : null;
   const { url: frontUrl } = useCardMediaUrl(frontSource);
   const pageFront = useContext(PhotoFrontContext);
+  const pageStrip = useContext(CardStripContext);
   const frontCoverRef = useRef<(() => void) | null>(null);
   const tableFront: PhotoFront | null = frontPhoto && card.front && mediaFrom ? {
     design: card.design,
@@ -314,10 +321,13 @@ export default function CardTable({
   // A long note runs onto a second leaf on a table that can be turned (Part 9); the sealing moment keeps one side.
   const leavesOn = !isLetter && !card.sealed && !sendMoment;
   const leaves = useNoteLeaves(leavesOn ? note : '', card.number, leavesOn);
-  // The envelope's pictures: the cream set for a letter.
-  const envArt = (name: string) => art(isLetter ? `cream-${name}` : name);
-  const waxWhole = isLetter ? LETTER_WAX_WHOLE : WAX_WHOLE;
-  const waxCracked = isLetter ? LETTER_WAX_CRACKED : WAX_CRACKED;
+  // The envelope's pictures: the cream set for a letter, and for a thank-you card (Wave 5, `envelope: 'cream'`), with the
+  // letter's red wax and inks.
+  const cream = isLetter || (isThankYouCard(card) && card.envelope === 'cream');
+  const kindTitle = cardKindTitle(card);
+  const envArt = (name: string) => art(cream ? `cream-${name}` : name);
+  const waxWhole = cream ? LETTER_WAX_WHOLE : WAX_WHOLE;
+  const waxCracked = cream ? LETTER_WAX_CRACKED : WAX_CRACKED;
   const stampSrc = isLetter ? LETTER_STAMP : cardStampFile(card.number, card.design, card.mood);
   const letterRef = useRef(letter);
   letterRef.current = letter;
@@ -595,7 +605,7 @@ export default function CardTable({
     else if (step === 'flap') { primary = 'Take the letter out'; hint = 'or pull it out with your finger'; }
     else if (step === 'out') { primary = 'Read the letter'; }
   } else if (step === 'front') {
-    words = sealed ? `${from} sealed this card.` : `A Christmas card from ${from}.`;
+    words = sealed ? `${from} sealed this card.` : `A ${cardKindName(card)} from ${from}.`;
     // A travelling card past its first stop (Part 3): how far it came, under the words.
     if (!sealed) wordsSub = travelCameLine(card.travel);
     primary = 'Turn it over';
@@ -679,7 +689,7 @@ export default function CardTable({
     ? [words, send === 'addressed' ? `Addressed to ${toName}.` : '', send === 'sending' ? 'Sealing it.' : ''].filter(Boolean).join(' ')
     : step === 'out' && !sealed
     ? `Card from ${fromName}: ${captionSentence} On the back: ${note}${mediaSentence}${reply ? ` ${reply.fromName} wrote back: ${reply.note}` : ''}`
-    : `Christmas card from ${fromName}${sealed ? ', sealed until Christmas morning' : ''}${wordsSub ? `. ${wordsSub}` : ''}`;
+    : `${kindTitle} from ${fromName}${sealed ? ', sealed until Christmas morning' : ''}${wordsSub ? `. ${wordsSub}` : ''}`;
   const day = postmarkDay(mailedOn || new Date().toISOString());
   const [month, date] = day.split(' ');
   // On the table once it's turned over (how much of them shows follows the card's own turn, from the engine), and not
@@ -688,16 +698,18 @@ export default function CardTable({
   if (mediaShown && !mediaSeen) setMediaSeen(true);
 
   return createPortal(
-    <>
+    // A thank-you card's strip (Wave 5) under its picture and on its back; a Christmas card's page strip passes through.
+    <CardStripContext.Provider value={isThankYouCard(card) && card.strip ? card.strip : pageStrip}>
       <div
         ref={stageRef}
         className={styles.stage}
         role="dialog"
         aria-modal="true"
-        aria-label={sendMoment ? `Your card for ${sendMoment.firstName}` : isLetter ? `Letter from ${fromName}` : `Christmas card from ${fromName}`}
+        aria-label={sendMoment ? `Your card for ${sendMoment.firstName}` : isLetter ? `Letter from ${fromName}` : `${kindTitle} from ${fromName}`}
         tabIndex={-1}
         data-send={sendMoment ? '1' : undefined}
         data-mood={isLetter ? 'letter' : mood}
+        data-envelope={cream && !isLetter ? 'cream' : undefined}
       >
         <div className={styles.safe} data-el="safe" />
         <div
@@ -839,7 +851,7 @@ export default function CardTable({
               <div className={styles.toName} style={{ fontFamily: PEN, fontSize: `calc(var(--ew) * ${fitOnEnvelope(toName, 0.094, 0.78).toFixed(4)})` }}>{toName}</div>
               {card.sealed
                 ? <div className={styles.sealedMark}>Do not open<br />until Christmas</div>
-                : <div className={styles.kind}>{isLetter ? 'A letter for you' : 'Christmas card'}</div>}
+                : <div className={styles.kind}>{isLetter ? 'A letter for you' : kindTitle}</div>}
             </div>
           </div>
         </div>
@@ -1079,7 +1091,7 @@ export default function CardTable({
         </div>
       </div>
       {overlay}
-    </>,
+    </CardStripContext.Provider>,
     document.body,
   );
 }

@@ -151,7 +151,8 @@ export default function MailboxHero({
           </div>
         ) : null}
         <Link href="/app/mailbox/cards" data-testid="mail.emptyDayCard.send" className={`mt-3.5 ${WAX_BUTTON}`} style={{ backgroundColor: WAX }}>
-          Send a Christmas card
+          {/* Once only thank-you cards are open (Wave 5), the server's words. */}
+          {invite.improved && invite.thank_you?.only ? invite.thank_you.entry : 'Send a Christmas card'}
         </Link>
         <p className={`mt-2.5 text-center text-[13px] leading-[18px] ${CARD_PAPER_TEXT}`}>{detail}</p>
         {home ? (

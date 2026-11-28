@@ -32,8 +32,11 @@ export default function CardLinkScene({
   front = null,
   postmarks = null,
   improved = false,
+  cream = false,
   children,
 }: {
+  /** A thank-you card (Wave 5): the cream linen envelope. */
+  cream?: boolean;
   /** The card improvements of November 28 (the read's `improved`): the guest page's tighter layout. */
   improved?: boolean;
   /** A travelling card (Part 7): its envelope, address side up with these postmarks and no names, behind the card. */
@@ -58,7 +61,7 @@ export default function CardLinkScene({
       </div>
       <div className={styles.column}>
         {envelope && front ? (
-          <div className={`${styles.lying} ${postmarks?.length ? styles.lyingTravel : ''}`} role="img" aria-label={`A Christmas card: ${front.caption}`} data-testid="cardLinkFront">
+          <div className={`${styles.lying} ${postmarks?.length ? styles.lyingTravel : ''}`} role="img" aria-label={`${cream ? 'A thank-you card' : 'A Christmas card'}: ${front.caption}`} data-testid="cardLinkFront">
             {postmarks?.length ? (
               <div className={styles.addressed} aria-hidden="true" data-testid="cardLinkPostmarks">
                 {/* eslint-disable @next/next/no-img-element */}
@@ -71,10 +74,10 @@ export default function CardLinkScene({
             ) : null}
             <div className={styles.open}>
               {/* eslint-disable @next/next/no-img-element */}
-              <img src={art('env-flap-in.webp')} alt="" className={styles.flapIn} />
-              <img src={art('env-inside.webp')} alt="" />
-              <img src={art('env-pocket-shadow.webp')} alt="" />
-              <img src={art('env-pocket.webp')} alt="" />
+              <img src={art(`${cream ? 'cream-' : ''}env-flap-in.webp`)} alt="" className={styles.flapIn} />
+              <img src={art(`${cream ? 'cream-' : ''}env-inside.webp`)} alt="" />
+              <img src={art(`${cream ? 'cream-' : ''}env-pocket-shadow.webp`)} alt="" />
+              <img src={art(`${cream ? 'cream-' : ''}env-pocket.webp`)} alt="" />
               {/* eslint-enable @next/next/no-img-element */}
             </div>
             <div className={styles.card}>
@@ -84,7 +87,7 @@ export default function CardLinkScene({
         ) : envelope ? (
           <div className={styles.envelope} aria-hidden="true">
             {/* eslint-disable @next/next/no-img-element */}
-            <img src={art('env-pocket.webp')} alt="" />
+            <img src={art(`${cream ? 'cream-' : ''}env-pocket.webp`)} alt="" />
             <img src={art('env-flap-shadow.webp')} alt="" />
             <img src={art('env-flap-out.webp')} alt="" className={styles.flap} />
             <img src={art('wax-gold.webp')} alt="" className={styles.wax} />

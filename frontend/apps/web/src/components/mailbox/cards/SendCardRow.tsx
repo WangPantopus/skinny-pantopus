@@ -13,9 +13,17 @@ import Link from 'next/link';
 import { ChevronRight } from 'lucide-react';
 import type { HolidayCards } from '@pantopus/api';
 import { CARD_PAPER, CARD_PAPER_HOVER, CARD_PAPER_QUIET, CARD_PAPER_TEXT, cardPicture, shortDay, WAX } from './cardArt';
-import { useEmptyDayCard, useOpenCards } from './cardDoors';
+import { cardEntry, useEmptyDayCard, useOpenCards } from './cardDoors';
 
 const FAN = ['christmas-2026-01', 'christmas-2026-08', 'christmas-2026-15'];
+
+/** The row's fan: three Christmas pictures, or once only thank-you cards are open (Wave 5) the thank-you collections' own. */
+function fanOf(data: HolidayCards): string[] {
+  const thanks = data.improved && data.thank_you?.only ? data.thank_you : null;
+  if (!thanks) return FAN;
+  const picks = thanks.collections.map((c) => c.pick).filter((id): id is string => Boolean(id));
+  return [...picks, ...thanks.designs.map((d) => d.id)].filter((id, i, all) => all.indexOf(id) === i).slice(0, 3);
+}
 
 /** With digital stamps on: what's left to send with. */
 function stampsLine(stamps: HolidayCards['stamps']): string {
@@ -47,7 +55,7 @@ export default function SendCardRow() {
       className={`mx-3 mt-3 flex items-center gap-3 rounded-xl px-3.5 py-3 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8b1d1d] ${CARD_PAPER} ${CARD_PAPER_HOVER}`}
     >
       <span aria-hidden className="relative h-[54px] w-[62px] flex-shrink-0">
-        {(today ? [today.design] : FAN).map((design, index, all) => (
+        {(today ? [today.design] : fanOf(data)).map((design, index, all) => (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             key={design}
@@ -60,7 +68,7 @@ export default function SendCardRow() {
       </span>
       <span className="min-w-0 flex-1">
         <span className="block truncate text-[15px] font-semibold leading-5" style={{ color: today ? undefined : WAX }}>
-          {today ? `Today’s card · to ${today.to_name || 'them'}` : 'Send a Christmas card'}
+          {today ? `Today’s card · to ${today.to_name || 'them'}` : cardEntry(data)}
         </span>
         <span className={`block text-[13px] leading-[18px] ${CARD_PAPER_TEXT}`}>{line}</span>
       </span>

@@ -33,6 +33,7 @@ import { SignaturePad, sameSignature } from './cardSignature';
 import CardPrint, { useCardMediaUrl } from './CardPrint';
 import PhotoCardStudio, { type PhotoCardMade } from './PhotoCardStudio';
 import { PhotoFrontContext, type PhotoFront } from './PhotoCardFront';
+import { CardStripContext } from './cardKind';
 import { canRecordGreeting, GreetingObject, greetingLength, recordingClock, useGreetingPlayer, useGreetingRecorder } from './CardGreeting';
 import { ON_CLOTH_BUTTON, ON_CLOTH_MUTED, Slip, StepsAtTable } from './AtTheTable';
 import CardFlip from './CardFlip';
@@ -401,7 +402,10 @@ export function ToStep({
   onContinue,
   onPaper = false,
   linkName = false,
+  cardName = 'Christmas card',
 }: {
+  /** What the card is called in its words (a thank-you card's `name`, Wave 5). */
+  cardName?: string;
   /** By link, ask first for an optional name for its envelope (Wave 3.2, only while `improved`). */
   linkName?: boolean;
   onChoose: (to: Recipient) => void;
@@ -549,12 +553,12 @@ export function ToStep({
         <p className={`mt-2 text-[14px] leading-5 ${m}`}>
           {improved ? (
             <>
-              They get an email saying you sent them a Christmas card. They can open and read it right away — no account
+              They get an email saying you sent them a {cardName}. They can open and read it right away — no account
               needed — and join free anytime to keep it or write back. The email never shows your note.
             </>
           ) : (
             <>
-              They get an email saying you sent them a Christmas card. They join Pantopus with this address to open it. The
+              They get an email saying you sent them a {cardName}. They join Pantopus with this address to open it. The
               email never shows your note.
             </>
           )}
@@ -2018,7 +2022,9 @@ function SentCard({
 
 // ── The flow ─────────────────────────────────────────────────
 
-export default function SendCardFlow({ chosenDesign = null, chosenPerson = null, sendAgain = false }: {
+export default function SendCardFlow({ chosenDesign = null, chosenPerson = null, sendAgain = false, thanks = false }: {
+  /** "Send a thank-you card" on an opened Christmas card (Wave 5): open at the thank-you shelf, the person chosen. */
+  thanks?: boolean;
   /** The picture a public card page, or a button under one of the assistant's replies, sent them here with (?design=). */
   chosenDesign?: string | null;
   /** "Send this card to someone else" from Sent (mail-cards-experience Part 6): its picture stays chosen and Pick a card
@@ -2126,8 +2132,16 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null,
   // A photo card (Wave 4.2, `photo_card` on the read while `improved`): its design is never in `designs`.
   const photoCard = improved ? data?.photo_card ?? null : null;
   const isPhotoCard = Boolean(photoCard && designId === photoCard.design);
-  // A photo card never travels (no travel switch).
-  const travelOffer = isPhotoCard ? null : data?.travel ?? null;
+  // Thank-you cards (Wave 5, `thank_you` on the read while `improved`): their collections after every Christmas one on
+  // Pick a card, or alone once `only`; their designs are never in `designs`. Words and dates come from the read.
+  const thankYou = improved ? data?.thank_you ?? null : null;
+  const isThankYou = Boolean(thankYou && designId && thankYou.designs.some((d) => d.id === designId));
+  const catalogDesigns = useMemo(() => (!data ? [] : thankYou?.only ? thankYou.designs : [...data.designs, ...(thankYou?.designs ?? [])]), [data, thankYou]);
+  const catalogCollections = useMemo(() => (!data ? [] : thankYou?.only ? thankYou.collections : [...(data.collections ?? []), ...(thankYou?.collections ?? [])]), [data, thankYou]);
+  // Every design a sent card can name (Sent's lines): the Christmas ones and the thank-you ones.
+  const allDesigns = useMemo(() => (!data ? [] : [...data.designs, ...(thankYou?.designs ?? [])]), [data, thankYou]);
+  // A photo card or a thank-you card never travels (no travel switch).
+  const travelOffer = isPhotoCard || isThankYou ? null : data?.travel ?? null;
   // Let this card travel (Wave 3.4): while `improved` the switch starts from `travel.default_on` (absent: on, as before).
   const travelStartsOn = improved ? travelOffer?.default_on ?? true : true;
   const travelStarted = useRef(false);
@@ -2162,15 +2176,15 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null,
   const refreshCards = () => { if (improved) void cards.refetch(); };
   // Why the stamp books opened for a photo or voice: the server's words while `improved`, else the line from before.
   const mediaStampReason = (error: { message?: string }) => (improved ? error.message || mediaNeedsStampLine : MEDIA_NEEDS_STAMP);
-  const design = useMemo<HolidayCardDesign | null>(() => data?.designs.find((d) => d.id === designId)
+  const design = useMemo<HolidayCardDesign | null>(() => catalogDesigns.find((d) => d.id === designId)
     // The photo card's stock fields, as list reads and older builds print them ("Merry Christmas" on its stock picture).
     ?? (photoCard && designId === photoCard.design
       ? { id: photoCard.design, number: 0, caption: 'Merry Christmas', paper: '#f7f0e2', table: null, mood: null }
-      : null), [data, designId, photoCard]);
+      : null), [catalogDesigns, designId, photoCard]);
   // "Pick a card" as shelves (server key card_shelves, card shelves SPEC Part C): null for today's screen. A collection's
   // page opens inside step 2 with its own entry in the browser's history (?collection=<slug>), so the browser's Back
   // returns to the shelves, where they were scrolled.
-  const shelves = useMemo(() => (data ? shelvesOf(data) : null), [data]);
+  const shelves = useMemo(() => (data ? shelvesOf({ ...data, designs: catalogDesigns, collections: catalogCollections }) : null), [data, catalogDesigns, catalogCollections]);
   const [pickCollection, setPickCollection] = useState<string | null>(null);
   const [shelvesTop, setShelvesTop] = useState<number | null>(null);
   const collectionPushed = useRef(false);
@@ -2212,6 +2226,13 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null,
     && (data?.postage_enabled ? (stamps.balance?.available ?? 0) > 0 : !today);
   const options = useMemo<HolidayCardArrival[]>(() => {
     if (!data || !to) return [];
+    // A thank-you card (Wave 5): its own choices, nothing sealed; a chosen person's by their clock.
+    if (isThankYou && thankYou) {
+      const ty = thankYou.arrivals;
+      if (to.kind === 'list') return to.entries.some((entry) => entry.kind === 'person') ? ty.person : ty.email;
+      if (to.kind === 'person') return (theirs.data?.arrivals_all ?? ty.person).filter((a) => ty.person.includes(a));
+      return to.kind === 'email' ? ty.email : ty.link;
+    }
     // By email every choice the server offers (arrivals.email_all); a link keeps its two.
     const byEmail = data.arrivals.email_all ?? data.arrivals.email;
     if (to.kind === 'list') return to.entries.some((entry) => entry.kind === 'person') ? data.arrivals.person : byEmail;
@@ -2222,7 +2243,7 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null,
         : theirs.data?.arrivals ?? data.arrivals.person;
     }
     return to.kind === 'email' ? byEmail : data.arrivals.email;
-  }, [data, to, theirs.data, improved]);
+  }, [data, to, theirs.data, improved, isThankYou, thankYou]);
 
   const listId = (entry: ListEntry) => {
     const key = entryKey(entry);
@@ -2240,6 +2261,18 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null,
     if (improved) { if (designId) toWrite('to'); else setStep('pick'); return; }
     setStep(keepPicture && designId ? 'write' : 'pick');
   };
+
+  // "Send a thank-you card" (Wave 5): the thank-you shelf's page opens once, on Pick a card, with the person chosen.
+  const thanksOpened = useRef(false);
+  useEffect(() => {
+    if (!thanks || thanksOpened.current || step !== 'pick' || !shelves || !thankYou) return;
+    const shelf = shelves.find((s) => thankYou.collections.some((c) => c.id === s.id));
+    if (!shelf) return;
+    thanksOpened.current = true;
+    openCollection(shelf);
+    // Once, as the flow opens at its shelf.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [thanks, step, shelves, thankYou]);
 
   // Send one back: that person is already chosen and the flow opens at Pick a card, unless today's card has gone and
   // there are no stamps to send another (then this page shows today's card, as it always does). Once, as it opens.
@@ -2885,7 +2918,7 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null,
   const shareSealedLink = async () => {
     if (!sentLink) return;
     try {
-      await navigator.share({ text: `A Christmas card for you from ${firstNameOf(fromName)}: ${sentLink}` });
+      await navigator.share({ text: `A ${isThankYou && thankYou ? thankYou.name : 'Christmas card'} for you from ${firstNameOf(fromName)}: ${sentLink}` });
     } catch (error) {
       if ((error as { name?: string } | null)?.name !== 'AbortError') setLinkSaid('Couldn’t open the share sheet. Copy the link and send it yourself.');
     }
@@ -2930,13 +2963,14 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null,
       <div className={page}>
         <div className="mx-auto w-full max-w-[560px]">
           <StepHeader step="sent" title="Today's card" onBack={() => router.push('/app/mailbox/personal')} headingRef={headingRef} />
-          <SentCard card={today} designs={data.designs} title="Today's card" fromName={fromName} onTakeBack={() => { void doTakeBack(); }} takingBack={takeBack.isPending} takeBackError={takeBackError} improved={improved} />
+          <SentCard card={today} designs={allDesigns} title="Today's card" fromName={fromName} onTakeBack={() => { void doTakeBack(); }} takingBack={takeBack.isPending} takeBackError={takeBackError} improved={improved} />
         </div>
       </div>
     );
   }
 
-  if (!data.open) {
+  // Nothing can be sent: Christmas cards closed and no thank-you card open (Wave 5).
+  if (!data.open && !thankYou) {
     return (
       <div className={page}>
         <StepHeader step="sent" title="Christmas cards" onBack={() => router.push('/app/mailbox/personal')} headingRef={headingRef} />
@@ -2958,6 +2992,8 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null,
 
   return (
     <PhotoFrontContext.Provider value={flowFront}>
+    {/* A thank-you card (Wave 5): "THANK YOU, {year}" from the read under its picture and on its back. */}
+    <CardStripContext.Provider value={isThankYou && thankYou ? thankYou.strip : null}>
     <div className={`${page} pb-6`}>
       <div className={`mx-auto w-full ${widePage ? 'max-w-[1240px]' : 'max-w-[560px]'}`}>
       <StepHeader
@@ -3016,6 +3052,7 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null,
             setStep(keepPicture && designId ? 'write' : 'pick');
           }}
           linkName={improved}
+          cardName={isThankYou && thankYou ? thankYou.name : undefined}
           max={max}
           listed={listed}
           onToggle={toggleListed}
@@ -3025,8 +3062,8 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null,
       ) : null}
       {step === 'pick' ? (
         <PickStep
-          designs={data.designs}
-          collections={data.collections ?? []}
+          designs={catalogDesigns}
+          collections={catalogCollections}
           year={data.year}
           chosen={designId}
           // Leaving a photo card for a card from the catalog: its photo was its front, so it goes too (Wave 4.2).
@@ -3034,7 +3071,7 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null,
           // Pick a card first (`improved`): on to Who it's for while no one is chosen yet, else straight to Write.
           onNext={() => { leavePick(); if (improved && !to) setStep('to'); else toWrite('pick'); }}
           nextLabel={improved && !to ? 'Choose who it’s for' : 'Write on this card'}
-          shelving={shelves ? { shelves, open: openShelf, onOpenCollection: openCollection, opening: data.opening ?? null, restoreTop: shelvesTop } : null}
+          shelving={shelves ? { shelves, open: openShelf, onOpenCollection: openCollection, opening: thankYou?.only ? thankYou.collections.map((c) => c.id) : data.opening ?? null, restoreTop: shelvesTop } : null}
         />
       ) : null}
       {/* From Write on the back onward, you are at the table (design plan Part 9): the chosen card's cloth. */}
@@ -3165,7 +3202,7 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null,
           results={listSent}
           entries={to.entries}
           idOf={listId}
-          designs={data.designs}
+          designs={allDesigns}
           takenBack={listTakenBack}
           takingBack={listTakingBack}
           takeBackError={listTakeBackError}
@@ -3177,7 +3214,7 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null,
         />
       ) : null}
       {step === 'sent' && sent ? (
-        <SentCard postageEnabled={data.postage_enabled} card={sent} designs={data.designs} title={sent.by_link ? 'Your card' : 'On its way'} seeInSent link={sentLink} fromName={fromName} onTakeBack={() => { void doTakeBack(); }} takingBack={takeBack.isPending} takeBackError={takeBackError} improved={improved} />
+        <SentCard postageEnabled={data.postage_enabled} card={sent} designs={allDesigns} title={sent.by_link ? 'Your card' : 'On its way'} seeInSent link={sentLink} fromName={fromName} onTakeBack={() => { void doTakeBack(); }} takingBack={takeBack.isPending} takeBackError={takeBackError} improved={improved} />
       ) : null}
       {data.postage_enabled && step === 'sent' ? (
         <div className="mx-auto max-w-[420px] space-y-2.5 px-4 pb-4">
@@ -3262,6 +3299,7 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null,
         />
       ) : null}
     </div>
+    </CardStripContext.Provider>
     </PhotoFrontContext.Provider>
   );
 }

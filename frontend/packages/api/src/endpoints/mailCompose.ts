@@ -41,6 +41,8 @@ export interface EscrowedMailView {
      * /cards/<slug> page draws it), null while it's sealed until Christmas. Never its note, signature, photo or voice.
      */
     card?: { holiday: string; year: number; sealed: boolean; sealed_until?: string | null; front?: CardLinkFront | null;
+      /** A thank-you card (Wave 5). */
+      kind?: 'thank_you'; name?: string; strip?: string; envelope?: 'cream';
       by_link?: boolean; guest_open?: boolean; to_name?: string | null;
       /** A card that travels (server key card_travel): its envelope's postmarks, the towns and the miles it came. */
       travel?: { postmarks: { town: string; state: string | null; on: string }[]; towns: number; miles: number } } | null;
@@ -73,6 +75,8 @@ export interface GuestOpenCardResponse {
     travel?: Pick<CardTravel, 'postmarks' | 'miles' | 'towns'> | null;
     /** A photo card's front (Wave 4.2): its `photo` in this frame. */
     front?: { frame: 'heirloom' | 'midnight' | 'arch'; caption: string | null } | null;
+    /** A thank-you card (Wave 5): what to call it, what prints under its picture, its envelope. */
+    kind?: 'thank_you'; name?: string; strip?: string; envelope?: 'cream';
   };
   journey: string | null;
   by_link: boolean;

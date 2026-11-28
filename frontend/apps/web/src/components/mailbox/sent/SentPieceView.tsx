@@ -27,6 +27,7 @@ import { askTakeBack, takeBackMessage } from '../cards/takeBack';
 import { cardMood, firstNameOf, shortDay, WAX } from '../cards/cardArt';
 import CardPrint, { useCardMediaUrl } from '../cards/CardPrint';
 import { PhotoFrontContext, type PhotoFront } from '../cards/PhotoCardFront';
+import { CardStripContext } from '../cards/cardKind';
 import CardGreeting from '../cards/CardGreeting';
 import CardLinkActions from '../cards/CardLinkActions';
 import { linkOpened, sentEnvelope, sentEnvelopeName, sentFirst, sentStatusLine, sentTravelLine, trailLabel, trailWhen } from './sentWords';
@@ -173,7 +174,8 @@ export default function SentPieceView({ id }: { id: string }) {
       {/* The same full-screen moment they have. Your own note is shown, so it opens as it did for them, seal or none. */}
       {onTable && card.design ? (
         <CardTable
-          card={{ design: card.design, number: card.number, caption: card.caption, paper: card.paper ?? '#f7eee0', table: card.table, year: card.year ?? new Date(piece.sent_at).getFullYear(), sealed: false, verse: card.verse ?? null, signature: card.signature ?? null, photo: card.photo ?? null, voice: card.voice ?? null, front: card.front ?? null }}
+          card={{ design: card.design, number: card.number, caption: card.caption, paper: card.paper ?? '#f7eee0', table: card.table, year: card.year ?? new Date(piece.sent_at).getFullYear(), sealed: false, verse: card.verse ?? null, signature: card.signature ?? null, photo: card.photo ?? null, voice: card.voice ?? null, front: card.front ?? null,
+            ...(card.kind === 'thank_you' ? { kind: card.kind, name: card.name, strip: card.strip, envelope: card.envelope } : {}) }}
           mediaFrom={(fileId) => ({ sent: piece.id, fileId })}
           note={piece.note}
           fromName={piece.envelope.from}
@@ -298,7 +300,10 @@ export default function SentPieceView({ id }: { id: string }) {
               <div className="mt-3.5 grid max-w-[584px] items-start gap-5 md:grid-cols-2">
                 <div className={`mx-auto w-full md:max-w-none ${launchFeatures.cardTable ? '' : 'max-w-[300px]'}`}>
                   <PhotoFrontContext.Provider value={photoFront}>
-                    {front ? <CardFlip showBack={showBack} front={front} back={back} /> : back}
+                    {/* A thank-you card (Wave 5): its strip under the picture and on the back. */}
+                    <CardStripContext.Provider value={card.kind === 'thank_you' ? card.strip ?? null : null}>
+                      {front ? <CardFlip showBack={showBack} front={front} back={back} /> : back}
+                    </CardStripContext.Provider>
                   </PhotoFrontContext.Provider>
                   {(card.photo && !photoFront) || card.voice ? (
                     // Their own photo and voice greeting (memories plan steps 4 and 7), never covered: from their own card's route.

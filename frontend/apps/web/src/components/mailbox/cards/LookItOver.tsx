@@ -26,6 +26,7 @@ import { CardFromEnvelope, SealedNotice, useCardOpening } from './HolidayCardVie
 import { cardMood, daysAway, emailGoesAt, longDay, SERIF } from './cardArt';
 import CardPrint from './CardPrint';
 import CardGreeting from './CardGreeting';
+import { cardKindName, isThankYouCard } from './cardKind';
 import CardTable from './CardTable';
 import { useNoteLeaves } from './CardPaper';
 import { launchFeatures } from '@/lib/featureFlags';
@@ -189,13 +190,15 @@ export default function LookItOver({
     senderName: preview.link_page.sender_name,
     senderVerified: preview.link_page.sender_verified,
     senderKind: 'person',
-    subject: piece.subject || 'A Christmas card',
+    subject: piece.subject || `A ${cardKindName(card)}`,
     previewText: null,
     outcomeDescription: null,
     sentTo: preview.link_page.sent_to,
     createdAt: preview.link_page.sent_on,
     card: { holiday: card.holiday, year: card.year, sealed: preview.link_page.sealed, front: preview.link_page.front ?? null,
-      by_link: preview.link_page.by_link, ...(guestOpen ? { guest_open: true } : {}) },
+      by_link: preview.link_page.by_link, ...(guestOpen ? { guest_open: true } : {}),
+      // A thank-you card (Wave 5): its name, strip and envelope on the page its link opens.
+      ...(isThankYouCard(card) ? { kind: card.kind, name: card.name, strip: card.strip, envelope: card.envelope } : {}) },
   } : null;
 
   return (
@@ -247,7 +250,7 @@ export default function LookItOver({
               <h3 className={`${sectionLabel} px-1`}>The page its link opens</h3>
               {launchFeatures.cardTable ? (
                 <div className="mt-2">
-                  <CardLinkScene framed front={linkPageFront(linkPage)} improved={improved}>
+                  <CardLinkScene framed front={linkPageFront(linkPage)} improved={improved} cream={isThankYouCard(card) && card.envelope === 'cream'}>
                     <CardLinkWords letter={linkPage} />
                     <CardLinkSignIn letter={linkPage} />
                   </CardLinkScene>
@@ -304,7 +307,7 @@ export default function LookItOver({
             <p className={`mt-1.5 ${onCloth ? `text-[15px] leading-[22px] ${ON_CLOTH_TEXT}` : body}`}>
               {sealed
                 ? `The seal lifts at 7 a.m. where ${first} lives. The card slides out of the envelope picture side up.`
-                : `A Christmas card from ${from.replace(/\.$/, '')}. It slides out of the envelope picture side up.`}
+                : `A ${cardKindName(card)} from ${from.replace(/\.$/, '')}. It slides out of the envelope picture side up.`}
             </p>
             <div className={launchFeatures.cardTable ? 'mt-4' : 'mx-auto mt-4 max-w-[300px]'}>
               <CardFromEnvelope piece={unsealed} recipientName={addressee} opening={stage === 'opening'} plays={plays} showBack={showBack} leaves={leaves} leafLifted={leafLifted}>

@@ -665,6 +665,9 @@ export type HolidayCardArrival = 'next_morning' | 'sealed_christmas' | 'christma
 export interface SentHolidayCard {
   id: string;
   design: string;
+  /** A thank-you card (Wave 5): `kind` and what to call it. */
+  kind?: 'thank_you';
+  name?: string;
   /** Their name as they show it, or the masked email address. By link: "them" until someone opens it. */
   to_name: string | null;
   by_email: boolean;
@@ -777,6 +780,23 @@ export interface HolidayCards {
    * no strip. `stamps` is null when the balance couldn't be read.
    */
   welcome?: { card_id: string; from_first_name: string; can_write_back: boolean; stamps: number | null };
+  /**
+   * Wave 5, only while `improved` and a thank-you card can be sent now: its collections and designs (after every
+   * Christmas one, or alone once `only`), what to call one, what it prints under its picture, its envelope and its
+   * arrivals. Absent: nothing new. The Christmas fields beside it are unchanged.
+   */
+  thank_you?: {
+    only: boolean;
+    entry: string;
+    name: string;
+    plural: string;
+    strip: string;
+    envelope: 'cream';
+    closes_on: string | null;
+    collections: (HolidayCardCollection & { opens_on: string; closes_on: string | null })[];
+    designs: HolidayCardDesign[];
+    arrivals: { person: HolidayCardArrival[]; email: HolidayCardArrival[]; link: HolidayCardArrival[] };
+  };
   /**
    * Wave 4.2, only while `improved` and a photo can be added: "Make a photo card". Its design is never in `designs`.
    * Shapes are width:height.
@@ -1105,6 +1125,15 @@ export interface SentPiece {
   /** The envelope as it reaches them: no postmark until the carrier has it. */
   envelope: { from: string; postmarked_on: string | null };
   card: { design: string | null; number: number | null; caption: string | null; paper: string | null; year: number | null;
+    /**
+     * A thank-you card (Wave 5, only while the card improvements are on): `kind` 'thank_you', what to call it
+     * ("thank-you card"), what prints under its picture ("THANK YOU, 2026", the year it was sent) and its envelope
+     * ('cream'). A Christmas card has none of them and is drawn exactly as before.
+     */
+    kind?: 'thank_you';
+    name?: string;
+    strip?: string;
+    envelope?: 'cream';
     /** A photo card's front (Wave 4.2; the detail read only): its `photo` in this frame. */
     front?: { frame: CardFrame; caption: string | null } | null;
     /** The picture's height in px at 960 px wide. */

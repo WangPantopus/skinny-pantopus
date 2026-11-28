@@ -77,7 +77,8 @@ export default function CardWelcomeStrip() {
           data-testid="cardWelcomeSend"
           className="flex min-h-11 flex-1 basis-[12rem] items-center justify-center rounded-xl border border-[#d6cbb6] bg-[#fffdf8] px-4 text-[15px] font-semibold text-[#374151] transition hover:bg-[#f5efe3] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8b1d1d]"
         >
-          Send a Christmas card
+          {/* Once only thank-you cards are open (Wave 5), the server's words. */}
+          {data?.thank_you?.only ? data.thank_you.entry : 'Send a Christmas card'}
         </Link>
       </div>
     </section>

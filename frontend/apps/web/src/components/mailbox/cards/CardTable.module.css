@@ -121,6 +121,10 @@
 .stage[data-mood='letter'] .toName { color: #1b2a5c; text-shadow: none; mix-blend-mode: multiply; }
 .stage[data-mood='letter'] .fromName { color: #2c3a64; mix-blend-mode: multiply; }
 .stage[data-mood='letter'] .kind { color: #8b1d1d; }
+/* A thank-you card (Wave 5) on the cream linen envelope: the letter's inks. */
+.stage[data-envelope='cream'] .toName { color: #1b2a5c; text-shadow: none; mix-blend-mode: multiply; }
+.stage[data-envelope='cream'] .fromName { color: #2c3a64; mix-blend-mode: multiply; }
+.stage[data-envelope='cream'] .kind { color: #8b1d1d; }
 .sealedMark {
   position: absolute; left: 50%; top: 74%; transform: translate(-50%, -50%) rotate(-7deg); border: calc(var(--ew) * 0.007) double #ecd7a4;
   padding: calc(var(--ew) * 0.018) calc(var(--ew) * 0.03); font: 700 calc(var(--ew) * 0.04) / 1.18 var(--serif); letter-spacing: 0.11em;

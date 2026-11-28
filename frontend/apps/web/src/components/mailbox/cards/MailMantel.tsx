@@ -31,7 +31,8 @@ export function mantelCards(items: MailItemV2[], now = new Date()): MailItemV2[]
   const season = seasonNow(now);
   if (season === null) return [];
   return items
-    .filter((item) => item.card && !item.card.sealed && item.opened_at && !item.removed && item.card.year === season)
+    // Christmas cards alone: a thank-you card (Wave 5) never stands on the mantel.
+    .filter((item) => item.card && !item.card.sealed && item.opened_at && !item.removed && item.card.year === season && item.card.kind !== 'thank_you')
     .sort((a, b) => Date.parse(b.opened_at as string) - Date.parse(a.opened_at as string))
     .slice(0, MOST);
 }

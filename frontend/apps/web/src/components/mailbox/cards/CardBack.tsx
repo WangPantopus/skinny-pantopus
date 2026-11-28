@@ -6,11 +6,12 @@
 // it's given (the flip lays it over the picture side, the same size).
 // ============================================================
 
-import type { CSSProperties, ReactNode } from 'react';
+import { useContext, type CSSProperties, type ReactNode } from 'react';
 import { launchFeatures } from '@/lib/featureFlags';
 import { INK, paperStyle, SERIF } from './cardArt';
 import { cardPen } from './cardFont';
 import { PaperBack, type NoteFit, type NoteLeaves } from './CardPaper';
+import { CardStripContext, stripFooter } from './cardKind';
 import type { CardSignature } from '@pantopus/api';
 
 export const BACK_TEXT: CSSProperties = launchFeatures.cardTable ? {
@@ -77,6 +78,8 @@ export default function CardBack({
   children?: ReactNode;
   className?: string;
 }) {
+  // A thank-you card (Wave 5): its strip on the back's last line.
+  const backStrip = useContext(CardStripContext);
   if (launchFeatures.cardTable) {
     return <PaperBack number={number} paper={paper} fromName={fromName} year={year} note={message} writing={children} signature={signature} leaves={leaves} className={className} />;
   }
@@ -97,7 +100,7 @@ export default function CardBack({
         className="absolute text-center"
         style={{ left: 0, right: 0, bottom: '3cqw', fontFamily: SERIF, fontSize: '1.9cqw', letterSpacing: '0.3em', color: '#8a7a62' }}
       >
-        PANTOPUS POST · CHRISTMAS {year}
+        PANTOPUS POST · {backStrip ? stripFooter(backStrip) : `CHRISTMAS ${year}`}
       </p>
       <div className="pointer-events-none absolute inset-0" style={{ boxShadow: 'inset 0 0 3cqw rgba(110, 80, 30, 0.13)' }} />
     </div>

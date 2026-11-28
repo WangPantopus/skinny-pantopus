@@ -34,6 +34,7 @@ import CardTable, { type TableMenuItem } from './cards/CardTable';
 import { firstNameOf } from './cards/cardArt';
 import { travelCameLine } from './cards/TravelPostmarks';
 import { markCardClaimPath } from './cards/cardNoticeHold';
+import { CardStripContext, cardKindName, isThankYouCard } from './cards/cardKind';
 
 type Letter = EscrowedMailView['mail'];
 
@@ -469,7 +470,8 @@ export function LinkPageSignIn({ letter, loginHref, registerHref, mailId, token,
 export function CardLinkWords({ letter }: { letter: LinkPageLetter }) {
   return (
     <div className={table.words}>
-      <h1>A Christmas card for you</h1>
+      {/* A thank-you card (Wave 5): the server's name for it. */}
+      <h1>A {cardKindName(letter.card)} for you</h1>
       <p className={table.from}>From {letter.senderName}</p>
       {/* A travelling card past its first stop (Part 7): how far it came. */}
       {travelCameLine(letter.card?.travel) ? <p className={table.line} data-testid="cardLinkTravelLine">{travelCameLine(letter.card?.travel)}</p> : null}
@@ -1092,7 +1094,9 @@ export default function OpenLetterView({ mailId, token, isCard = false }: {
     }
 
     return (
-      <CardLinkScene front={linkPageFront(letter)} postmarks={letter.card?.travel?.postmarks ?? null} improved={improved}>
+      <CardStripContext.Provider value={isThankYouCard(letter.card) ? letter.card?.strip ?? null : null}>
+      <CardLinkScene front={linkPageFront(letter)} postmarks={letter.card?.travel?.postmarks ?? null} improved={improved}
+        cream={isThankYouCard(letter.card) && letter.card?.envelope === 'cream'}>
         <CardLinkWords letter={letter} />
 
         {signedIn === false && (
@@ -1166,6 +1170,7 @@ export default function OpenLetterView({ mailId, token, isCard = false }: {
           <Link href="/start">What is Pantopus?</Link>
         </p>
       </CardLinkScene>
+      </CardStripContext.Provider>
     );
   }
 

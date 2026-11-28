@@ -921,7 +921,7 @@ export function PersonalSidebarContent({ currentPath, showLabels, chatUnread, ma
       {launchFeatures.mailbox ? <SidebarItem icon={christmasMail ? NavIcons.christmasMail : NavIcons.mail} label="Mail" active={startsWith('/app/mailbox') && !(cardsOpen && onCards)} onClick={() => go('/app/mailbox/personal')} onPrefetch={prefetchMail} showLabel={showLabels} count={mailUnread} countLabel="unopened" testId="sidebar-mail" /> : null}
       {/* While Christmas cards are open (Mail's "Send a Christmas card" row shows), the send flow is one step away,
           right under Mail (TABCARD 2d, founder 2026-11-13). */}
-      {cardsOpen ? <SidebarItem icon={NavIcons.christmasMail} label="Send a Christmas card" active={onCards} onClick={() => go('/app/mailbox/cards')} showLabel={showLabels} testId="navDrawer.item.send-a-christmas-card" /> : null}
+      {cardsOpen ? <SidebarItem icon={NavIcons.christmasMail} label={cardsOpen} active={onCards} onClick={() => go('/app/mailbox/cards')} showLabel={showLabels} testId="navDrawer.item.send-a-christmas-card" /> : null}
       <SidebarItem icon={NavIcons.messages} label="Messages" active={startsWith('/app/chat')} onClick={() => go('/app/chat')} onPrefetch={prefetchMessages} showLabel={showLabels} count={chatUnread} testId="sidebar-messages" />
       {/* Launch cut #5 (Public scheduling): the Scheduling entry is hidden. */}
       {webFeatureFlags.scheduling && launchFeatures.publicScheduling ? <SidebarItem icon={NavIcons.scheduling} label="Scheduling" active={startsWith('/app/scheduling')} onClick={() => go('/app/scheduling')} onPrefetch={prefetchScheduling} showLabel={showLabels} testId="sidebar-scheduling" /> : null}

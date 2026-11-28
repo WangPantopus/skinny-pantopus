@@ -16,6 +16,7 @@ import { SignatureInk, drawableSignature } from './cardSignature';
 import type { CardSignature } from '@pantopus/api';
 import styles from './CardPaper.module.css';
 import PhotoCardFront, { PhotoFrontContext } from './PhotoCardFront';
+import { CardStripContext, stripFooter } from './cardKind';
 
 const SERIF_VAR = { '--card-serif': PAPER_SERIF } as CSSProperties;
 const PEN_STACK = `${cardPen.style.fontFamily}, ui-serif, Georgia, serif`;
@@ -329,6 +330,8 @@ export function PaperFront({
 }) {
   // A photo card (Wave 4.2): where the page knows its photo and frame, its front is the photo in its frame.
   const photoFront = useContext(PhotoFrontContext);
+  // A thank-you card (Wave 5): the page's strip, unless this front was given its own.
+  const pageStrip = useContext(CardStripContext);
   const text = caption || '';
   const captionSize = Math.min(4.8, 70 / Math.max(1, text.length * 0.53));
   const day = postmarkDay(mailedOn || new Date().toISOString());
@@ -341,7 +344,7 @@ export function PaperFront({
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={cardTrimmedPicture(design)} alt="" className={styles.photo} draggable={false} />
         <div className={`${styles.caption} ${isVerseReference(text) ? styles.verse : cardHand.className}`} style={{ fontSize: `${captionSize}cqw` }}>{text}</div>
-        <div className={styles.year}>{strip ?? `CHRISTMAS, ${year}`}</div>
+        <div className={styles.year}>{strip ?? pageStrip ?? `CHRISTMAS, ${year}`}</div>
         <div className={styles.pm}><CardPostmarkSvg day={day} year={year} /></div>
         <div className={`${styles.grain} ${styles.grainFront}`} />
         <div className={styles.edges} />
@@ -380,6 +383,8 @@ export function PaperBack({
   style?: CSSProperties;
   children?: ReactNode;
 }) {
+  // A thank-you card (Wave 5): its strip on the back's last line too.
+  const backStrip = useContext(CardStripContext);
   const text = note ?? '';
   const ownFit = useNoteFit(leaves ? '' : text);
   const fit = leaves ? leaves.fit : ownFit;
@@ -408,7 +413,7 @@ export function PaperBack({
             </span>
           ) : <span style={{ fontFamily: PEN_STACK }}>{firstNameOf(fromName)}</span>}
         </div>
-        <div className={styles.foot}>PANTOPUS POST · CHRISTMAS {year}</div>
+        <div className={styles.foot}>PANTOPUS POST · {backStrip ? stripFooter(backStrip) : `CHRISTMAS ${year}`}</div>
         {/* Full grain under the table's light; away from it, lighter, so the back reads as the same paper. */}
         <div className={`${styles.grain} ${children ? '' : styles.grainSoft}`} />
         <div className={styles.edges} />

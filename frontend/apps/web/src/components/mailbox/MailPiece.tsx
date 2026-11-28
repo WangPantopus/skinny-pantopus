@@ -16,6 +16,7 @@ import type { MailItemV2 } from '@/types/mailbox';
 import { PantopusMark } from '@/components/brand/PantopusMark';
 import { cardPicture, cardStampFile, TABLE_ART } from './cards/cardArt';
 import { cardPen } from './cards/cardFont';
+import { cardKindName, cardKindTitle, isThankYouCard } from './cards/cardKind';
 import { launchFeatures } from '@/lib/featureFlags';
 
 export type PieceKind = 'letter' | 'bill' | 'notice' | 'postcard' | 'booklet' | 'parcel' | 'bundle';
@@ -78,11 +79,11 @@ export function pieceSentence(item: MailItemV2, opened: boolean): string {
   const kind = pieceKind(item);
   if (item.card) {
     const state = item.card.sealed ? ', sealed until Christmas morning' : opened ? ', opened' : ', in its envelope';
-    return `Christmas card from ${item.sender_display || 'someone'}${state}`;
+    return `${cardKindTitle(item.card)} from ${item.sender_display || 'someone'}${state}`;
   }
   if (item.card_reply) {
-    // Write back (mail-cards-experience Part 3): a reply to your card.
-    return `${(item.sender_display || 'Someone').trim().split(/\s+/)[0]} wrote back to your Christmas card${opened ? ', opened' : ''}`;
+    // Write back (mail-cards-experience Part 3): a reply to your card (a thank-you card's, Wave 5, in its words).
+    return `${(item.sender_display || 'Someone').trim().split(/\s+/)[0]} wrote back to your ${cardKindName(item.card_reply)}${opened ? ', opened' : ''}`;
   }
   const what = item.special_delivery ? `Special delivery ${KIND_WORDS[kind].toLowerCase()}` : KIND_WORDS[kind];
   const from = item.sender_display || 'an unknown sender';
@@ -307,14 +308,16 @@ export default function MailPiece({ item, recipientName, recipientLine, opened, 
     );
   } else if (item.card && launchFeatures.cardTable && torn) {
     // An opened card shows its picture (design plan Part 4): the whole card, taken out, leans over the envelope's top
-    // edge; who it's from (in Sent: to), its caption and the day beside it. The envelope keeps its red paper and height.
+    // edge; who it's from (in Sent: to), its caption and the day beside it. The envelope keeps its red paper and height
+    // (a thank-you card's, Wave 5: its cream linen one, in the letter's inks).
     const pen = `${cardPen.style.fontFamily}, ui-serif, Georgia, serif`;
     const [month = '', date = ''] = postDate.split(' ');
     const who = ((sentTo ?? from).trim().split(/\s+/)[0]) || (sentTo ? 'them' : 'Someone');
+    const cream = isThankYouCard(item.card) && item.card.envelope === 'cream';
     body = (
       <div
         className="relative h-[150px] rounded-md"
-        style={{ backgroundColor: '#9f2f28', backgroundImage: `url(${TABLE_ART}env-front.webp)`, backgroundSize: 'cover', backgroundPosition: '50% 12%', boxShadow: SHADOW }}
+        style={{ backgroundColor: cream ? '#efe4cf' : '#9f2f28', backgroundImage: `url(${TABLE_ART}${cream ? 'cream-' : ''}env-front.webp)`, backgroundSize: 'cover', backgroundPosition: '50% 12%', boxShadow: SHADOW }}
       >
         <div
           className="absolute -top-[14px] left-4 w-[125px] -rotate-3 rounded-[2px]"
@@ -323,26 +326,29 @@ export default function MailPiece({ item, recipientName, recipientLine, opened, 
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={cardPicture(item.card.design, 'thumb')} alt="" className="absolute left-[2px] right-[2px] top-[2px] h-[86%] w-[calc(100%-4px)] rounded-[1px] object-cover" />
         </div>
-        <div className="absolute left-[158px] right-3 top-[18px] text-[#f4e2bf]">
+        <div className={`absolute left-[158px] right-3 top-[18px] ${cream ? 'text-[#2c3a64]' : 'text-[#f4e2bf]'}`}>
           <div className="truncate text-[22px] leading-[26px]" style={{ fontFamily: pen }}>{sentTo ? 'To' : 'From'} {who}</div>
-          <div className="mt-1 line-clamp-2 text-[15px] italic leading-[19px] text-[#fbeed2]" style={{ fontFamily: SERIF }}>{item.card.caption || 'A Christmas card'}</div>
-          <div className="mt-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-[#d8b76f]" style={{ fontFamily: SERIF }}>
+          <div className={`mt-1 line-clamp-2 text-[15px] italic leading-[19px] ${cream ? 'text-[#3a3226]' : 'text-[#fbeed2]'}`} style={{ fontFamily: SERIF }}>{item.card.caption || `A ${cardKindName(item.card)}`}</div>
+          <div className={`mt-2 text-[11px] font-semibold uppercase tracking-[0.1em] ${cream ? 'text-[#8b1d1d]' : 'text-[#d8b76f]'}`} style={{ fontFamily: SERIF }}>
             {month} {date} · {sentTo ? 'Delivered' : 'Opened'}
           </div>
         </div>
       </div>
     );
   } else if (item.card && launchFeatures.cardTable) {
-    // On the table's paper (launch key card_table): the same place for everything, on the real envelope.
+    // On the table's paper (launch key card_table): the same place for everything, on the real envelope (a thank-you
+    // card's, Wave 5: the cream linen one, in the letter's inks).
     const pen = `${cardPen.style.fontFamily}, ui-serif, Georgia, serif`;
     const [month = '', date = ''] = postDate.split(' ');
     const year = postDate.split(' ')[2] ?? '';
+    const cream = isThankYouCard(item.card) && item.card.envelope === 'cream';
+    const ink = cream ? '#2c3a64' : '#f4e2bf';
     body = (
       <div
         className="relative h-[150px] rounded-md"
-        style={{ backgroundColor: '#9f2f28', backgroundImage: `url(${TABLE_ART}env-front.webp)`, backgroundSize: 'cover', backgroundPosition: '50% 12%', boxShadow: SHADOW, clipPath: torn ? TORN : undefined }}
+        style={{ backgroundColor: cream ? '#efe4cf' : '#9f2f28', backgroundImage: `url(${TABLE_ART}${cream ? 'cream-' : ''}env-front.webp)`, backgroundSize: 'cover', backgroundPosition: '50% 12%', boxShadow: SHADOW, clipPath: torn ? TORN : undefined }}
       >
-        <div className="absolute left-4 top-3.5 max-w-[46%] text-[17px] leading-[20px] text-[#f4e2bf]" style={{ fontFamily: pen }}>
+        <div className="absolute left-4 top-3.5 max-w-[46%] text-[17px] leading-[20px]" style={{ fontFamily: pen, color: ink }}>
           <div className="truncate">{from}</div>
           {town ? <div className="truncate">{town}</div> : null}
         </div>
@@ -353,16 +359,16 @@ export default function MailPiece({ item, recipientName, recipientLine, opened, 
           <div className="absolute right-[30px] top-2 aspect-[622/365] w-[108px] opacity-60">
             <div
               aria-hidden="true"
-              className="absolute inset-0 bg-[#f4e2bf]"
-              style={{ WebkitMaskImage: `url(${TABLE_ART}postmark-blank.webp)`, maskImage: `url(${TABLE_ART}postmark-blank.webp)`, WebkitMaskSize: '100% 100%', maskSize: '100% 100%' }}
+              className="absolute inset-0"
+              style={{ backgroundColor: ink, WebkitMaskImage: `url(${TABLE_ART}postmark-blank.webp)`, maskImage: `url(${TABLE_ART}postmark-blank.webp)`, WebkitMaskSize: '100% 100%', maskSize: '100% 100%' }}
             />
             <svg viewBox="0 0 622 365" className="absolute inset-0 h-full w-full" aria-hidden="true">
-              <text x="165" y="161.6" textAnchor="middle" fontFamily={SERIF} fontWeight="700" fontSize="39.8" letterSpacing="1.74" fill="#f4e2bf" transform="rotate(7 165 161.6)">{month} {date}</text>
-              <text x="160.3" y="199.6" textAnchor="middle" fontFamily={SERIF} fontWeight="700" fontSize="32.5" letterSpacing="1.49" fill="#f4e2bf" transform="rotate(7 160.3 199.6)">{year}</text>
+              <text x="165" y="161.6" textAnchor="middle" fontFamily={SERIF} fontWeight="700" fontSize="39.8" letterSpacing="1.74" fill={ink} transform="rotate(7 165 161.6)">{month} {date}</text>
+              <text x="160.3" y="199.6" textAnchor="middle" fontFamily={SERIF} fontWeight="700" fontSize="32.5" letterSpacing="1.49" fill={ink} transform="rotate(7 160.3 199.6)">{year}</text>
             </svg>
           </div>
         ) : null}
-        <div className="absolute left-[34%] right-3 top-[70px] text-[23px] leading-[26px] text-[#fbeed2]" style={{ fontFamily: pen }}>
+        <div className="absolute left-[34%] right-3 top-[70px] text-[23px] leading-[26px]" style={{ fontFamily: pen, color: cream ? '#1b2a5c' : '#fbeed2' }}>
           <div className="truncate">{recipientName}</div>
           {recipientLine ? <div className="truncate text-[17px] leading-[20px]">{recipientLine}</div> : null}
         </div>
@@ -370,7 +376,7 @@ export default function MailPiece({ item, recipientName, recipientLine, opened, 
           // eslint-disable-next-line @next/next/no-img-element
           <img src={`${TABLE_ART}wax-gold.webp`} alt="" className="absolute bottom-1.5 left-2.5 h-[60px] w-auto" />
         ) : (
-          <div className="absolute bottom-3 left-4 text-[11px] font-semibold uppercase tracking-[0.1em] text-[#d8b76f]" style={{ fontFamily: SERIF }}>Christmas card</div>
+          <div className="absolute bottom-3 left-4 text-[11px] font-semibold uppercase tracking-[0.1em]" style={{ fontFamily: SERIF, color: cream ? '#8b1d1d' : '#d8b76f' }}>{cardKindTitle(item.card)}</div>
         )}
       </div>
     );

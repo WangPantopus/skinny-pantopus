@@ -133,6 +133,12 @@ export default function CardTablePiece({
   const sendBack: TableMenuItem | null = senderId && theirs.isSuccess
     ? { label: `Send ${firstNameOf(from)} a card`, short: 'Send a card', onSelect: () => router.push(sendOneBackPath({ userId: senderId, name: from })) }
     : null;
+  // "Send a thank-you card" on an opened Christmas card (Wave 5, `send_thank_you` on the piece read): the send flow at
+  // the thank-you shelf, this card's sender chosen. The server says when it can be sent (never this browser's clock).
+  const thanksTo = piece.card?.send_thank_you ?? null;
+  const sendThanks: TableMenuItem | null = thanksTo && !blockedNow
+    ? { label: thanksTo.label, short: 'Thank you', onSelect: () => router.push(`${sendOneBackPath({ userId: thanksTo.to.user_id, name: thanksTo.to.name })}&thanks=1`) }
+    : null;
 
   // Write back (Part 3): the server says whether this reader can write back now (can_reply), and their own reply once it's
   // written (reply, or pending_reply while it waits). Writing opens the sheet; written, it opens the joined pair here.
@@ -308,6 +314,7 @@ export default function CardTablePiece({
     if (!card.sealed && !replyPiece) items.push({ label: 'Open it again', onSelect: () => setReplay((n) => n + 1) });
     // "Share this card" is never in the quiet row on a reader's card: its corner button and this line (Part 3, Fix 1).
     if (!card.sealed && !replyPiece && !card.front) items.push({ label: 'Share this card', onSelect: () => setSheet('share') });
+    if (sendThanks) items.push({ label: sendThanks.label, onSelect: sendThanks.onSelect });
     if (sendBack) items.push({ label: sendBack.label, onSelect: sendBack.onSelect });
     if (piece.sender_user_id) {
       // As drawn for card memories (wave 4 drawing 6): the card itself is reported, and the person is named.
@@ -317,7 +324,7 @@ export default function CardTablePiece({
     return items;
     // The menu follows the piece; its handlers read the latest piece through this same render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filed, archived, card.sealed, piece.sender_user_id, piece.recipient_home_id, from, sendBack?.label, writeBack?.label, Boolean(replyPiece), nextCard?.count, passOn?.label, journey?.label]);
+  }, [filed, archived, card.sealed, piece.sender_user_id, piece.recipient_home_id, from, sendBack?.label, sendThanks?.label, writeBack?.label, Boolean(replyPiece), nextCard?.count, passOn?.label, journey?.label]);
 
   // A reply waits for the joined read, so its table is made once, with the room the reply needs.
   if (replyPiece && joined.isPending) return null;
@@ -344,7 +351,8 @@ export default function CardTablePiece({
       passOn={passOn}
       journey={journey}
       menu={menu}
-      sendBack={passedAll ? null : sendBack}
+      // "Send a thank-you card" (Wave 5) takes the quiet row's place of "Send {name} a card", which stays in the ⋯ menu.
+      sendBack={passedAll ? null : sendThanks ?? sendBack}
       writeBack={passedAll ? null : writeBack}
       reply={reply}
       nextCard={nextCard}
