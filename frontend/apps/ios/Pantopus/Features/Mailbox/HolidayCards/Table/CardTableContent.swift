@@ -52,9 +52,17 @@ struct CardTableContent: Equatable {
     /// The table it opens on, as the server names it (card shelves A4); nil from older servers (`CardTableMood` goes by
     /// the number then).
     var mood: String?
+    /// A photo card (cards-next 4.2): its photo drawn in its frame as the card's front, not lying beside it (`photo` is
+    /// nil then). Nil for every other card and while sealed.
+    var photoFront: CardPhotoFrontSpec?
 
     var firstName: String {
         HolidayCardWords.firstName(fromName)
+    }
+
+    /// A photo card (cards-next 4.2), sealed or not: never shared as a picture, a video or a public page.
+    var isPhotoCard: Bool {
+        photoFront != nil || design == CardPhotoFrontSpec.designId
     }
 }
 
@@ -104,5 +112,52 @@ extension CardTableContent {
         // A card that travels: its envelope's postmarks, as they see it (travelling card plan Part 7).
         travel = CardTravelEnvelope(sent: piece.travel, year: piece.card.year)
         mood = piece.card.mood
+        // A photo card: your photo is its front.
+        let front = CardPhotoFrontSpec(front: piece.card.front, photo: piece.card.photo) { .sent(cardId: piece.id, fileId: $0.fileId) }
+        if let front {
+            photoFront = front
+            photo = nil
+        }
+    }
+}
+
+extension CardTableContent {
+    /// A card from the Mailbox.
+    @MainActor
+    init(letter: MailLetter, card: HolidayCardLetter, now: Date = Date()) {
+        design = card.card.design
+        number = card.card.number
+        caption = card.card.caption ?? ""
+        paper = card.card.paper
+        table = card.card.table
+        slug = card.card.slug
+        year = card.card.year
+        mailedOn = card.mailedOn
+        note = card.note
+        fromName = letter.senderName
+        toName = card.envelope.to
+        sealed = card.card.sealed
+        sealedUntil = card.card.sealedUntil
+        sealedInDays = card.card.sealedUntil.map { HolidayCardWords.inDays($0, now: now) } ?? "soon"
+        sealedDayCount = card.card.sealedUntil
+            .flatMap { MailDates.parse($0) }
+            .map { MailDates.daysBetween(now, $0, calendar: .current) } ?? 0
+        verse = card.card.sealed ? nil : card.card.verse
+        signature = card.card.sealed ? nil : card.card.signature
+        photo = card.card.sealed ? nil : card.card.photo
+        voice = card.card.sealed ? nil : card.card.voice
+        mediaFrom = .piece(mailId: letter.piece.id)
+        travel = CardTravelEnvelope(card.card.travel, year: card.card.year)
+        mood = card.card.mood
+        // A photo card (cards-next 4.2): its photo is the front, veiled first when covered; not shown again inside.
+        if !card.card.sealed, let front = CardPhotoFrontSpec(
+            front: card.card.front,
+            photo: card.card.photo,
+            covered: card.card.photo?.covered == true,
+            source: { .piece(mailId: letter.piece.id, fileId: $0.fileId) }
+        ) {
+            photoFront = front
+            photo = nil
+        }
     }
 }

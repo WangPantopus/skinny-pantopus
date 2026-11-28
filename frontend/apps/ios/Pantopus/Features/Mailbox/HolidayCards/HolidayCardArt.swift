@@ -146,9 +146,15 @@ struct HolidayCardFront: View {
     /// being written.
     var mailedOn: String?
     var thumb = false
+    /// A photo card's front (cards-next 4.2): the photo in its frame, drawn the table's way at every size.
+    var photoFront: CardPhotoFrontSpec?
+    /// The photo on this phone while it uploads, drawn until its stored copy is read.
+    var photoPreview: UIImage?
 
     var body: some View {
-        if LaunchFeatures.cardTable, !thumb {
+        if let photoFront {
+            CardPhotoFrontPage(spec: photoFront, year: year, mailedOn: mailedOn, preview: photoPreview)
+        } else if LaunchFeatures.cardTable, !thumb {
             // The card on the table's face and shape, so what you see while sending is what arrives.
             CardTableFrontPage(design: design, caption: caption, paper: paper, year: year, mailedOn: mailedOn)
         } else {

@@ -227,7 +227,10 @@ struct MailSentPieceView: View {
                     if let travel = piece.travel {
                         MailSentJourneyButton(travel: travel)
                     }
-                    CardTableSentShareButton(content: content, sharesSealed: piece.sealed)
+                    // Never a photo card's (cards-next 4.2).
+                    if !content.isPhotoCard {
+                        CardTableSentShareButton(content: content, sharesSealed: piece.sealed)
+                    }
                 }
             }
             sendAgain(piece)
@@ -254,7 +257,9 @@ struct MailSentPieceView: View {
             // Before the carrier's postmark, the day you sent it (as the web).
             mailedOn: envelope.isPostmarked
                 ? envelope.postmarkDate
-                : MailDates.parse(piece.sentAt).map { MailDates.postmarkDay($0, calendar: .current) }
+                : MailDates.parse(piece.sentAt).map { MailDates.postmarkDay($0, calendar: .current) },
+            // A photo card (cards-next 4.2): your photo in its frame.
+            photoFront: CardPhotoFrontSpec(front: piece.card.front, photo: piece.card.photo) { .sent(cardId: piece.id, fileId: $0.fileId) }
         )
         .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
         .shadow(color: MailPaper.cardShadow.opacity(0.28), radius: 15, x: 0, y: 14)
@@ -437,9 +442,11 @@ private extension MailSentPieceView {
     /// Your own photo beside the card, never covered (memories plan step 4).
     @ViewBuilder
     func ownMedia(_ piece: MailSentPiece, from: String) -> some View {
-        if piece.card.photo != nil || piece.card.voice != nil {
+        // A photo card's photo is its front, not beside it (cards-next 4.2).
+        let photo = piece.card.front == nil ? piece.card.photo : nil
+        if photo != nil || piece.card.voice != nil {
             CardMediaBeside(
-                photo: piece.card.photo,
+                photo: photo,
                 voice: piece.card.voice,
                 from: .sent(cardId: piece.id),
                 number: piece.card.number,

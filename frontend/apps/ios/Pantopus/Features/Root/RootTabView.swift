@@ -680,6 +680,8 @@ public struct RootTabView: View {
     private var briefingNoticeMayShow: Bool {
         // A new account's plan may still open over the first screen: the notice waits for the answer.
         guard !PlanFirstOpen.shared.deciding else { return false }
+        // Not while the Christmas card they joined for is on screen (cards-next 4.1): the next visit outside it.
+        guard !GuidanceCenter.shared.joinedForCardOnScreen else { return false }
         return switch model.selected {
         case .place: model.placeAtRoot && !model.placeVerifySheetUp
         case .today: true

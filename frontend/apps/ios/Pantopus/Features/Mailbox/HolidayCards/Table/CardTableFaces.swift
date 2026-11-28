@@ -172,9 +172,8 @@ struct CardTableFront: View, Equatable {
 /// The small postmark on the card's face, in a 100 by 60 box: two rings with the day over the year, and three wavy
 /// lines to the right.
 enum CardTablePostmark {
-    static func draw(in context: GraphicsContext, width: CGFloat, day: String?, year: Int) {
+    static func draw(in context: GraphicsContext, width: CGFloat, day: String?, year: Int, ink: Color = MailPaper.cardPostmark) {
         let unit = width / 100
-        let ink = MailPaper.cardPostmark
         let line = ink.opacity(0.86)
         func point(_ x: CGFloat, _ y: CGFloat) -> CGPoint {
             CGPoint(x: x * unit, y: y * unit)

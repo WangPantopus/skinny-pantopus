@@ -373,12 +373,24 @@ extension HolidayCardToStep {
     /// The card already picked, small, with its caption and "Change" (back to Pick a card).
     func chosenCard(_ design: HolidayCardDesign) -> some View {
         HStack(spacing: Spacing.s3) {
-            HolidayCardPictureView(design: design.id, paper: design.paper, height: design.height, thumb: true)
-                .frame(width: 40)
-                .clipShape(RoundedRectangle(cornerRadius: 2, style: .continuous))
-                .shadow(color: MailPaper.cardShadow.opacity(0.22), radius: 3, x: 0, y: 2)
-                .accessibilityHidden(true)
-            Text(design.caption)
+            Group {
+                if let photoFront = viewModel.photoFrontSpec {
+                    // A photo card (cards-next 4.2): its own front, small.
+                    CardPhotoFrontPage(
+                        spec: photoFront,
+                        year: viewModel.cards?.year ?? 2026,
+                        mailedOn: nil,
+                        preview: viewModel.attachments.photo?.preview
+                    )
+                } else {
+                    HolidayCardPictureView(design: design.id, paper: design.paper, height: design.height, thumb: true)
+                }
+            }
+            .frame(width: 40)
+            .clipShape(RoundedRectangle(cornerRadius: 2, style: .continuous))
+            .shadow(color: MailPaper.cardShadow.opacity(0.22), radius: 3, x: 0, y: 2)
+            .accessibilityHidden(true)
+            Text(viewModel.isPhotoCard ? "Your photo card" : design.caption)
                 .font(.system(size: 14, weight: .medium))
                 .foregroundStyle(HolidayCardDesk.text(scheme))
                 .lineLimit(2)
@@ -494,6 +506,11 @@ struct HolidayCardPickStep: View {
     }
 
     var body: some View {
+        // "Make a photo card" (cards-next 4.2): one quiet pill over the catalog while the server offers it.
+        if viewModel.photoCardSpec != nil {
+            HolidayCardPhotoCardPill { viewModel.makesPhotoCard = true }
+                .padding(.bottom, Spacing.s3)
+        }
         if cards.showsShelves {
             // The card shelves (server switch `card_shelves`): the opening row, then a shelf per collection.
             HolidayCardShelves(viewModel: viewModel, cards: cards)
@@ -688,7 +705,28 @@ struct HolidayCardPickBar: View {
     var body: some View {
         VStack(spacing: 10) {
             HStack(spacing: Spacing.s3) {
-                if let picked = viewModel.design {
+                if viewModel.isPhotoCard {
+                    // Your photo card (cards-next 4.2): back to the studio rather than the card rack.
+                    HolidayCardFront(
+                        design: CardPhotoFrontSpec.designId,
+                        caption: nil,
+                        paper: nil,
+                        year: cards.year,
+                        photoFront: viewModel.photoFrontSpec,
+                        photoPreview: viewModel.attachments.photo?.preview
+                    )
+                    .frame(width: 40)
+                    .shadow(color: MailPaper.cardShadow.opacity(0.22), radius: 3, x: 0, y: 2)
+                    .accessibilityHidden(true)
+                    Text("Your photo card")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(HolidayCardDesk.text(scheme))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .accessibilityIdentifier("sendCardPickedCaption")
+                    HolidayCardPaperButton(title: "Change it") { viewModel.makesPhotoCard = true }
+                        .fixedSize()
+                        .accessibilityIdentifier("sendCardChangePhotoCard")
+                } else if let picked = viewModel.design {
                     Button { viewModel.largeDesign = picked } label: {
                         HolidayCardPictureView(design: picked.id, paper: picked.paper, height: picked.height, thumb: true)
                             .frame(width: 40)
@@ -809,9 +847,17 @@ struct HolidayCardWriteStep: View {
     /// The card, its back up to write on (turned over to see the picture).
     private var card: some View {
         HolidayCardFlip(showBack: showBack) {
-            HolidayCardFront(design: design.id, caption: design.caption, paper: design.paper, height: design.height, year: cards.year)
-                .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
-                .shadow(color: MailPaper.cardShadow.opacity(0.24), radius: 13, x: 0, y: 12)
+            HolidayCardFront(
+                design: design.id,
+                caption: design.caption,
+                paper: design.paper,
+                height: design.height,
+                year: cards.year,
+                photoFront: viewModel.photoFrontSpec,
+                photoPreview: viewModel.attachments.photo?.preview
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
+            .shadow(color: MailPaper.cardShadow.opacity(0.24), radius: 13, x: 0, y: 12)
         } back: {
             HolidayCardBack(
                 paper: design.paper,
@@ -878,7 +924,8 @@ struct HolidayCardWriteStep: View {
                 gift: CardTableMood(mood: design.mood, number: design.number) == .reverence,
                 needsStamp: needsStamp,
                 needsStampText: viewModel.mediaNeedsStampLine,
-                freeHint: viewModel.freeMediaHint
+                freeHint: viewModel.freeMediaHint,
+                photoIsFront: viewModel.isPhotoCard
             ) { viewModel.openStampsForMedia() }
                 // A photo shared to Mail from another app's share sheet goes on the card here, as if picked
                 // (`ShareInCardPhoto`). Where this card can't take one it waits, and the row says why.

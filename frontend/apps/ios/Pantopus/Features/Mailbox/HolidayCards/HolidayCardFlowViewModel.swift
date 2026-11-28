@@ -16,6 +16,7 @@
 
 import Foundation
 import Observation
+import UIKit
 
 enum HolidayCardFlowState {
     case loading
@@ -290,6 +291,12 @@ final class HolidayCardFlowViewModel {
     var byLink = false
     /// The name typed for a link's envelope ("Mom"); kept with the draft.
     var linkName = ""
+    /// A photo card's frame and line (cards-next 4.2); its photo is `attachments.photo`. Nil for every other card.
+    var photoFront: CardFront?
+    /// "Make a photo card": the studio is up.
+    var makesPhotoCard = false
+    /// The photo picked in the studio, whole, so it opens again on it to crop another way.
+    @ObservationIgnored var photoCardSource: UIImage?
     /// The link to send, just after sending a card by link.
     private(set) var sentLink: String?
     var email = ""
@@ -387,7 +394,8 @@ final class HolidayCardFlowViewModel {
     }
 
     var design: HolidayCardDesign? {
-        cards?.designs.first { $0.id == designId }
+        if isPhotoCard, let designId { return HolidayCardDesign.photoCard(id: designId) }
+        return cards?.designs.first { $0.id == designId }
     }
 
     /// The arrivals open for who it's for: a person's by their clock once
@@ -473,8 +481,12 @@ final class HolidayCardFlowViewModel {
     private func fetch() async {
         do {
             let response: HolidayCardsResponse = try await api.request(HolidayCardEndpoints.cards())
-            // A link can name a picture that isn't one of this year's: nothing is chosen then.
-            if let designId, !response.designs.contains(where: { $0.id == designId }) { self.designId = nil }
+            // A link can name a picture that isn't one of this year's: nothing is chosen then. A photo card's ("Send
+            // this card to someone else" from Sent) opens the studio empty, its photo went with that card (4.2).
+            if let designId, !response.designs.contains(where: { $0.id == designId }) {
+                self.designId = nil
+                if response.improved, designId == response.photoCard?.design { makesPhotoCard = true }
+            }
             state = .loaded(response)
             savedSignature = response.signature?.saved
             HolidayCardWords.postageOn = response.postageEnabled
@@ -694,6 +706,7 @@ final class HolidayCardFlowViewModel {
             media: mediaPick
         )
         body.travel = letsTravel ? true : nil
+        body.front = isPhotoCard ? photoFront : nil
         return body
     }
 
@@ -701,7 +714,10 @@ final class HolidayCardFlowViewModel {
     /// list too with `improved` (cards-next Wave 2).
     var mediaPick: HolidayCardMediaPick {
         guard improved || recipient?.entries == nil, cards?.takesMemories == true else { return .none }
-        return attachments.pick
+        var pick = attachments.pick
+        // A photo card's photo goes as a still (cards-next 4.2: no Live Photo on a front).
+        if isPhotoCard { pick.photoLive = nil }
+        return pick
     }
 
     /// Who a greeting is for, on its label ("For Maya"): the person, or "you" for an address or a link.
@@ -797,6 +813,12 @@ final class HolidayCardFlowViewModel {
     /// saved signature; the note starts empty and when it comes is asked again.
     func sendThisCardAgain() {
         let picture = designId
+        // A photo card's file went with that card: the studio opens empty (cards-next 4.2).
+        if isPhotoCard {
+            startOver()
+            makesPhotoCard = true
+            return
+        }
         startOver()
         designId = picture
         keepsPicture = picture != nil
@@ -832,6 +854,8 @@ final class HolidayCardFlowViewModel {
         message = ""
         if let savedSignature { signature = savedSignature }
         attachments.reset()
+        photoFront = nil
+        photoCardSource = nil
         arrival = nil
         query = ""
         email = ""
@@ -994,6 +1018,7 @@ extension HolidayCardFlowViewModel {
             emailsKeepArrival: cards?.emailAllArrivals == nil ? nil : true
         )
         body.travel = letsTravel ? true : nil
+        body.front = isPhotoCard ? photoFront : nil
         return body
     }
 
@@ -1119,7 +1144,8 @@ extension HolidayCardFlowViewModel {
             arrival: arrival?.rawValue,
             requestId: requestId,
             listIds: listIds,
-            linkName: linkEnvelopeName
+            linkName: linkEnvelopeName,
+            front: isPhotoCard ? photoFront : nil
         )
     }
 
@@ -1142,8 +1168,11 @@ extension HolidayCardFlowViewModel {
             recipient = to
             listed = to.entries ?? (to.isLink ? [] : [to])
         }
-        let designHere = kept.designId.map { id in cards.designs.contains { $0.id == id } } ?? false
+        // A photo card comes back with its frame and line while the server still offers one (cards-next 4.2).
+        let photoCardHere = kept.front != nil && kept.designId != nil && kept.designId == photoCardSpec?.design
+        let designHere = photoCardHere || (kept.designId.map { id in cards.designs.contains { $0.id == id } } ?? false)
         if designHere { designId = kept.designId }
+        if photoCardHere { photoFront = kept.front }
         message = String(kept.message.prefix(cards.messageLimit))
         signature = kept.signature
         attachments.restore(photo: kept.photo, alt: kept.photoAlt, voice: kept.voice)

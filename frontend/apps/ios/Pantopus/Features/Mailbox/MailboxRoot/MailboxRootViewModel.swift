@@ -247,6 +247,8 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
     /// The Christmas cards answer while sending is open (`holiday_cards` and
     /// `mailbox` on): the row at the top of Me shows it. Nil hides the row.
     private(set) var christmasCards: HolidayCardsResponse?
+    /// The welcome strip was put away on this phone (read with the cards).
+    private var welcomeDismissed = false
 
     /// The Counter's pieces with their due tags, lines and buttons (board R9).
     var counterItems: [MailCounterItem] {
@@ -494,6 +496,31 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
     var mantelCards: [HolidayCardMantel.Card] {
         guard LaunchFeatures.cardTable, isLive, selectedDrawer == .me, currentTab == .incoming, !showsSent else { return [] }
         return HolidayCardMantel.cards(in: loadedMail, viewed: viewedMailIds)
+    }
+
+    /// The welcome strip (cards-next 4.1): where the mantel stands, while the cards' read carries `welcome` and it wasn't
+    /// put away on this phone.
+    var cardWelcome: HolidayCardWelcome? {
+        guard LaunchFeatures.cardTable, isLive, selectedDrawer == .me, currentTab == .incoming, !showsSent,
+              !welcomeDismissed, let welcome = christmasCards?.welcome else { return nil }
+        return welcome
+    }
+
+    /// "Write back to {first name}": the card on its table, its reply coming straight up.
+    func writeBackFromWelcome(_ welcome: HolidayCardWelcome) {
+        CardTableWriteBackIntent.set(welcome.cardId)
+        openMail(welcome.cardId)
+    }
+
+    /// The strip's ×: gone on this phone for this account.
+    func dismissCardWelcome() {
+        HolidayCardWelcomeDismissal.dismiss(account: Self.account)
+        welcomeDismissed = true
+    }
+
+    private static var account: String? {
+        if case let .signedIn(user) = AuthManager.shared.state { return user.id }
+        return nil
     }
 
     /// A piece tapped in the list. A Christmas card takes the list's other waiting cards with it, for "Open the next
@@ -870,6 +897,7 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
         let response: HolidayCardsResponse? = try? await api.request(HolidayCardEndpoints.cards())
         guard let response else { return }
         christmasCards = response.open ? response : nil
+        welcomeDismissed = HolidayCardWelcomeDismissal.isDismissed(account: Self.account)
         HolidayCardWords.postageOn = response.postageEnabled
         // The other ways into a card (the tab's envelope, Today, profiles, the side menu) follow this answer.
         if case let .signedIn(user) = AuthManager.shared.state { HolidayCardDoors.shared.note(response, account: user.id) }

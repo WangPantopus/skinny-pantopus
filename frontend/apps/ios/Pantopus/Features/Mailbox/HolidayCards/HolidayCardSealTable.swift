@@ -71,9 +71,11 @@ extension HolidayCardFlowViewModel {
             if let stops = card?.travel?.postmarks, !stops.isEmpty {
                 content.travel = CardTravelEnvelope(sealing: CardTravelEnvelope.marks(stops, year: content.year))
             }
+            // A photo card (cards-next 4.2): sealed with its photo as the front.
+            content.photoFront = photoFrontSpec
             return content
         }
-        return CardTableContent(
+        var content = CardTableContent(
             design: design.id,
             number: design.number,
             caption: design.caption,
@@ -93,6 +95,8 @@ extension HolidayCardFlowViewModel {
             signature: cards.signature == nil ? nil : signature,
             mood: design.mood
         )
+        content.photoFront = photoFrontSpec
+        return content
     }
 }
 
@@ -189,16 +193,18 @@ struct CardTableSendCover: ViewModifier {
             }
             return .refused(viewModel.sendError ?? "Couldn’t send your card just now. Try again in a moment.")
         }
-        let share = CardTableMenuItem(title: "Share this card", identifier: "cardTableSendShare") { [weak model] in
+        let shareItem = CardTableMenuItem(title: "Share this card", identifier: "cardTableSendShare") { [weak model] in
             model?.isSharing = true
         }
+        // A photo card (cards-next 4.2) is never shared as a picture or a video.
+        let share = model.content.isPhotoCard ? [] : [shareItem]
         let again = await sendAgain(viewModel)
         if let results = viewModel.listResults {
             let sent = results.filter { $0.card != nil }.count
             let words = sent == 1 ? "1 card on its way." : "\(sent) cards on their way."
-            return .sent(words: travelWords(words, viewModel), primary: "Done", buttons: [share] + again)
+            return .sent(words: travelWords(words, viewModel), primary: "Done", buttons: share + again)
         }
-        guard let card = viewModel.sent else { return .sent(words: "On its way.", primary: "Done", buttons: [share] + again) }
+        guard let card = viewModel.sent else { return .sent(words: "On its way.", primary: "Done", buttons: share + again) }
         if card.byLink, let link = viewModel.sentLink {
             let from = HolidayCardWords.firstName(viewModel.fromName)
             let copy = CardTableMenuItem(title: "Copy link", identifier: "cardTableSendCopyLink") { [weak model] in
@@ -218,7 +224,7 @@ struct CardTableSendCover: ViewModifier {
                 model?.asksTakeBack = true
             })
         }
-        buttons.append(share)
+        buttons += share
         let travels = viewModel.sentTravels ? [HolidayCardTravelWords.sentLine] : []
         let words = (["On its way to \(first)."] + travels + lines).joined(separator: "\n")
         return .sent(words: words, primary: "Done", buttons: buttons + again)

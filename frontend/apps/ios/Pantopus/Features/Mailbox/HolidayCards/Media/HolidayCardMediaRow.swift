@@ -30,6 +30,9 @@ struct HolidayCardMediaRow: View {
     var needsStampText = HolidayCardMediaRow.needsStampLine
     /// One quiet line under the buttons while free photo cards are left (cards-next Wave 2); nil: none.
     var freeHint: String?
+    /// A photo card (cards-next 4.2): its photo is the card's front, so it shows here only if its upload failed (to try
+    /// again), and no second photo can be added. The voice greeting stays.
+    var photoIsFront = false
     var onNeedsStamp: () -> Void = {}
 
     @State private var picked: PhotosPickerItem?
@@ -39,7 +42,15 @@ struct HolidayCardMediaRow: View {
     @Environment(\.colorScheme) private var scheme
 
     private var showsPhoto: Bool {
-        takesPhoto || attachments.photo != nil
+        photoIsFront ? photo != nil : takesPhoto || attachments.photo != nil
+    }
+
+    /// The photo this row shows.
+    private var photo: HolidayCardAttachments.Photo? {
+        guard let photo = attachments.photo else { return nil }
+        guard photoIsFront else { return photo }
+        if case .failed = photo.status { return photo }
+        return nil
     }
 
     private var showsVoice: Bool {
@@ -48,7 +59,7 @@ struct HolidayCardMediaRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s3) {
-            if attachments.photo == nil, attachments.voice == nil, !attachments.recorder.recording {
+            if photo == nil, attachments.voice == nil, !attachments.recorder.recording {
                 HStack(spacing: Spacing.s2) {
                     if showsPhoto { addPhoto }
                     if showsVoice { record }
@@ -57,7 +68,7 @@ struct HolidayCardMediaRow: View {
             } else {
                 HStack(alignment: .top, spacing: Spacing.s4) {
                     Group {
-                        if let photo = attachments.photo {
+                        if let photo {
                             photoCell(photo)
                         } else if showsPhoto {
                             addPhoto
@@ -96,7 +107,7 @@ struct HolidayCardMediaRow: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("sendCardMediaFreeHint")
             }
-            if attachments.photo != nil { describe }
+            if photo != nil || (photoIsFront && attachments.photo != nil) { describe }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         // Asking for Live Photos by name is what makes the picker hand one over with its moving part; `.images` alone

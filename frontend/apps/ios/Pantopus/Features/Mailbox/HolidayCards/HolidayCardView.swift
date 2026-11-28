@@ -132,6 +132,13 @@ struct HolidayCardView: View {
         }
     }
 
+    /// A photo card (cards-next 4.2) whose photo isn't covered: the photo in its frame. Covered, this reader shows the
+    /// stock front as an older build does.
+    private var photoFront: CardPhotoFrontSpec? {
+        guard !card.card.sealed, card.card.photo?.covered != true else { return nil }
+        return CardPhotoFrontSpec(front: card.card.front, photo: card.card.photo) { .piece(mailId: letter.piece.id, fileId: $0.fileId) }
+    }
+
     private var theCard: some View {
         HolidayCardFlip(showBack: showBack) {
             HolidayCardFront(
@@ -140,7 +147,8 @@ struct HolidayCardView: View {
                 paper: card.card.paper,
                 height: card.card.height,
                 year: card.card.year,
-                mailedOn: card.mailedOn
+                mailedOn: card.mailedOn,
+                photoFront: photoFront
             )
             .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
             .shadow(color: MailPaper.cardShadow.opacity(0.28), radius: 15, x: 0, y: 14)

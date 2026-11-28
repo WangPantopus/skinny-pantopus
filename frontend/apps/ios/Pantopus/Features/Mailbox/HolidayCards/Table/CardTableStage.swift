@@ -409,6 +409,19 @@ private struct CardTableCardView: View {
     private func frontDrawing(_ content: CardTableContent) -> some View {
         if content.isLetter {
             CardTableLetterSheet(paperGrain: art.paper, title: "Welcome to \(content.firstName)")
+        } else if let front = content.photoFront {
+            // A photo card (cards-next 4.2): the photo in its frame, veiled first when covered.
+            CardPhotoFrontFace(
+                frame: front.frame,
+                photo: model.photoFrontImage,
+                aspect: front.aspect,
+                caption: front.caption,
+                year: content.year,
+                mailedOn: content.mailedOn,
+                paperGrain: art.paper,
+                veil: model.photoFrontVeiled ? "Tap to view \(content.firstName)’s photo" : nil
+            )
+            .equatable()
         } else {
             CardTableFront(
                 picture: picture,

@@ -94,10 +94,17 @@ public struct HolidayCardsResponse: Decodable, Sendable, Hashable {
     /// the flow draws the new experience only while this read says so; false (left out) keeps every card screen as it
     /// was. Never kept beyond this read.
     public let improved: Bool
+    /// The welcome strip under the mantel (cards-next 4.1, only while `improved`): a new account that opened a card and
+    /// has sent none. Nil: no strip.
+    public let welcome: HolidayCardWelcome?
+    /// "Make a photo card" (cards-next 4.2, only while `improved` and a photo can be added): the design, frames,
+    /// caption limit and shapes. Nil: no pill.
+    public let photoCard: HolidayCardPhotoCardSpec?
 
     private enum CodingKeys: String, CodingKey {
         case open, holiday, year, designs, collections, arrivals, today, stamps, signature, media, travel, shelves, opening
-        case improved
+        case improved, welcome
+        case photoCard = "photo_card"
         case noteHelp = "note_help"
         case maxRecipients = "max_recipients"
         case postageEnabled = "postage_enabled"
@@ -151,6 +158,8 @@ public struct HolidayCardsResponse: Decodable, Sendable, Hashable {
         shelves = (try? c.decodeIfPresent(Bool.self, forKey: .shelves)) ?? false
         opening = try? c.decodeIfPresent([String].self, forKey: .opening)
         improved = (try? c.decodeIfPresent(Bool.self, forKey: .improved)) == true
+        welcome = improved ? try? c.decodeIfPresent(HolidayCardWelcome.self, forKey: .welcome) : nil
+        photoCard = improved ? try? c.decodeIfPresent(HolidayCardPhotoCardSpec.self, forKey: .photoCard) : nil
     }
 
     /// "Add a photo" shows (the server takes one now, and this build carries the memories), unless no bought stamp
@@ -184,6 +193,105 @@ public struct HolidayCardsResponse: Decodable, Sendable, Hashable {
     /// stamp books) or `unavailable`.
     var mediaStamp: HolidayCardMediaSpec.BoughtStamp.State {
         media?.boughtStamp?.state ?? .ready
+    }
+}
+
+/// `photo_card` on `GET /api/mailbox/cards` (cards-next 4.2): the photo card's design (never on Pick a card's shelves), its
+/// three frames, the caption's limit and the shapes a photo is cropped to on the phone.
+public struct HolidayCardPhotoCardSpec: Decodable, Sendable, Hashable {
+    public struct Shape: Decodable, Sendable, Hashable, Identifiable {
+        public let id: String
+        public let width: Int
+        public let height: Int
+
+        private enum CodingKeys: String, CodingKey {
+            case id
+            case width = "w"
+            case height = "h"
+        }
+
+        /// Width over height.
+        public var aspect: Double {
+            Double(width) / Double(max(1, height))
+        }
+    }
+
+    public let design: String
+    public let frames: [String]
+    public let defaultFrame: String
+    public let captionLimit: Int
+    public let shapes: [Shape]
+
+    private enum CodingKeys: String, CodingKey {
+        case design, frames, shapes
+        case defaultFrame = "default_frame"
+        case captionLimit = "caption_limit"
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        design = try c.decode(String.self, forKey: .design)
+        frames = (try? c.decodeIfPresent([String].self, forKey: .frames)) ?? []
+        defaultFrame = (try? c.decodeIfPresent(String.self, forKey: .defaultFrame)) ?? frames.first ?? "heirloom"
+        captionLimit = (try? c.decodeIfPresent(Int.self, forKey: .captionLimit)) ?? 42
+        shapes = (try? c.decodeIfPresent([Shape].self, forKey: .shapes)) ?? []
+    }
+}
+
+/// A photo card's front (cards-next 4.2): its frame (`heirloom`, `midnight` or `arch`) and the sender's line under the
+/// photo. On a read piece, Sent's page and Look it over; nil for every other card and while a photo card is sealed.
+public struct CardFront: Codable, Sendable, Hashable {
+    public let frame: String
+    public let caption: String?
+
+    public init(frame: String, caption: String?) {
+        self.frame = frame
+        self.caption = caption
+    }
+}
+
+public extension HolidayCardDesign {
+    /// The photo card as a design the flow can hold (it is never in `designs`): the server's stock fields, so lists,
+    /// envelopes and older builds draw its stock picture at this id.
+    static func photoCard(id: String) -> HolidayCardDesign {
+        HolidayCardDesign(
+            id: id,
+            number: 0,
+            caption: "Merry Christmas",
+            paper: "#f7f0e2",
+            height: 1056,
+            slug: nil,
+            table: "#1c2233",
+            verse: nil,
+            mood: "nostalgia"
+        )
+    }
+}
+
+/// `welcome` on `GET /api/mailbox/cards` (cards-next 4.1): the card a new account opened, and what the strip offers.
+public struct HolidayCardWelcome: Decodable, Sendable, Hashable {
+    /// The opened card "Write back" answers.
+    public let cardId: String
+    /// The first word of its sender's name as the Mailbox names them ("Someone" when it can't be read).
+    public let fromFirstName: String
+    /// A reply can be written to that card now.
+    public let canWriteBack: Bool
+    /// Stamps they can send with now; nil when the balance couldn't be read.
+    public let stamps: Int?
+
+    private enum CodingKeys: String, CodingKey {
+        case stamps
+        case cardId = "card_id"
+        case fromFirstName = "from_first_name"
+        case canWriteBack = "can_write_back"
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        cardId = try c.decode(String.self, forKey: .cardId)
+        fromFirstName = MailPieceModel.firstText(try? c.decodeIfPresent(String.self, forKey: .fromFirstName)) ?? "Someone"
+        canWriteBack = (try? c.decodeIfPresent(Bool.self, forKey: .canWriteBack)) == true
+        stamps = try? c.decodeIfPresent(Int.self, forKey: .stamps)
     }
 }
 
@@ -471,9 +579,11 @@ public struct SendHolidayCardBody: Encodable, Sendable {
     public let photoLive: String?
     /// "Let it travel" left on (travelling card plan Part 2): true starts a journey; left out for an ordinary card.
     public var travel: Bool?
+    /// A photo card's frame and line (cards-next 4.2); left out for every other card.
+    public var front: CardFront?
 
     private enum CodingKeys: String, CodingKey {
-        case design, message, arrival, to, signature, photo, voice, travel
+        case design, message, arrival, to, signature, photo, voice, travel, front
         case requestId = "request_id"
         case useStamp = "use_stamp"
         case photoAlt = "photo_alt"
@@ -556,6 +666,8 @@ public struct SendHolidayCardListBody: Encodable, Sendable {
     public let emailsKeepArrival: Bool?
     /// "Let it travel" left on: each card of the list starts a journey of its own; left out otherwise.
     public var travel: Bool?
+    /// A photo card's frame and line (cards-next 4.2), the same on every card of the list.
+    public var front: CardFront?
 
     public struct Recipient: Encodable, Sendable {
         public let to: SendHolidayCardBody.Recipient
@@ -568,7 +680,7 @@ public struct SendHolidayCardListBody: Encodable, Sendable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case design, message, arrival, recipients, signature, photo, voice, travel
+        case design, message, arrival, recipients, signature, photo, voice, travel, front
         case useStamp = "use_stamp"
         case photoAlt = "photo_alt"
         case photoLive = "photo_live"
@@ -865,11 +977,18 @@ public struct MailCard: Decodable, Sendable, Hashable {
     public let travel: CardTravel?
     /// The table it opens on, named by the server (card shelves A4); nil from older servers.
     public let mood: String?
+    /// The reader joined Pantopus for this card (cards-next 4.1, `joined_for`): while it's on screen no guidance card
+    /// and no daily briefings notice show. False from older servers and with the switch off.
+    public let joinedFor: Bool
+    /// A photo card's frame and line (cards-next 4.2): `photo` is drawn in this frame as the card's front. Nil for every
+    /// other card, while sealed, and with the switch off.
+    public let front: CardFront?
 
     private enum CodingKeys: String, CodingKey {
         case design, number, caption, paper, height, holiday, year, arrival, sealed, slug, table, verse, signature
-        case photo, voice, travel, mood
+        case photo, voice, travel, mood, front
         case sealedUntil = "sealed_until"
+        case joinedFor = "joined_for"
     }
 
     /// The card a reply answers (experience plan Part 3), drawn with that card's picture in the reply's row.
@@ -892,6 +1011,8 @@ public struct MailCard: Decodable, Sendable, Hashable {
         voice = nil
         travel = nil
         mood = reply.mood
+        joinedFor = false
+        front = nil
     }
 
     /// A card not sent yet, as its envelope is drawn while it's being sealed.
@@ -914,6 +1035,8 @@ public struct MailCard: Decodable, Sendable, Hashable {
         voice = nil
         travel = nil
         mood = design.mood
+        joinedFor = false
+        front = nil
     }
 
     private init(copying card: MailCard, sealed: Bool) {
@@ -935,6 +1058,8 @@ public struct MailCard: Decodable, Sendable, Hashable {
         voice = card.voice
         travel = card.travel
         mood = card.mood
+        joinedFor = card.joinedFor
+        front = card.front
     }
 
     /// The same card on the morning its seal lifts.
@@ -962,6 +1087,8 @@ public struct MailCard: Decodable, Sendable, Hashable {
         voice = sealed ? nil : try? c.decodeIfPresent(CardVoice.self, forKey: .voice)
         travel = try? c.decodeIfPresent(CardTravel.self, forKey: .travel)
         mood = try? c.decodeIfPresent(String.self, forKey: .mood)
+        joinedFor = (try? c.decodeIfPresent(Bool.self, forKey: .joinedFor)) == true
+        front = sealed ? nil : try? c.decodeIfPresent(CardFront.self, forKey: .front)
     }
 }
 

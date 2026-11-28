@@ -71,6 +71,8 @@ struct HolidayCardDraft: Codable, Equatable {
     var listIds: [String: String]
     /// The name on a link's envelope (`improved`, cards-next 3.2); nil in drafts kept before it, or without one.
     var linkName: String?
+    /// A photo card's frame and line (cards-next 4.2); nil for every other card and in older drafts.
+    var front: CardFront?
 }
 
 /// Where the draft is kept: this device's defaults, one draft at a time, with the moment it was kept.

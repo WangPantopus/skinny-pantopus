@@ -59,6 +59,11 @@ final class GuidanceCenter {
         didSet { if !waitingCardCheck, oldValue { scheduleEvaluation() } }
     }
 
+    /// A card the reader joined for is on screen (cards-next 4.1, `card.joined_for`): no guidance card or briefings notice.
+    var joinedForCardOnScreen = false {
+        didSet { if !joinedForCardOnScreen, oldValue { scheduleEvaluation() } }
+    }
+
     /// The side menu is open (`RootTabView`).
     @ObservationIgnored var sideMenuOpen = false {
         didSet { if !sideMenuOpen, oldValue { scheduleEvaluation() } }

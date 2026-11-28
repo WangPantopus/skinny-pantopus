@@ -125,6 +125,16 @@ struct HolidayCardLookStep: View {
         preview.piece.item.card
     }
 
+    /// A photo card (cards-next 4.2): your photo in its frame as the front, and not again beside the card.
+    private var photoFront: CardPhotoFrontSpec? {
+        CardPhotoFrontSpec(front: card?.front, photo: card?.photo) { .own(fileId: $0.fileId) }
+    }
+
+    /// The photo beside the card: none on a photo card.
+    private var besidePhoto: CardPhoto? {
+        photoFront == nil ? card?.photo : nil
+    }
+
     private var arrival: HolidayCardArrival? {
         card?.arrival.flatMap(HolidayCardArrival.init(rawValue:)) ?? viewModel.arrival
     }
@@ -399,7 +409,9 @@ struct HolidayCardLookStep: View {
             paper: card?.paper ?? design.paper,
             height: card?.height ?? design.height,
             year: card?.year ?? cards.year,
-            mailedOn: envelope.postmarkDate
+            mailedOn: envelope.postmarkDate,
+            photoFront: photoFront,
+            photoPreview: viewModel.attachments.photo?.preview
         )
         .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
         .shadow(color: MailPaper.cardShadow.opacity(0.28), radius: 15, x: 0, y: 14)
@@ -464,9 +476,9 @@ private extension HolidayCardLookStep {
     /// The sender's own photo beside the card, never covered (memories plan step 4).
     @ViewBuilder
     var ownMedia: some View {
-        if card?.photo != nil || card?.voice != nil {
+        if besidePhoto != nil || card?.voice != nil {
             CardMediaBeside(
-                photo: card?.photo,
+                photo: besidePhoto,
                 voice: card?.voice,
                 from: .own,
                 number: card?.number ?? design.number,
@@ -497,7 +509,7 @@ private extension HolidayCardLookStep {
 
     /// The card as it'll lie on the table, for "Open it the way they will".
     var lookContent: CardTableContent {
-        CardTableContent(
+        var content = CardTableContent(
             design: design.id,
             number: design.number,
             caption: card?.caption ?? design.caption,
@@ -515,11 +527,13 @@ private extension HolidayCardLookStep {
             sealedDayCount: 0,
             verse: design.verse,
             signature: card?.signature,
-            photo: card?.photo,
+            photo: besidePhoto,
             voice: card?.voice,
             mediaFrom: .own,
             mood: card?.mood ?? design.mood
         )
+        content.photoFront = photoFront
+        return content
     }
 }
 

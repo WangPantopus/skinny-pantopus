@@ -91,7 +91,7 @@ struct CardTableScreen: View {
                     closeLabel: closeLabel,
                     shareLabel: shareContent.sealed ? "Share the sealed card" : "Share this card",
                     onClose: onClose,
-                    onShare: canShare ? { model.isSharing = true } : nil
+                    onShare: canShare && !model.content.isPhotoCard ? { model.isSharing = true } : nil
                 )
                 .frame(width: screen.width, height: screen.height, alignment: .topLeading)
             }
@@ -118,7 +118,7 @@ struct CardTableScreen: View {
             }
         }
         .onAppear {
-            model.offersShare = canShare && sharesQuietly
+            model.offersShare = canShare && sharesQuietly && !model.content.isPhotoCard
             model.reduceMotion = reduceMotion
             model.lowPower = ProcessInfo.processInfo.isLowPowerModeEnabled
             model.setShowing(true)

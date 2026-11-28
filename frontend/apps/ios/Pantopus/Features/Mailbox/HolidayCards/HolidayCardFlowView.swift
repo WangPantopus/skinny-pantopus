@@ -179,6 +179,8 @@ struct HolidayCardFlowView: View {
         }
         // Seal it by hand: the table over the flow, from Look it over until Done.
         .modifier(CardTableSendCover(viewModel: viewModel, onDone: done))
+        // "Make a photo card" (cards-next 4.2).
+        .modifier(HolidayCardPhotoStudioCover(viewModel: viewModel))
         // On an iPad window wide enough, the reading column leaves the flow the whole width: the header runs it, and each
         // step lays out its own column in it (`column`). Phones and the iPhone Duo keep the column.
         .wideColumnsScreen()
