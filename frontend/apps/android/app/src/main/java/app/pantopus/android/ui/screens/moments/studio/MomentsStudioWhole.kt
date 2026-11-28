@@ -17,8 +17,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.rememberUpdatedState
@@ -66,6 +69,7 @@ import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.Spacing
 import coil.compose.AsyncImage
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.withContext
 import java.util.Locale
@@ -80,6 +84,37 @@ import kotlin.math.min
  * canvas, and Reset puts it back whole; any of those places it on the canvas with Resize's own model and drawing, so it
  * then uploads as that canvas. Marks, stamps, dots and playable items stay where the author put them on the screen.
  */
+
+/**
+ * Where the middle of an item on the picture (a stamp, a dot, moving words, a playable item) may go, as shares of the
+ * frame it is placed on (PHASE-6 F): on the whole stage, anywhere on the 9:16 canvas, the backdrop around the picture
+ * included; elsewhere, null, and each kind keeps its own limits as before.
+ */
+@Immutable
+internal data class StudioReach(
+    val left: Double,
+    val top: Double,
+    val right: Double,
+    val bottom: Double,
+) {
+    fun x(v: Double): Double = v.coerceIn(left, right)
+
+    fun y(v: Double): Double = v.coerceIn(top, bottom)
+}
+
+internal val LocalStudioReach = compositionLocalOf<StudioReach?> { null }
+
+/**
+ * Some item lies outside the photo's own box (PHASE-6 F): the Moment then posts in its canvas form, so readers see the
+ * item where it was put. As taken, the items are in the photo's shares; on the canvas, in the canvas's.
+ */
+internal fun MomentsComposeUiState.itemsBeyond(shape: Float): Boolean {
+    val box = FitBox(shape)
+    val inX = if (placement == null) 0.0..1.0 else box.left.toDouble()..(box.left + box.width).toDouble()
+    val inY = if (placement == null) 0.0..1.0 else box.top.toDouble()..(box.top + box.height).toDouble()
+    val points = stamps.map { it.x to it.y } + dots.map { it.x to it.y } + items.map { it.x to it.y }
+    return points.any { (x, y) -> x !in inX || y !in inY }
+}
 
 /** The Studio shows and posts this photo whole: a photo, not before and after (whose halves are drawn as they are). */
 internal val MomentsComposeUiState.showsWhole: Boolean
@@ -213,8 +248,10 @@ internal fun placeWholeAt(
     current: MomentPlacement?,
     live: MutableState<MomentPlacement?>,
     onPlace: (MomentPlacement?, IntSize) -> Unit,
+    keepCanvas: Boolean = false,
 ) {
-    val settled = next?.takeUnless { it.isFit(view.shape) }
+    // With an item beyond the photo's box the canvas form stays (PHASE-6 F): whole and straight is then a placement.
+    val settled = if (keepCanvas) next ?: wholeFit(view.shape) else next?.takeUnless { it.isFit(view.shape) }
     if (settled == current) {
         live.value = null
         return
@@ -268,6 +305,14 @@ internal fun StudioWholeStage(
     val photo = (state.media as? MomentMediaFile.Photo)?.file ?: return
     // The photo drawn where it was moved arrived (or the drawing failed): it shows again in place of the live one.
     LaunchedEffect(photo, state.notice) { live.value = null }
+    // An item put beyond the photo's own box: the Moment takes its canvas form, so readers see the item there (PHASE-6 F).
+    val beyond = state.placement == null && state.itemsBeyond(view.shape)
+    LaunchedEffect(beyond) {
+        if (beyond) {
+            delay(CANVAS_FORM_MS)
+            placeWholeAt(view, wholeFit(view.shape), null, live, onPlace, keepCanvas = true)
+        }
+    }
     BoxWithConstraints(modifier = Modifier.fillMaxSize().testTag("moments.studio.whole")) {
         val canvas = canvasOn(Size(constraints.maxWidth.toFloat(), constraints.maxHeight.toFloat()))
         val top = Color(view.backdrop.top)
@@ -297,6 +342,14 @@ internal fun StudioWholeStage(
                 MomentPlacedStill(view.looked, moving, marks, "Your photo", Modifier.fillMaxSize())
             }
         }
+        // The items on the photo may go anywhere on the canvas, in shares of the photo's own frame.
+        val reach =
+            StudioReach(
+                left = ((canvas.left - pictureBox.left) / pictureBox.width).toDouble(),
+                top = ((canvas.top - pictureBox.top) / pictureBox.height).toDouble(),
+                right = ((canvas.right - pictureBox.left) / pictureBox.width).toDouble(),
+                bottom = ((canvas.bottom - pictureBox.top) / pictureBox.height).toDouble(),
+            )
         AtRect(pictureBox) {
             if (live.value == null) {
                 AsyncImage(
@@ -306,10 +359,13 @@ internal fun StudioWholeStage(
                     modifier = Modifier.fillMaxSize(),
                 )
             }
-            layers()
+            CompositionLocalProvider(LocalStudioReach provides reach) { layers() }
         }
     }
 }
+
+/** An item that lies beyond the photo turns the Moment into its canvas form once the finger has rested this long. */
+private const val CANVAS_FORM_MS = 300L
 
 @Composable
 private fun AtRect(
@@ -343,7 +399,9 @@ private fun WholeCanvasTouch(
     val placeNow by rememberUpdatedState(onPlace)
     val enabled = !state.posting
 
-    fun place(next: MomentPlacement?) = placeWholeAt(view, next, now, live, placeNow)
+    val beyond by rememberUpdatedState(state.itemsBeyond(view.shape))
+
+    fun place(next: MomentPlacement?) = placeWholeAt(view, next, now, live, placeNow, keepCanvas = beyond)
 
     fun step(change: (MomentPlacement) -> MomentPlacement) {
         val from = live.value ?: now ?: wholeFit(view.shape)
@@ -414,11 +472,14 @@ internal fun StudioWholeRow(
     Row(modifier = modifier, horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
         if (!fills) {
             WholePill(if (filled) "Fit" else "Fill", "moments.studio.whole.fill", enabled) {
-                placeWholeAt(view, if (filled) null else MomentPlacement.cover(shape), state.placement, live, onPlace)
+                val next = if (filled) null else MomentPlacement.cover(shape)
+                placeWholeAt(view, next, state.placement, live, onPlace, state.itemsBeyond(shape))
             }
         }
         if (state.placement != null) {
-            WholePill("Reset", "moments.studio.whole.reset", enabled) { placeWholeAt(view, null, state.placement, live, onPlace) }
+            WholePill("Reset", "moments.studio.whole.reset", enabled) {
+                placeWholeAt(view, null, state.placement, live, onPlace, state.itemsBeyond(shape))
+            }
         }
     }
 }
