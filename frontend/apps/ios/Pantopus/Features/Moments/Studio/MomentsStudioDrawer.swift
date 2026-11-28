@@ -2,12 +2,13 @@
 //  MomentsStudioDrawer.swift
 //  Pantopus
 //
-//  The Studio's drawer, opened from the bar's pill: every row of today's Post
-//  sheet that isn't on the bar or the picture. The small map and the place
-//  (with the place picker), "Taken" or the Live line, "Show the area instead"
-//  or "Pin it at a place", "No location", the height and the weather, "Share
-//  later", and 1, 6, 24 or 48 hours. Who sees it, the caption and Post are on
-//  the Studio itself.
+//  The Studio's details, a sheet opened from the bar's one summary line (a
+//  tap, or the bar dragged up; PHASE-5 A4, PHASE-6 F3): who sees it, and every
+//  row of today's Post sheet that isn't on the picture. The small map and the
+//  place (with the place picker), "Taken" or the Live line, "Show the area
+//  instead" or "Pin it at a place", "No location", the height and the weather,
+//  "Share later", and 1, 6, 24 or 48 hours. The caption and Post are on the
+//  Studio itself.
 //
 //  The rows are today's own (`MomentsPostSheet+Place`, `MomentsPostSheet+Sky`),
 //  read from a Post sheet made only to lend them, so the two screens can never
@@ -21,6 +22,8 @@ struct MomentsStudioDrawer: View {
     let model: MomentsComposerModel
     let onDone: () -> Void
     @Environment(AuthManager.self) private var auth
+    /// The made-up name screen, when "Made-up name" is picked here before there is one.
+    @State private var showsNameScreen = false
 
     /// Today's Post sheet, never shown: its rows read only the model.
     private var rows: MomentsPostSheet {
@@ -36,7 +39,7 @@ struct MomentsStudioDrawer: View {
             }
             .scrollBounceBehavior(.basedOnSize)
             .background(Theme.Color.appSurface)
-            .navigationTitle(model.studioPostKind?.name ?? "Where and how long")
+            .navigationTitle(model.studioPostKind?.name ?? "Who, where and how long")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
@@ -63,6 +66,12 @@ struct MomentsStudioDrawer: View {
 
     private var options: some View {
         VStack(alignment: .leading, spacing: 0) {
+            // Who sees it (PHASE-5 A4: the bar keeps one summary line; the details are all here).
+            MomentsStudioAudienceRow(model: model) { showsNameScreen = true }
+                .padding(.vertical, Spacing.s2)
+                .sheet(isPresented: $showsNameScreen) {
+                    PenNameSetupView { _ in model.pickStudioAudience(.madeUp) }
+                }
             // A post made from it (CONTRACT 6d): the kind's own details first; a Moment's own rows (the Live mark,
             // the area, the height and the weather, "Share later", how long) don't apply to it.
             if let kind = model.studioPostKind {

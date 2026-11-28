@@ -30,6 +30,8 @@ struct MomentsComposerChoice: View {
     let request: MomentsComposeRequest
     let onClose: @MainActor () -> Void
     @State private var reinvented = PulseReinventedFlags.shared
+    /// Went back while Text was open: its labels are brought back inside today's bounds when it closes (PHASE-6 F2).
+    @State private var labelsOwed = false
 
     var body: some View {
         Group {
@@ -58,12 +60,21 @@ struct MomentsComposerChoice: View {
                 // Nor today's post kinds: a picked kind's words go back to the caption.
                 request.model.clearStudioKind()
                 request.model.marking.studio = nil
+                // Nor text anywhere (PHASE-6 F2): today's bounds, and a label outside them brought back in once.
+                labelsOwed = request.model.marking.isOpen
+                request.model.studioTextClosed(goingBack: true)
                 // Nor Guess the spot or a step deck: they live beside the Studio's tools, and today's server refuses
                 // both keys while the switch is off. The refusal's words go too: today's sheet starts clean.
                 request.model.studioGuess = false
                 request.model.studioDeck = nil
                 if request.model.error == Self.switchedOffWords { request.model.error = nil }
             }
+        }
+        // Text's wider bounds last only while its editor is open in the Studio (PHASE-6 F2).
+        .onChange(of: request.model.marking.isOpen) { _, open in
+            guard !open else { return }
+            request.model.studioTextClosed(goingBack: labelsOwed)
+            labelsOwed = false
         }
         // A Studio post refused because the switch is off (403 `PULSE_REINVENTED_OFF`, CONTRACT 1, whose words the
         // Studio shows): the switch is read again at once, so today's Post sheet takes the draft now, not at the next
