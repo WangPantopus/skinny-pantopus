@@ -58,12 +58,14 @@ import app.pantopus.android.ui.screens.moments.compose.marks.MomentLook
 import app.pantopus.android.ui.screens.moments.compose.marks.MomentMarks
 import app.pantopus.android.ui.screens.moments.compose.marks.MomentMarksEditing
 import app.pantopus.android.ui.screens.moments.compose.marks.MomentMarksKeeper
+import app.pantopus.android.ui.screens.moments.compose.marks.MomentMarksPainter
 import app.pantopus.android.ui.screens.moments.compose.marks.MomentMarksTool
 import app.pantopus.android.ui.screens.moments.compose.marks.MomentPlacement
 import app.pantopus.android.ui.screens.moments.compose.marks.MomentPlacementPainter
 import app.pantopus.android.ui.screens.moments.compose.marks.shape
 import app.pantopus.android.ui.screens.moments.map.metersBetween
 import app.pantopus.android.ui.screens.moments.studio.StudioMention
+import app.pantopus.android.ui.screens.moments.studio.StudioMotion
 import app.pantopus.android.ui.screens.moments.studio.StudioPair
 import app.pantopus.android.ui.screens.moments.studio.holdsStudioChoices
 import app.pantopus.android.ui.screens.moments.studio.sentBackdrop
@@ -1055,7 +1057,10 @@ class MomentsComposeViewModel
 
         /** "Pulse, reinvented"'s Studio (PHASE-5 A): the photo shows and posts whole, on [backdrop]'s two colours. */
         fun setWhole(backdrop: MomentPlacementPainter.Backdrop) =
-            _state.update { if (it.media is MomentMediaFile.Photo) it.copy(whole = true, wholeBackdrop = backdrop) else it }
+            _state.update {
+                val shown = it.media is MomentMediaFile.Photo || it.media is MomentMediaFile.Video
+                if (shown) it.copy(whole = true, wholeBackdrop = backdrop) else it
+            }
 
         /**
          * "Pulse, reinvented"'s Studio's first screen (PHASE-5 A): the whole photo of [picture] px (as it came) moved, sized,
@@ -1066,7 +1071,7 @@ class MomentsComposeViewModel
             picture: IntSize,
         ) {
             val current = _state.value
-            val media = current.media as? MomentMediaFile.Photo ?: return
+            val media = current.media ?: return
             if (!current.whole || current.posting || current.marking != null) return
             if (current.placement == next) return
             // Between whole as taken and the canvas, what lies on the photo moves with it, so it stays where it was.
@@ -1074,6 +1079,8 @@ class MomentsComposeViewModel
             _state.update {
                 it.copy(marks = moved.marks, stamps = moved.stamps, dots = moved.dots, items = moved.items, placement = next)
             }
+            // A video is exported again where it is placed, as Resize's Done exports it (PHASE-5 A on a video).
+            if (media is MomentMediaFile.Video) return prepare(media)
             marksKeeper.draw(
                 moved.marks,
                 next,
@@ -1213,7 +1220,8 @@ class MomentsComposeViewModel
          * Today's Post screen takes the Moment from the Studio (the switch went off): the picture and the words stay; the
          * stamps, the made-up name and the mentions, which today's screens don't offer, go. Nothing changes when there were none.
          */
-        fun leaveStudio() =
+        fun leaveStudio() {
+            val before = _state.value
             _state.update {
                 if (!it.holdsStudioChoices) {
                     it
@@ -1231,6 +1239,34 @@ class MomentsComposeViewModel
                     )
                 }
             }
+            heldToTodaysLabelBox(before)
+        }
+
+        /**
+         * "Pulse, reinvented" (PHASE-6 I): words the Studio put beyond today's label box on its canvas come back into it once
+         * when today's Post screen takes the Moment, and are drawn in again as the editor's Done draws them.
+         */
+        private fun heldToTodaysLabelBox(before: MomentsComposeUiState) {
+            val placed = before.placement?.takeIf { before.whole } ?: return
+            val canvas = MomentPlacement.CANVAS
+            val labels =
+                before.marks.labels.map { if (it.text.isBlank()) it else MomentMarksPainter.keptIn(it, canvas.width, canvas.height) }
+            val held = before.marks.copy(labels = labels)
+            if (held == before.marks) return
+            _state.update { it.copy(marks = held) }
+            when (val media = before.media) {
+                is MomentMediaFile.Video -> prepare(media)
+                is MomentMediaFile.Photo ->
+                    marksKeeper.draw(
+                        held,
+                        placed,
+                        media.file,
+                        onDrawn = { file -> _state.update { it.copy(media = MomentMediaFile.Photo(file)) } },
+                        onFailed = { drawn, place -> _state.update { it.copy(marks = drawn, placement = place, notice = MARKS_FAILED) } },
+                    )
+                null -> Unit
+            }
+        }
 
         /** The Sky's rows (`MomentsComposeSky.kt`). */
         fun setPinAtPlace(on: Boolean) = _state.update { it.withPinAtPlace(on) }
@@ -1399,6 +1435,8 @@ class MomentsComposeViewModel
                         else -> {
                             val latitude = pinned?.let { moment.latitude ?: it.first }
                             posting.start(moment, media, latitude, pinned?.let { moment.longitude ?: it.second })
+                            // "Pulse, reinvented"'s Studio: a motion photo's kept clip follows its photo up (PHASE-5 C).
+                            StudioMotion.posted(moment.id)
                             // The photo that posts carries its marks: the one as it came isn't needed any more.
                             marksKeeper.drop()
                         }

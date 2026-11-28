@@ -92,6 +92,8 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -111,6 +113,7 @@ import app.pantopus.android.ui.theme.Radii
 import app.pantopus.android.ui.theme.Spacing
 import java.io.File
 import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.roundToInt
 
 /**
@@ -280,7 +283,7 @@ internal fun MomentsMarksEditor(
                 .pointerInput(Unit) { detectTapGestures { } }
                 .testTag("moments.marks"),
     ) {
-        if (picture != null) MarksCanvas(picture, editing, onEdit, video)
+        if (picture != null) MarksCanvas(picture, editing, onEdit, video, studio)
         // The viewer's own top fade, over the strip its top bar covers and a little below.
         Box(
             modifier =
@@ -444,6 +447,7 @@ private fun MarksCanvas(
     editing: MomentMarksEditing,
     onEdit: ((MomentMarksEditing) -> MomentMarksEditing) -> Unit,
     video: File?,
+    studio: Boolean = false,
 ) {
     val image = remember(picture) { picture.asImageBitmap() }
     val backdrop = remember(picture) { MomentPlacementPainter.backdrop(picture) }
@@ -455,17 +459,20 @@ private fun MarksCanvas(
     val shownMarks =
         remember(editing.marks, editing.placement == null, editing.tool, pictureSize) { editing.shownOnCanvas(pictureSize).marks }
     val shown = editing.copy(marks = shownMarks)
+    // "Pulse, reinvented"'s Studio on its canvas (PHASE-6 I); anywhere else today's frame, all its values today's.
+    val statusTop = with(LocalDensity.current) { WindowInsets.statusBars.getTop(this).toDp() }
+    val fit = StudioCanvasFit(studio && editing.placement != null, statusTop)
     BoxWithConstraints(
         modifier =
             Modifier
                 .fillMaxSize()
-                .padding(bottom = VIEWER_REPLY_BAR)
+                .padding(top = fit.top, bottom = fit.bottom)
                 .clip(RoundedCornerShape(bottomStart = VIEWER_CORNER, bottomEnd = VIEWER_CORNER)),
         contentAlignment = Alignment.Center,
     ) {
         val frameWidth = constraints.maxWidth.toFloat()
         val frameHeight = constraints.maxHeight.toFloat()
-        val scale = max(frameWidth / surface.width, frameHeight / surface.height)
+        val scale = fit.scale(frameWidth / surface.width, frameHeight / surface.height)
         val density = LocalDensity.current
         // The width picked is in dp on this screen; the line keeps it as a share of the picture's width as shown.
         val lineWidth = with(density) { editing.width.points.dp.toPx() } / (surface.width * scale)
@@ -476,7 +483,7 @@ private fun MarksCanvas(
         // And below the editor's top buttons (with the phone turned sideways, the label box's top can be above them).
         val ceiling =
             WindowInsets.statusBars.getTop(density) + with(density) { TOP_BUTTONS_BELOW_FRAME_TOP.toPx() } - (frameHeight - drawnHeight) / 2
-        val frame = LabelFrame(drawnWidth, drawnHeight, surface.width, surface.height, floor, ceiling)
+        val frame = LabelFrame(drawnWidth, drawnHeight, surface.width, surface.height, floor, ceiling, fit.keep(density))
         // A new label's letters: 22 dp on this screen, kept as a share of the picture's width (never below the smallest).
         val letters = with(density) { MomentMarkRules.NEW_LABEL_POINTS.dp.toPx() } / drawnWidth
         val stroke by rememberUpdatedState { points: List<Float> -> onEdit { it.drawn(points, lineWidth) } }
@@ -915,4 +922,27 @@ internal fun Inks(
             }
         }
     }
+}
+
+/** "Pulse, reinvented"'s Studio: how much of a label stays on its canvas (PHASE-6 F2, I). */
+private val STUDIO_KEEP_ON = 24.dp
+
+/**
+ * "Pulse, reinvented"'s Studio on its canvas (PHASE-6 I), [on]: the editor shows the whole canvas between its top buttons
+ * (under [statusTop]) and its tools, and words go anywhere on it with 24 dp kept on. Off: today's frame, today's cover scale
+ * and today's label rules.
+ */
+private class StudioCanvasFit(
+    private val on: Boolean,
+    statusTop: Dp,
+) {
+    val top: Dp = if (on) statusTop + TOP_BUTTONS_BELOW_FRAME_TOP else 0.dp
+    val bottom: Dp = if (on) VIEWER_REPLY_BAR + TOOLS_ABOVE_FRAME_BOTTOM else VIEWER_REPLY_BAR
+
+    fun scale(
+        byWidth: Float,
+        byHeight: Float,
+    ): Float = if (on) min(byWidth, byHeight) else max(byWidth, byHeight)
+
+    fun keep(density: Density): Float = if (on) with(density) { STUDIO_KEEP_ON.toPx() } else 0f
 }
