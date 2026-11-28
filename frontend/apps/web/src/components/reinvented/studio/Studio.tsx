@@ -1649,6 +1649,53 @@ export default function Studio({
     else if (camera) setCamera(false);
     else closeOrBack();
   });
+  // A trackpad's pinch (ctrl and the wheel) never zooms the page anywhere in the Studio: over the picture it sizes the
+  // picture (StudioPicture), elsewhere it does nothing (LEAD-8's look, 09:36: over the rail, the chips, the caption and the
+  // location bar it would still have zoomed the page).
+  useEffect(() => {
+    const root = trap.current;
+    if (!root) return undefined;
+    const pinch = (e: WheelEvent) => {
+      if (e.ctrlKey) e.preventDefault();
+    };
+    root.addEventListener('wheel', pinch, { passive: false });
+    return () => root.removeEventListener('wheel', pinch);
+  }, [trap, wide]);
+  // On a wide screen the details sit beside the picture but come after Post in the page: Tab runs the rail, the picture's
+  // controls, the details and then Post, and Shift+Tab the other way (LEAD-8's look, 09:36: Tab reached Post first).
+  useEffect(() => {
+    const root = trap.current;
+    if (!wide || !root) return undefined;
+    const focusable =
+      'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+    const shown = (el: HTMLElement) =>
+      el.getAttribute('type') !== 'hidden' &&
+      el.getClientRects().length > 0 &&
+      !el.closest('[hidden], [inert]') &&
+      getComputedStyle(el).visibility !== 'hidden';
+    const key = (e: KeyboardEvent) => {
+      if (e.key !== 'Tab' || e.altKey || e.ctrlKey || e.metaKey) return;
+      const at = document.activeElement as HTMLElement | null;
+      // A question or menu opened over the Studio keeps its own Tab.
+      if (!at || at.closest('[aria-modal="true"]') !== root) return;
+      const post = root.querySelector<HTMLElement>('[data-studio-post]'),
+        details = root.querySelector<HTMLElement>('.st-drawer');
+      if (!post || !details || !shown(post)) return;
+      const all = [...root.querySelectorAll<HTMLElement>(focusable)].filter(shown);
+      const inside = all.filter((el) => details.contains(el)),
+        rest = all.filter((el) => !details.contains(el));
+      const p = rest.indexOf(post);
+      if (p < 0 || !inside.length) return;
+      const order = [...rest.slice(0, p), ...inside, ...rest.slice(p)];
+      const i = order.indexOf(at);
+      if (i < 0) return;
+      e.preventDefault();
+      e.stopPropagation();
+      order[(i + (e.shiftKey ? -1 : 1) + order.length) % order.length].focus();
+    };
+    root.addEventListener('keydown', key, true);
+    return () => root.removeEventListener('keydown', key, true);
+  }, [trap, wide]);
 
   const placeName =
     placement === 'place'
@@ -3007,11 +3054,14 @@ export default function Studio({
                         <RotateCw size={15} aria-hidden="true" />
                         Turn
                       </button>
-                      {canTrim && (
+                      {/* While a loop is on, Trim stays in the row, off, so the row and the canvas keep their size (LEAD-8's
+                          look, 09:36: the canvas grew to 361 px when Trim left the row). */}
+                      {(canTrim || (isVideo && !!loopSpan)) && (
                         <button
                           type="button"
                           className="st-chip"
-                          disabled={!!busy}
+                          disabled={!!busy || !canTrim}
+                          title={canTrim ? undefined : 'Take the loop off to trim'}
                           aria-pressed={trimOpen}
                           onClick={() => {
                             setLoopOpen(false);
@@ -3170,6 +3220,7 @@ export default function Studio({
                       <button
                         type="button"
                         className="st-post"
+                        data-studio-post
                         disabled={!ready}
                         onClick={tryPost}
                       >

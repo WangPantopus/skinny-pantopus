@@ -84,8 +84,6 @@ interface Back {
   rest: Rest;
   row: string | null;
   rowTop: number;
-  /** The list's area when the page was left (while it followed the map); the row is put back on that area's rows. */
-  area?: string;
 }
 function readBack(): Back | null {
   try {
@@ -397,12 +395,22 @@ export default function ReinventedPulse() {
   const scroller = useRef<HTMLDivElement>(null);
   // A row kept where it was while the list is read for a new area: the row the person came Back to, or the one whose tap
   // flew the map (PHASE-6 G: the list used to jump to its top and the row left the finger).
-  // Coming Back, the row waits (up to 4 s) for the list of the area it was left on: on a wide screen the map's area settles
-  // a moment after the first read, and putting the row back on that first read let the list go to its top right after
-  // (LEAD-7's look, 08:39).
-  const pendingRow = useRef<{ key: string; top: number; area?: string; until: number } | null>(
-    back?.row ? { key: back.row, top: back.rowTop, area: back.area, until: Date.now() + 4000 } : null,
+  // Coming Back, the row is put back on every settled list for 4 s, not once: on a wide screen the map's area settles and the
+  // list is read again a moment after the first read, which sent the list to its top (LEAD-7's look, 08:39; LEAD-8's,
+  // 09:36: 2 of 4). The person's own scroll, wheel, tap or key on the list ends it at once.
+  const pendingRow = useRef<{ key: string; top: number; until: number } | null>(
+    back?.row ? { key: back.row, top: back.rowTop, until: Date.now() + 4000 } : null,
   );
+  useEffect(() => {
+    const el = scroller.current;
+    if (!el) return undefined;
+    const mine = () => {
+      if (pendingRow.current?.until) pendingRow.current = null;
+    };
+    const kinds = ['wheel', 'pointerdown', 'touchstart', 'keydown'] as const;
+    kinds.forEach((k) => el.addEventListener(k, mine, { passive: true }));
+    return () => kinds.forEach((k) => el.removeEventListener(k, mine));
+  }, []);
   const sentinel = useRef<HTMLDivElement>(null);
   const { hasNextPage, isFetchingNextPage, fetchNextPage } = list;
   useEffect(() => {
@@ -498,13 +506,13 @@ export default function ReinventedPulse() {
             rowTop = el.getBoundingClientRect().top - box.top;
           }
         }
-        const kept: Back = { at: Date.now(), view: mapView.current?.() ?? null, rest, row, rowTop, area: areaKey || undefined };
+        const kept: Back = { at: Date.now(), view: mapView.current?.() ?? null, rest, row, rowTop };
         window.sessionStorage.setItem(BACK_KEY, JSON.stringify(kept));
       } catch {
         /* storage blocked: Back opens the new Pulse as new */
       }
     },
-    [view, reach, rest, areaKey],
+    [view, reach, rest],
   );
   const openPost = useCallback(
     (id: string) => {
@@ -616,11 +624,10 @@ export default function ReinventedPulse() {
       box = scroller.current;
     if (!keep || !box || !following || stale || waiting || !list.data || list.isPlaceholderData) return;
     const early = !!keep.until && Date.now() < keep.until;
-    // Coming Back: not on another area's rows while the map is still settling on the kept one.
-    if (early && keep.area && keep.area !== areaKey) return;
     const el = box.querySelector<HTMLElement>(`[data-row="${CSS.escape(keep.key)}"]`);
     if (el) box.scrollTop += el.getBoundingClientRect().top - box.getBoundingClientRect().top - keep.top;
-    if (el || !early) pendingRow.current = null;
+    // Coming Back it stays for the window (the list may be read again for the settled area); a flown row is put back once.
+    if (!early) pendingRow.current = null;
   }, [shown, following, stale, waiting, areaKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const momentIds = useMemo(

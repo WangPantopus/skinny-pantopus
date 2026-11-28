@@ -275,8 +275,23 @@
 .rp-top[data-phone] .rp-switch button {
   display: grid;
   place-items: center;
-  width: 30px;
+  width: 26px;
   padding: 0;
+}
+/* The round buttons draw at the web's 32 px here (section C), each still 44 px to the pointer, so the pill keeps its words:
+   a twelve-letter town in full at 375 and at least six letters at 320 (LEAD-8's look, 09:36). */
+.rp-top[data-phone] .rp-lens {
+  width: 32px;
+  height: 32px;
+}
+.rp-top[data-phone] .rp-lens::before {
+  inset: -6px;
+}
+.rp-top[data-phone] .rp-bell {
+  min-width: 32px;
+}
+.rp-top[data-phone] .rp-bell button {
+  padding: 6px;
 }
 .rp-top[data-phone] .rp-scope {
   gap: 4px;
@@ -295,15 +310,6 @@
     right: 6px;
     gap: 2px;
     padding: 0 2px;
-  }
-  .rp-top[data-phone] .rp-lens {
-    width: 34px;
-  }
-  .rp-top[data-phone] .rp-bell {
-    min-width: 34px;
-  }
-  .rp-top[data-phone] .rp-bell button {
-    padding: 7px;
   }
   .rp-top[data-phone] .rp-scope {
     padding: 0 4px;
