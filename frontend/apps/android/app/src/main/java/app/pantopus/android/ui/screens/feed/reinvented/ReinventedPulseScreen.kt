@@ -175,7 +175,7 @@ fun ReinventedPulseScreen(
     // Phase 3 (CONTRACT 8e): the Retake opened from the list, and the Studio it asks for.
     MomentRetakeListSheet()
     MomentConvergenceListSheet()
-    MomentPinboardListSheet()
+    MomentPinboardListSheet(onOpenPiece = watch::piece)
     MomentMailItHost(viewModel.viewer)
     TogetherStudioOpener(actions.onCompose)
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
@@ -294,6 +294,12 @@ private class ReinventedWatch(
 
     fun ring(ring: MomentRingDto) {
         viewModel.watch(ring)
+        onWatch()
+    }
+
+    /** A pinboard's piece (8i) plays as itself, not as its board, which waits under the viewer. */
+    fun piece(moment: MomentDto) {
+        viewModel.watch(moment)
         onWatch()
     }
 

@@ -49,6 +49,7 @@ import app.pantopus.android.data.api.models.reinvented.PinboardDto
 import app.pantopus.android.data.api.models.reinvented.PinboardPieceDto
 import app.pantopus.android.data.api.models.reinvented.shownPinboard
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.moments.MomentsRepository
 import app.pantopus.android.data.pulse.TogetherRepository
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
@@ -60,6 +61,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -68,13 +70,27 @@ import javax.inject.Inject
  * `pinboard/Pinboard.tsx`): add your piece to a shared prompt, such as "Best fall tree on your walk". A pinboard is its
  * first photo and the pieces people add for a week, one each; it stays. In Pulse it is one row ("Pinboard · 4 pieces")
  * that opens the board; in the viewer a chip opens it too. "Add your piece" opens the Studio with the prompt in its
- * drawer. Only while the switch is on (a Moment carries `pinboard` only then).
+ * drawer. A tap on a piece plays it in today's viewer, and closing the viewer returns to the board (LEAD-8, 10:37; as the
+ * iPhone's #5287 and the web's #5286). Only while the switch is on (a Moment carries `pinboard` only then).
  */
 
 /** The pinboard open, from Pulse ([fromList]) or over the viewer ([inViewer]), one at a time: the start's id. */
 internal object MomentPinboardState {
     val fromList = mutableStateOf<String?>(null)
     val inViewer = mutableStateOf<String?>(null)
+
+    /** A piece asked to play (its Moment's id); Pulse reads it and plays it, the board staying open under the viewer. */
+    val piece = mutableStateOf<String?>(null)
+
+    /** A piece tapped on [boardId]'s board: the board is Pulse's own from here, so closing the viewer comes back to it. */
+    fun openPiece(
+        boardId: String,
+        pieceId: String,
+    ) {
+        inViewer.value = null
+        fromList.value = boardId
+        piece.value = pieceId
+    }
 
     /** A Moment of a pinboard opens the board; anything else opens as before (false). */
     fun opens(moment: MomentDto): Boolean {
@@ -95,6 +111,8 @@ data class MomentPinboardUi(
     val id: String? = null,
     val board: PinboardDto? = null,
     val failed: Boolean = false,
+    /** A piece that could not open: the line under the pieces. */
+    val pieceProblem: String? = null,
 )
 
 @HiltViewModel
@@ -102,6 +120,7 @@ class MomentPinboardViewModel
     @Inject
     constructor(
         private val repository: TogetherRepository,
+        private val moments: MomentsRepository,
     ) : ViewModel() {
         private val _ui = MutableStateFlow(MomentPinboardUi())
         val ui: StateFlow<MomentPinboardUi> = _ui.asStateFlow()
@@ -118,13 +137,44 @@ class MomentPinboardViewModel
                     }
             }
         }
+
+        /** Reads a piece with today's `GET /api/moments/:id`; plays it through [onOpen], or says why it can't. */
+        fun openPiece(
+            pieceId: String,
+            onOpen: (MomentDto) -> Unit,
+        ) {
+            _ui.update { it.copy(pieceProblem = null) }
+            viewModelScope.launch {
+                when (val answer = moments.moment(pieceId)) {
+                    is NetworkResult.Success -> onOpen(answer.data)
+                    is NetworkResult.Failure -> _ui.update { it.copy(pieceProblem = "This piece isn’t there any more.") }
+                }
+            }
+        }
     }
 
-/** Pulse's list opens a pinboard here (`ReinventedPulseScreen`). */
+/**
+ * Pulse's list opens a pinboard here (`ReinventedPulseScreen`), and a piece asked from any board plays through
+ * [onOpenPiece] (today's viewer, as the piece itself), the board waiting under it.
+ */
 @Composable
-fun MomentPinboardListSheet() {
+fun MomentPinboardListSheet(
+    onOpenPiece: (MomentDto) -> Unit,
+    viewModel: MomentPinboardViewModel = hiltViewModel(),
+) {
+    val asked = MomentPinboardState.piece.value
+    LaunchedEffect(asked) {
+        val pieceId = asked ?: return@LaunchedEffect
+        MomentPinboardState.piece.value = null
+        viewModel.openPiece(pieceId, onOpenPiece)
+    }
     val id = MomentPinboardState.fromList.value ?: return
-    MomentPinboardSheet(id, onAdd = MomentPinboardState::addPiece) { MomentPinboardState.fromList.value = null }
+    MomentPinboardSheet(
+        id,
+        onAdd = MomentPinboardState::addPiece,
+        onPiece = { piece -> MomentPinboardState.openPiece(id, piece.id) },
+        viewModel = viewModel,
+    ) { MomentPinboardState.fromList.value = null }
 }
 
 /**
@@ -163,6 +213,11 @@ internal fun MomentPinboardChip(
             onClose()
             MomentPinboardState.addPiece(found)
         },
+        // The viewer closes; Pulse then plays the piece over the board (which waits under it).
+        onPiece = { piece ->
+            onClose()
+            MomentPinboardState.openPiece(open, piece.id)
+        },
     ) { MomentPinboardState.inViewer.value = null }
 }
 
@@ -172,6 +227,7 @@ internal fun MomentPinboardChip(
 private fun MomentPinboardSheet(
     id: String,
     onAdd: (PinboardDto) -> Unit,
+    onPiece: (PinboardPieceDto) -> Unit,
     viewModel: MomentPinboardViewModel = hiltViewModel(),
     onDismiss: () -> Unit,
 ) {
@@ -187,6 +243,7 @@ private fun MomentPinboardSheet(
         Column(
             modifier =
                 Modifier
+                    .keepsSheetStill()
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState())
                     .padding(horizontal = Spacing.s4)
@@ -198,7 +255,8 @@ private fun MomentPinboardSheet(
             when {
                 board == null -> BoardNote(if (ui.failed && ui.id == id) "This pinboard couldn’t load." else "Loading…")
                 else -> {
-                    Pieces(board.pieces)
+                    Pieces(board.pieces, onPiece)
+                    ui.pieceProblem?.let { BoardNote(it) }
                     if (board.canAdd) {
                         AddButton { onAdd(board) }
                     } else {
@@ -239,7 +297,10 @@ private fun BoardHeader(board: PinboardDto?) {
 
 /** The pieces, two to a row, each clipped to its cell, with whose it is. */
 @Composable
-private fun Pieces(pieces: List<PinboardPieceDto>) {
+private fun Pieces(
+    pieces: List<PinboardPieceDto>,
+    onPiece: (PinboardPieceDto) -> Unit,
+) {
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2), modifier = Modifier.testTag("together.pinboard.pieces")) {
         pieces.chunked(2).forEach { pair ->
             Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2), modifier = Modifier.fillMaxWidth()) {
@@ -249,6 +310,8 @@ private fun Pieces(pieces: List<PinboardPieceDto>) {
                         modifier =
                             Modifier
                                 .weight(1f)
+                                .clickable(role = Role.Button, onClickLabel = "Play") { onPiece(piece) }
+                                .testTag("together.pinboard.piece.${piece.id}")
                                 .semantics(mergeDescendants = true) { contentDescription = "$whose’s piece" },
                         verticalArrangement = Arrangement.spacedBy(4.dp),
                     ) {

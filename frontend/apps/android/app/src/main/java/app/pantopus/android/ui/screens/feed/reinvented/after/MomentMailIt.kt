@@ -253,6 +253,7 @@ private fun MomentMailItSheet(
         Column(
             modifier =
                 Modifier
+                    .keepsSheetStill()
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState())
                     .padding(horizontal = Spacing.s4)

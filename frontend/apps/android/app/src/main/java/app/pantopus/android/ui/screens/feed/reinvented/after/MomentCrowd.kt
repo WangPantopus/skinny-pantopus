@@ -189,6 +189,7 @@ internal fun MomentCrowdSheet(
         Column(
             modifier =
                 Modifier
+                    .keepsSheetStill()
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState())
                     .padding(horizontal = Spacing.s4)
