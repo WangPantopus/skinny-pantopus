@@ -37,8 +37,10 @@ object MomentMarksFlatten {
         marks: MomentMarks,
         placement: MomentPlacement? = null,
     ): File {
-        // "Pulse, reinvented"'s Studio: the film look over the photo as it came (the same bitmap with none).
-        val looked = MomentLooks.applied(picture, marks.look)
+        // "Pulse, reinvented"'s Studio: what the person chose blurred into the photo as it came, then the film look over it
+        // (the same bitmap with neither).
+        val blurred = app.pantopus.android.ui.screens.moments.studio.blur.MomentBlurPainter.applied(picture, marks.blur)
+        val looked = MomentLooks.applied(blurred, marks.look)
         val drawn =
             if (placement == null) {
                 looked.copy(Bitmap.Config.ARGB_8888, true) ?: error("Couldn't copy the photo.")
@@ -60,6 +62,7 @@ object MomentMarksFlatten {
         } finally {
             drawn.recycle()
             if (looked !== picture) looked.recycle()
+            if (blurred !== picture && blurred !== looked) blurred.recycle()
             // Half a file never stays behind.
             if (!written) out.delete()
         }

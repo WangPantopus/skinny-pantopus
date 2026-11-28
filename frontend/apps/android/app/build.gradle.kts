@@ -358,6 +358,8 @@ dependencies {
     implementation(libs.mlkit.barcode.scanning)
     // "Pulse, reinvented"'s Studio: the subject lift, on the phone; no install-time model (fetched on first use).
     implementation(libs.play.services.mlkit.subject.segmentation)
+    // "Pulse, reinvented"'s Studio: blur before posting reads the photo's lines on the phone (model fetched on first use).
+    implementation(libs.play.services.mlkit.text.recognition)
     // EXIF orientation read for Snap & Sell photo normalization.
     implementation(libs.androidx.exifinterface)
     implementation(libs.androidx.browser)
