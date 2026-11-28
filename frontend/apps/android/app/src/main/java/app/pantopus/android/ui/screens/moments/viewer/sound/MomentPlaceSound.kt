@@ -92,41 +92,52 @@ fun MomentPlaceSound(moment: MomentDto?) {
         }
     }
     Box(modifier = Modifier.fillMaxSize()) {
-        // Bottom left, clear of the elevation scale on the right; a 44 dp touch area around a 28 dp pill (PHASE-6 C).
-        Box(
-            contentAlignment = Alignment.CenterStart,
+        PlaceSoundPill(cleaned = sound.cleaned, playing = playing, onPlay = { play() }, modifier = Modifier.align(Alignment.BottomStart))
+    }
+}
+
+/**
+ * The pill that says the Moment has place sound and plays it again: bottom left, clear of the elevation scale on the right; a
+ * 44 dp touch area around a 28 dp pill (PHASE-6 C).
+ */
+@Composable
+private fun PlaceSoundPill(
+    cleaned: Boolean,
+    playing: Boolean,
+    onPlay: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        contentAlignment = Alignment.CenterStart,
+        modifier =
+            modifier
+                .padding(start = 12.dp, bottom = 150.dp)
+                .heightIn(min = 44.dp)
+                .clickable(role = Role.Button, onClick = onPlay)
+                .testTag("moments.viewer.placeSound")
+                .clearAndSetSemantics {
+                    contentDescription = if (cleaned) "Place sound, wind cleaned. Plays it again" else "Place sound. Plays it again"
+                    role = Role.Button
+                },
+    ) {
+        Row(
             modifier =
                 Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(start = 12.dp, bottom = 150.dp)
-                    .heightIn(min = 44.dp)
-                    .clickable(role = Role.Button) { play() }
-                    .testTag("moments.viewer.placeSound")
-                    .clearAndSetSemantics {
-                        contentDescription =
-                            if (sound.cleaned) "Place sound, wind cleaned. Plays it again" else "Place sound. Plays it again"
-                        role = Role.Button
-                    },
+                    .heightIn(min = 28.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(Color.Black.copy(alpha = 0.45f))
+                    .padding(horizontal = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            Row(
-                modifier =
-                    Modifier
-                        .heightIn(min = 28.dp)
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(Color.Black.copy(alpha = 0.45f))
-                        .padding(horizontal = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                PantopusIconImage(
-                    icon = PantopusIcon.Volume2,
-                    contentDescription = null,
-                    size = 14.dp,
-                    strokeWidth = 2.2f,
-                    tint = Color.White.copy(alpha = if (playing) 1f else 0.8f),
-                )
-                Text(if (sound.cleaned) "Place sound · wind cleaned" else "Place sound", color = Color.White, fontSize = 13.sp)
-            }
+            PantopusIconImage(
+                icon = PantopusIcon.Volume2,
+                contentDescription = null,
+                size = 14.dp,
+                strokeWidth = 2.2f,
+                tint = Color.White.copy(alpha = if (playing) 1f else 0.8f),
+            )
+            Text(if (cleaned) "Place sound · wind cleaned" else "Place sound", color = Color.White, fontSize = 13.sp)
         }
     }
 }
