@@ -155,6 +155,16 @@ export interface MailCard {
   voice?: { file_id: string; duration_ms: number | null } | null;
   /** A card that travels (server key card_travel), for the person it went to. Absent: an ordinary card. */
   travel?: CardTravel | null;
+  /**
+   * Wave 4.1 (only while the card improvements are on): the reader got it from an email or a link and joined in the
+   * last 14 days. While it's on screen no briefing notice or guidance card shows.
+   */
+  joined_for?: boolean;
+  /**
+   * Wave 4.2: a photo card's front, its `photo` drawn in this frame with this caption. Null while sealed; absent on a
+   * stock card and on list reads (they draw the design's stock picture).
+   */
+  front?: { frame: 'heirloom' | 'midnight' | 'arch'; caption: string | null } | null;
 }
 
 /** A postmark on a travelling card's envelope: the town it left and the day it left it (by the sender's clock). */

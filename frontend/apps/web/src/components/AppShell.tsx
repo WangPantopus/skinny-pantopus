@@ -52,6 +52,7 @@ import FloatingChatWidget from '@/components/chat/FloatingChatWidget';
 import NamePrompt from '@/components/profile/NamePrompt';
 import BriefingNotice from '@/components/BriefingNotice';
 import GuidanceHost from '@/components/guidance/GuidanceHost';
+import { useCardNoticeHold } from '@/components/mailbox/cards/cardNoticeHold';
 import { toast } from '@/components/ui/toast-store';
 import useViewerHome from '@/hooks/useViewerHome';
 import { useTabScroll } from '@/hooks/useTabScroll';
@@ -237,6 +238,8 @@ function AppShellInner({ children, publicPage = false }: { children: React.React
   const searchParams = useSearchParams();
   // "Keep this address handy · Save privately" after sign-up: the briefings notice waits until it's answered.
   const placePreviewOpen = pathname === '/app/place' && Boolean(searchParams.get('preview'));
+  // A Christmas card someone just came to (Wave 4.1): the briefings notice and guidance cards wait.
+  const cardHold = useCardNoticeHold(pathname ?? '');
   const queryClient = useQueryClient();
   // Each tab's page opens again where you left it.
   useTabScroll(pathname);
@@ -746,9 +749,10 @@ function AppShellInner({ children, publicPage = false }: { children: React.React
       )}
       {!isMapWorkspace && <FloatingChatWidget />}
       {/* Guidance cards for new accounts (founder 2026-11-16; they replaced the older promo pop-ups). */}
-      <GuidanceHost user={me ?? null} computer={!isMobile} blocked={namePromptOpen || feedComposerOpen || composerOpen || placePreviewOpen || mobileOpen} />
+      {/* Neither covers a Christmas card someone just came to (Wave 4.1, cardNoticeHold): they wait for the next visit. */}
+      <GuidanceHost user={me ?? null} computer={!isMobile} blocked={namePromptOpen || feedComposerOpen || composerOpen || placePreviewOpen || mobileOpen || cardHold} />
       {/* Asked once of an account with no name (sign-up didn't ask before October 2026). */}
-      {user?.id && !namePromptOpen && !feedComposerOpen && !composerOpen && !placePreviewOpen && <BriefingNotice key={user.id} accountId={user.id} />}
+      {user?.id && !namePromptOpen && !feedComposerOpen && !composerOpen && !placePreviewOpen && !cardHold && <BriefingNotice key={user.id} accountId={user.id} />}
       <NamePrompt
         user={user}
         onOpenChange={setNamePromptOpen}
