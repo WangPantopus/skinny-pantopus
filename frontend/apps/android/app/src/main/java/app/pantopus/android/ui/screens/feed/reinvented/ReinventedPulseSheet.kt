@@ -120,6 +120,19 @@ internal fun rememberReinventedHalf(): Pair<Float?, Modifier> {
     return half to Modifier.onGloballyPositioned { boxTop = it.positionInWindow().y }
 }
 
+/**
+ * The window's height under Pulse's box top, in the box's pixels; null until the box has been placed. The map is laid out
+ * this tall, so today's tab bar sliding away (the box growing by its height) never resizes it: a resize moves what the map
+ * shows, and the list that follows the map would be read again under the finger.
+ */
+@Composable
+internal fun rememberReinventedBelow(): Pair<Float?, Modifier> {
+    val window = LocalView.current.rootView.height.toFloat()
+    var boxTop by remember { mutableFloatStateOf(Float.NaN) }
+    val below = if (boxTop.isNaN() || window <= 0f) null else window - boxTop
+    return below to Modifier.onGloballyPositioned { boxTop = it.positionInWindow().y }
+}
+
 /** The share of the window's height above the sheet's top at half. */
 private const val WINDOW_HALF = 0.5f
 

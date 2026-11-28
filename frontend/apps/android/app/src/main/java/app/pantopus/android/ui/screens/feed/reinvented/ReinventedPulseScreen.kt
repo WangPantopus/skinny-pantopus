@@ -11,9 +11,11 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
@@ -634,7 +636,14 @@ private fun BoxScope.ReinventedOverMap(
     // The map keeps its middle above the part the sheet covers once it rests (never re-laid while it moves).
     val covered =
         with(density) { full - reinventedSheetTop(settled, header.toPx(), full.toPx(), REINVENTED_SHEET_PEEK.toPx(), half).toDp() }
-    parts.map(covered)
+    // The map as tall as the window under the box's top, whatever today's tab bar does: it is never resized while a list
+    // scrolls, so what it shows (and the list that follows it) stays put; its bottom padding counts the extra height.
+    val (below, placedBelow) = rememberReinventedBelow()
+    Box(Modifier.matchParentSize().then(placedBelow))
+    val mapHeight = below?.let { with(density) { it.toDp() } }?.coerceAtLeast(full) ?: full
+    Box(Modifier.fillMaxWidth().wrapContentHeight(Alignment.Top, unbounded = true).height(mapHeight)) {
+        parts.map(covered + (mapHeight - full))
+    }
     // What the map shows uncovered, between the top line and the sheet once it rests: the list follows it there.
     LaunchedEffect(headerPx, covered, full) { with(density) { onUncovered(headerPx.toFloat(), (full - covered).toPx()) } }
     ReinventedSheet(
