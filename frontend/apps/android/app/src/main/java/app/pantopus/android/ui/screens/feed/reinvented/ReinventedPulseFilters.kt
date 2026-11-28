@@ -27,6 +27,9 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -41,6 +44,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import app.pantopus.android.data.api.models.reinvented.ReinventedAppliedFiltersDto
 import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.pulse.ReinventedFilterQuery
 import app.pantopus.android.data.pulse.ReinventedFilterStore
@@ -53,6 +58,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 import java.time.Instant
 import javax.inject.Inject
 
@@ -126,8 +132,30 @@ data class ReinventedFilters(
 }
 
 /**
+ * The plain line under the top line (CONTRACT 10a): written from what the server says it applied to the map's answer
+ * ([applied], the map takes no `when`: its time is its When), or from the phone's own choice while no answer has said.
+ */
+internal fun reinventedFilterLine(
+    applied: ReinventedAppliedFiltersDto?,
+    phone: ReinventedFilters,
+    time: String,
+): String? {
+    applied ?: return phone.words(time)
+    val parts = mutableListOf<String>()
+    applied.kinds?.takeIf { it.isNotEmpty() }?.let { kinds -> parts += kinds.joinToString(", ") { reinventedChipTitle(it) } }
+    if (time != ReinventedMapState.LIVE) parts += reinventedWhenWords(time)
+    if (applied.from == CONNECTIONS) parts += "Connections only"
+    applied.state.orEmpty().forEach { s -> STATES.firstOrNull { it.first == s }?.let { parts += it.second } }
+    if (applied.since != null) parts += "New since your last visit"
+    return parts.takeIf { it.isNotEmpty() }?.joinToString(" · ")
+}
+
+/**
  * The filters, kept on this phone for the signed-in person, and the time they last opened the new Pulse here (read once
- * per visit, then this visit is kept as the next "last visit").
+ * per visit, then this visit is kept as the next "last visit"). It follows the person: another account signed in on the
+ * same phone starts with its own kept choice (none, the first time) at once, without a relaunch. Only the new Pulse
+ * makes it, so nothing is written to the phone while the switch is off; while it is on, the time row's choice and each
+ * visit are kept as they happen.
  */
 @HiltViewModel
 class ReinventedFiltersViewModel
@@ -136,14 +164,38 @@ class ReinventedFiltersViewModel
         private val store: ReinventedFilterStore,
         auth: AuthRepository,
     ) : ViewModel() {
-        private val person: String? = (auth.state.value as? AuthRepository.State.SignedIn)?.user?.id
-        private val kept: ReinventedKeptFilters? = person?.let(store::read)
+        private var person: String? = null
 
         /** The time last opened here, or null on a first visit (then "New since your last visit" can't be chosen). */
-        val since: String? = person?.let { store.visit(it, Instant.now().toString()) }
+        var since: String? by mutableStateOf(null)
+            private set
 
-        private val _filters =
-            MutableStateFlow(
+        private val _filters = MutableStateFlow(ReinventedFilters())
+        val filters: StateFlow<ReinventedFilters> = _filters.asStateFlow()
+
+        /** The time row's choice kept with them, for the map to open on; null when none was kept. */
+        var keptTime: String? by mutableStateOf(null)
+            private set
+
+        init {
+            // At once, so the first reads already carry the kept choice; then whenever the signed-in person changes.
+            load(signedIn(auth.state.value))
+            viewModelScope.launch {
+                auth.state.collect { state ->
+                    val id = signedIn(state)
+                    if (id != person) load(id)
+                }
+            }
+        }
+
+        private fun signedIn(state: AuthRepository.State): String? = (state as? AuthRepository.State.SignedIn)?.user?.id
+
+        /** [id]'s kept choice and last visit (none for nobody signed in), and this visit kept as the next. */
+        private fun load(id: String?) {
+            person = id
+            val kept = id?.let(store::read)
+            since = id?.let { store.visit(it, Instant.now().toString()) }
+            _filters.value =
                 kept?.let {
                     ReinventedFilters(
                         kinds = it.kinds.filter { k -> k in REINVENTED_KINDS },
@@ -151,12 +203,9 @@ class ReinventedFiltersViewModel
                         state = it.state.filter { s -> STATES.any { st -> st.first == s } },
                         fresh = it.fresh && since != null,
                     )
-                } ?: ReinventedFilters(),
-            )
-        val filters: StateFlow<ReinventedFilters> = _filters.asStateFlow()
-
-        /** The time row's choice kept with them, for the map to open on; null when none was kept. */
-        val keptTime: String? = kept?.time?.takeIf { t -> REINVENTED_TIMES.any { it.first == t } }
+                } ?: ReinventedFilters()
+            keptTime = kept?.time?.takeIf { t -> REINVENTED_TIMES.any { it.first == t } }
+        }
 
         fun set(
             next: ReinventedFilters,

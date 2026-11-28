@@ -214,8 +214,8 @@ private fun ReadsFiltered(
     mapModel: ReinventedMapViewModel,
 ) {
     // The kept time goes to the map once; until the map has it, the list's first read already carries it.
-    val kept = remember(filtersModel) { filtersModel.keptTime }
-    var taken by remember(filtersModel) { mutableStateOf(kept == null) }
+    val kept = filtersModel.keptTime
+    var taken by remember(kept) { mutableStateOf(kept == null) }
     LaunchedEffect(kept) { kept?.let(mapModel::pickTime) }
     val mapState by mapModel.state.collectAsStateWithLifecycle()
     val mapTime = mapState.time
@@ -513,7 +513,8 @@ private fun ReinventedPulseLayout(
                 // The pill first, so the When card (the rail's) opens over it.
                 ReinventedRailPill(
                     ask = ask,
-                    filterWords = filters.words(mapState.time).takeUnless { atlas.on },
+                    // The server's own account of what it applied (CONTRACT 10a), the phone's choice until it answers.
+                    filterWords = reinventedFilterLine(mapState.applied, filters, mapState.time).takeUnless { atlas.on },
                     onClearFilters = {
                         filtersModel.clear(ReinventedMapState.LIVE)
                         mapModel.pickTime(ReinventedMapState.LIVE)

@@ -72,6 +72,18 @@ data class ReinventedListResponse(
     val end: String? = null,
     /** Around me with no place at all: ask for one, as today's Pulse does. */
     @Json(name = "needs_place") val needsPlace: Boolean = false,
+    /** CONTRACT 10a: the filters the server applied, whenever any was sent; the plain line is written from it. */
+    val filters: ReinventedAppliedFiltersDto? = null,
+)
+
+/** CONTRACT 10a: what the server applied, normalised; a field not sent is null. */
+@JsonClass(generateAdapter = true)
+data class ReinventedAppliedFiltersDto(
+    val kinds: List<String>? = null,
+    @Json(name = "when") val whenKey: String? = null,
+    val from: String? = null,
+    val state: List<String>? = null,
+    val since: String? = null,
 )
 
 /** A post that stays, at the point everyone sees; a Heads-up is drawn red, pulsing and on top. */
@@ -109,6 +121,8 @@ data class ReinventedMapResponse(
     /** CONTRACT 6b: heights are on for the reader and rings float (`moment_float`): the living map (phase 4) floats them. */
     @Json(name = "heights_on") val heightsOn: Boolean = false,
     @Json(name = "float_on") val floatOn: Boolean = false,
+    /** CONTRACT 10a: the filters the server applied (no `when` on the map), whenever any was sent. */
+    val filters: ReinventedAppliedFiltersDto? = null,
 )
 
 /** A Moment live from here, with its band. */

@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.moments.MomentGuessSpotDto
 import app.pantopus.android.data.api.models.moments.MomentRingDto
 import app.pantopus.android.data.api.models.plans.PlanPinDto
+import app.pantopus.android.data.api.models.reinvented.ReinventedAppliedFiltersDto
 import app.pantopus.android.data.api.models.reinvented.ReinventedKeptDto
 import app.pantopus.android.data.api.models.reinvented.ReinventedMarkDto
 import app.pantopus.android.data.api.net.NetworkResult
@@ -82,6 +83,8 @@ data class ReinventedMapState(
     val floats: Boolean = false,
     /** My Atlas's map (the person's own kept Moments): no live beams on it (phase 4). */
     val atlas: Boolean = false,
+    /** CONTRACT 10a: the filters the server says it applied to this answer; null with none, or while a new read is out. */
+    val applied: ReinventedAppliedFiltersDto? = null,
 ) {
     /** Heads-ups last, so they draw over everything else. */
     val drawOrder: List<ReinventedMapItem> get() = items.filterNot { it.headsUp } + items.filter { it.headsUp }
@@ -160,6 +163,8 @@ class ReinventedMapViewModel
         fun filter(query: ReinventedFilterQuery?) {
             if (query == filters) return
             filters = query
+            // What the last answer applied is no longer what is asked: the line says the phone's choice until the next one.
+            _state.update { it.copy(applied = null) }
             readSoon(waitMs = 0L)
         }
 
@@ -202,6 +207,7 @@ class ReinventedMapViewModel
                                 deck = arrange(it.deck, items, area),
                                 guessSpots = spots,
                                 floats = map.heightsOn && map.floatOn,
+                                applied = map.filters,
                             )
                         } else {
                             it
