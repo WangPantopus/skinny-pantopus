@@ -2,6 +2,7 @@
 
 package app.pantopus.android.ui.screens.feed.reinvented
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -109,6 +110,8 @@ internal fun ReinventedRail(
     val askState by ask.state.collectAsStateWithLifecycle()
     var whenOpen by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(moving) { if (moving) whenOpen = false }
+    // The system Back closes the When card first (PHASE-6 G), before it moves the sheet or leaves Pulse.
+    BackHandler(enabled = whenOpen && !actions.atlas) { whenOpen = false }
     val fade by animateFloatAsState(if (moving) 0.4f else 1f, label = "rail")
     Box(modifier = modifier.padding(top = top)) {
         Column(
