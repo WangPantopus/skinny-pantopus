@@ -186,19 +186,28 @@ private fun goneWords(
     val zone = HolidayCardTimes.zone(cards.timeZone)
     // Today's words under it: when it arrives, and until when it can be taken back; a travelling card says so too.
     val lines =
-        listOfNotNull(arrivalLine(sent, zone), takeBackLine(sent, zone), CAN_TRAVEL.takeIf { sent.travel != null }).joinToString("\n")
+        listOfNotNull(
+            arrivalLine(sent, zone, cards.improved),
+            takeBackLine(sent, zone),
+            CAN_TRAVEL.takeIf { sent.travel != null },
+        ).joinToString("\n")
+    // With the card improvements the line itself starts "We emailed them.": it isn't said twice.
+    val saysEmailed = cards.improved && lines.startsWith(EMAILED)
     return when (val to = form.to) {
         CardRecipient.Link -> SealAnswer.Took("Your card is ready.", lines)
         // Set for later, nothing is emailed yet: the line under it says when.
         is CardRecipient.Email ->
             SealAnswer.Took(
                 "On its way to ${to.email}.",
-                listOfNotNull("We emailed them.".takeIf { sent.emailSendAt == null }, lines).joinToString("\n"),
+                listOfNotNull(EMAILED.takeIf { sent.emailSendAt == null && !saysEmailed }, lines).joinToString("\n"),
             )
         is CardRecipient.Person -> SealAnswer.Took("On its way to ${to.firstName}.", lines)
         else -> SealAnswer.Took("On its way.", lines)
     }
 }
+
+/** Said once a card by email went; with the card improvements the line under it may say it already. */
+private const val EMAILED = "We emailed them."
 
 /** Under "On its way to Maya." for a card that travels (travelling card plan Part 2). */
 internal const val CAN_TRAVEL = "It can travel. You’ll hear when it reaches a town."

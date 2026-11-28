@@ -863,7 +863,7 @@ internal fun SentCardSection(
                 .testTag("sendCardSent"),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        SentCardBox(card, cards.designOf(card.design), title, arrivalLine(card, zone))
+        SentCardBox(card, cards.designOf(card.design), title, arrivalLine(card, zone, cards.improved))
         if (card.byLink && card.canTakeBack) {
             CardLinkBox(
                 cardId = card.id,
@@ -990,7 +990,10 @@ private fun SentCardBox(
 internal fun arrivalLine(
     card: SentHolidayCard,
     zone: ZoneId,
+    /** The card improvements are on: a card by email or link can be read before they join ([guestSentLine]). */
+    improved: Boolean = false,
 ): String {
+    if (improved) guestSentLine(card, zone)?.let { return it }
     val who = card.toName ?: "They"
     val day = HolidayCardTimes.shortDay(card.arrivesOn ?: card.arrivesAt, zone)
     return when {

@@ -133,7 +133,7 @@ internal fun ToStep(
     /** The card improvements are on: "Send it by link" asks for the name on its envelope first (Wave 3.2, [LinkNameForm]). */
     improved: Boolean = false,
 ) {
-    if (form.byEmail) return EmailForm(form, viewModel)
+    if (form.byEmail) return EmailForm(form, viewModel, improved)
     val query by viewModel.query.collectAsStateWithLifecycle()
     val search by viewModel.search.collectAsStateWithLifecycle()
     // One card can go to a list (digital stamps on): people and addresses are added, then "Continue".
@@ -204,7 +204,7 @@ internal fun ToStep(
                 modifier = Modifier.padding(top = Spacing.s1).testTag("sendCardByLink"),
             )
             Text(
-                "Text it, or paste it anywhere. The first person to open it keeps the card.",
+                if (improved) GUEST_LINK_LINE else "Text it, or paste it anywhere. The first person to open it keeps the card.",
                 fontSize = 13.sp,
                 lineHeight = 18.sp,
                 color = PantopusColors.cardTextQuiet,
@@ -311,6 +311,8 @@ internal fun People(
 private fun EmailForm(
     form: SendCardForm,
     viewModel: SendCardViewModel,
+    /** The card improvements are on: they can read it before joining ([GUEST_EMAIL_LINE]). */
+    improved: Boolean = false,
 ) {
     val valid = SendCardViewModel.EMAIL.matches(form.email.trim())
     val many = viewModel.maxRecipients > 1
@@ -352,8 +354,12 @@ private fun EmailForm(
             modifier = Modifier.padding(top = Spacing.s2),
         )
         Text(
-            "They get an email saying you sent them a Christmas card. They join Pantopus with this address to open it. " +
-                "The email never shows your note.",
+            if (improved) {
+                GUEST_EMAIL_LINE
+            } else {
+                "They get an email saying you sent them a Christmas card. They join Pantopus with this address to open it. " +
+                    "The email never shows your note."
+            },
             fontSize = 14.sp,
             lineHeight = 20.sp,
             color = PantopusColors.cardTextQuiet,
@@ -1424,8 +1430,10 @@ private fun arrivalChoice(
     if (to is CardRecipient.Several) return listChoice(arrival, cards, to.entries, zone)
     val day = HolidayCardTimes.shortDay(theirDay ?: cards.nextRoundAt, zone)
     val name = (to as? CardRecipient.Person)?.firstName ?: "they"
-    if (to is CardRecipient.Link) return linkChoice(arrival)
-    if (to is CardRecipient.Email) emailLaterChoice(arrival, cards, zone)?.let { return it }
+    if (to is CardRecipient.Link) return guestChoice(arrival, cards, byLink = true, zone) ?: linkChoice(arrival)
+    if (to is CardRecipient.Email) {
+        (guestChoice(arrival, cards, byLink = false, zone) ?: emailLaterChoice(arrival, cards, zone))?.let { return it }
+    }
     return when (arrival) {
         "next_morning" -> "With the morning mail" to "$day, about 7 a.m. where $name lives. They can open it right away."
         "sealed_christmas" ->
@@ -1499,7 +1507,9 @@ private fun listChoice(
 ): Pair<String, String> {
     val people = entries.any { it is CardRecipient.Person }
     val emails = entries.any { it is CardRecipient.Email }
-    if (!people && cards.arrivals.emailAll != null) emailLaterChoice(arrival, cards, zone)?.let { return it }
+    if (!people && cards.arrivals.emailAll != null) {
+        (guestChoice(arrival, cards, byLink = false, zone) ?: emailLaterChoice(arrival, cards, zone))?.let { return it }
+    }
     if (!people) {
         return if (arrival == "sealed_christmas") {
             "Sealed until Christmas" to

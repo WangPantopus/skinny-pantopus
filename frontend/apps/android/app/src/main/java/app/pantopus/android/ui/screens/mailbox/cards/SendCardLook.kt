@@ -121,7 +121,7 @@ internal fun LookStep(
                 modifier = Modifier.semantics { heading() },
             )
             Text(
-                lookIntro(to, preview),
+                guestLookIntro(to, preview, cards.improved) ?: lookIntro(to, preview),
                 fontSize = 14.sp,
                 lineHeight = 20.sp,
                 color = DeskInk.quiet,
@@ -130,8 +130,8 @@ internal fun LookStep(
         }
         when (to) {
             is CardRecipient.Person -> PersonLook(to, preview, card, from, sealed)
-            is CardRecipient.Email -> EmailLook(to, preview, card, from, sealed, zone)
-            CardRecipient.Link -> LinkLook(preview, card, from, sealed, zone, linkName)
+            is CardRecipient.Email -> EmailLook(to, preview, card, from, sealed, zone, guest = cards.improved)
+            CardRecipient.Link -> LinkLook(preview, card, from, sealed, zone, linkName, guest = cards.improved)
             // A list's look shows its first card, to that one person or address (ListLookStep).
             is CardRecipient.Several -> Unit
         }
@@ -223,6 +223,8 @@ private fun EmailLook(
     from: String,
     sealed: Boolean,
     zone: ZoneId,
+    /** The card improvements are on: the page opens it for a guest when the server says so (`link_page.guest_open`). */
+    guest: Boolean = false,
 ) {
     preview.email?.let { email ->
         val heading =
@@ -237,7 +239,7 @@ private fun EmailLook(
         }
     }
     preview.linkPage?.let { page ->
-        LookSection("The page its link opens", horizontal = Spacing.s3) { LinkPagePicture(page, zone) }
+        LookSection("The page its link opens", horizontal = Spacing.s3) { LinkPagePicture(page, zone, guest && page.guestOpen) }
     }
     val envelope = lookEnvelope(preview, to.email, card)
     val state = if (sealed) "sealed until Christmas morning" else "in its envelope"
@@ -270,9 +272,10 @@ private fun LinkLook(
     sealed: Boolean,
     zone: ZoneId,
     linkName: String? = null,
+    guest: Boolean = false,
 ) {
     preview.linkPage?.let { page ->
-        LookSection("The page your link opens", horizontal = Spacing.s3) { LinkPagePicture(page, zone) }
+        LookSection("The page your link opens", horizontal = Spacing.s3) { LinkPagePicture(page, zone, guest && page.guestOpen) }
     }
     val envelope = lookEnvelope(preview, linkName ?: "Their name", card)
     val state = if (sealed) "sealed until Christmas morning" else "in its envelope"
@@ -648,8 +651,10 @@ private fun withNameInBold(
 private fun LinkPagePicture(
     page: HolidayCardPreviewLinkPage,
     zone: ZoneId,
+    /** Opened as a guest (the card improvements, with `link_page.guest_open`): open and read it there, or save it. */
+    guest: Boolean = false,
 ) {
-    if (LaunchFeatures.cardTable) return LinkPageOnTable(page)
+    if (LaunchFeatures.cardTable) return LinkPageOnTable(page, guest = guest)
     val shape = RoundedCornerShape(16.dp)
     Column(
         modifier =
