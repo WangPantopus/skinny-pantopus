@@ -1147,6 +1147,13 @@ class MomentsComposeViewModel
             }
         }
 
+        /** "Pulse, reinvented"'s Studio: what to blur before posting (shares of the photo as it came), drawn in like every mark. */
+        fun setBlur(boxes: List<app.pantopus.android.ui.screens.moments.studio.blur.MomentBlurBox>) {
+            val current = _state.value
+            if (current.media !is MomentMediaFile.Photo || current.posting || current.marking != null) return
+            if (current.marks.blur != boxes) redrawStudio(current.marks.copy(blur = boxes))
+        }
+
         /** The Studio's marks changed outside the editor: drawn into the photo as the editor's Done draws them. */
         private fun redrawStudio(marks: MomentMarks) {
             val media = _state.value.media as? MomentMediaFile.Photo ?: return

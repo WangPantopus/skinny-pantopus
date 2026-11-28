@@ -225,6 +225,7 @@ internal fun MomentsStudioStep(
                 wordsForm = true
             }
         }
+        app.pantopus.android.ui.screens.moments.studio.blur.MomentsStudioBlurLayer(state) // Blur before posting (phase 2)
         // The fades keep the rail and the caption readable over a bright picture.
         Box(
             modifier =
@@ -291,6 +292,7 @@ internal fun MomentsStudioStep(
             }
             // "Pulse, reinvented" one camera: "+ Ask / Kind" makes the picture or the words one of today's Pulse posts.
             StudioPostKindRow(state, Modifier.padding(horizontal = Spacing.s4).padding(bottom = Spacing.s3))
+            app.pantopus.android.ui.screens.moments.studio.blur.MomentsStudioBlurOffer(state) // Blur before posting (phase 2)
             // "Guess the spot" picked: what others will see.
             StudioGuessLine(state)
             // A whole photo: Fill or Fit, and Reset (PHASE-5 A).
@@ -519,6 +521,7 @@ private fun StudioRail(
         }
         if (media != null) {
             MarksTool(MomentMarksTool.Draw, media, enabled, onOpen)
+            if (media is MomentMediaFile.Photo) app.pantopus.android.ui.screens.moments.studio.blur.MomentsStudioBlurTool(enabled)
             MarksTool(MomentMarksTool.Resize, media, enabled, onOpen)
         }
     }
