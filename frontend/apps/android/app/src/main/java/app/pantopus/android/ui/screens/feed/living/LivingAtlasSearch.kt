@@ -20,6 +20,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -45,6 +46,7 @@ import app.pantopus.android.data.living.LivingAtlasResultDto
 import app.pantopus.android.data.living.LivingRepository
 import app.pantopus.android.data.living.searchRefusal
 import app.pantopus.android.ui.screens.feed.reinvented.MomentPicture
+import app.pantopus.android.ui.screens.moments.fieldcard.MomentsFieldGuideSheet
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
@@ -148,6 +150,9 @@ internal fun LivingAtlasSearch(
     val state by viewModel.state.collectAsStateWithLifecycle()
     var text by rememberSaveable { mutableStateOf("") }
     val focus = LocalFocusManager.current
+    // A field guide card found by the search opens the reader's own field guide (as the iPhone's).
+    var guide by remember { mutableStateOf(false) }
+    if (guide) MomentsFieldGuideSheet(onDismiss = { guide = false })
     Column(
         modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.s1).padding(top = Spacing.s3),
         verticalArrangement = Arrangement.spacedBy(Spacing.s3),
@@ -171,7 +176,10 @@ internal fun LivingAtlasSearch(
         when {
             error != null ->
                 Text(error, fontSize = 14.sp, color = PantopusColors.appText, modifier = Modifier.testTag("reinventedAtlas.search.error"))
-            q != null -> Results(q, state, viewModel::more) { open(it, onOpenOwn, onOpenMoment, onOpenPost) }
+            q != null ->
+                Results(q, state, viewModel::more) {
+                    if (it.type == "card") guide = true else open(it, onOpenOwn, onOpenMoment, onOpenPost)
+                }
             // While nothing is searched: what is near (CONTRACT 9c), then the person's cabinet (CONTRACT 9d) and Echoes (9e).
             else ->
                 Column(verticalArrangement = Arrangement.spacedBy(Spacing.s4)) {
@@ -236,7 +244,7 @@ private fun ResultRow(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .clickable(role = Role.Button, enabled = result.type != "card", onClick = onOpen)
+                .clickable(role = Role.Button, onClick = onOpen)
                 .semantics(mergeDescendants = true) {}
                 .testTag("reinventedAtlas.search.result.${result.key}"),
         verticalAlignment = Alignment.CenterVertically,

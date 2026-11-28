@@ -84,6 +84,7 @@ fun SettingsIndexScreen(
                 onBack = onClose,
                 // Log out asks first, as the You screen does.
                 onTapRow = { rowId -> if (rowId == "signOut") confirmSignOut = true else viewModel.onRow(rowId) },
+                onToggleRow = viewModel::onToggle,
                 onRetry = viewModel::refresh,
             ),
     )

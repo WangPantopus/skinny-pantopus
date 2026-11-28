@@ -83,6 +83,8 @@ class SettingsIndexViewModel
         private val privacy: PrivacyRepository,
         private val profile: ProfileRepository,
         private val storage: StorageUsage,
+        // "Pulse, reinvented" (CONTRACT 7d): the person's own Pantopus AI row, only while the switch is on for them.
+        private val pantopusAi: SettingsPantopusAi? = null,
     ) : ViewModel() {
         val title: String = "Settings"
 
@@ -121,6 +123,9 @@ class SettingsIndexViewModel
         /** What Pantopus keeps on this phone (Storage & data); null until measured. */
         private var storageBytes: Long? = null
 
+        /** "Pulse, reinvented": the person's Pantopus AI choice, read only while the switch is on (null: no row). */
+        private var pantopusAiOn: Boolean? = null
+
         /**
          * Entry and every Back from a sub-screen (Instant Screens): the index stays on screen, and a first entry shows
          * the stored profile at once. The block count is read again quietly (an unblock shows on return); the
@@ -146,6 +151,10 @@ class SettingsIndexViewModel
             // Measured on every entry and return: Clear cache, or browsing, changes it.
             viewModelScope.launch {
                 storageBytes = storage.measure().total
+                if (_state.value is GroupedListUiState.Loaded) rebuild()
+            }
+            viewModelScope.launch {
+                pantopusAiOn = pantopusAi?.read()
                 if (_state.value is GroupedListUiState.Loaded) rebuild()
             }
             viewModelScope.launch {
@@ -216,6 +225,17 @@ class SettingsIndexViewModel
                         _navigation.value = SettingsRoute.DidSignOut
                     }
                 }
+            }
+        }
+
+        /** "Pulse, reinvented": the Pantopus AI row's switch (shown at once, saved, put back when the server says no). */
+        fun onToggle(
+            rowId: String,
+            isOn: Boolean,
+        ) {
+            pantopusAi?.toggle(viewModelScope, rowId, isOn) {
+                pantopusAiOn = it
+                rebuild()
             }
         }
 
@@ -302,7 +322,7 @@ class SettingsIndexViewModel
                                         control = RowControl.Chevron,
                                         testTag = "settings.rules",
                                     ),
-                                ),
+                                ) + pantopusAi?.rows(pantopusAiOn).orEmpty(),
                         ),
                     )
                     add(
