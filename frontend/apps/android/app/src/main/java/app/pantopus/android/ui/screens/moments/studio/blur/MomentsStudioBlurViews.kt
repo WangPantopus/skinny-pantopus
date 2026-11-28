@@ -235,7 +235,9 @@ fun MomentsStudioBlurOffer(
 ) {
     val ui by viewModel.ui.collectAsStateWithLifecycle()
     // Only for what the phone found (a box drawn by hand was the person's own choice already).
-    if (!state.offersBlur || state.marks.blur.isNotEmpty() || ui.searching || ui.spots.none { it.kind != MomentBlurKind.Hand }) return
+    val found = ui.spots.any { it.kind != MomentBlurKind.Hand }
+    val offered = state.offersBlur && state.marks.blur.isEmpty() && !ui.searching
+    if (!offered || !found) return
     val words = "Blur before posting? ${blurSummary(ui.spots)}"
     Row(
         modifier =
@@ -419,7 +421,8 @@ fun MomentsStudioBlurLayer(
     viewModel: MomentsStudioBlurViewModel = hiltViewModel(),
 ) {
     val ui by viewModel.ui.collectAsStateWithLifecycle()
-    if (!state.offersBlur || !(ui.byHand || (ui.sheet && state.marks.blur.isEmpty()))) return
+    val shown = ui.byHand || (ui.sheet && state.marks.blur.isEmpty())
+    if (!state.offersBlur || !shown) return
     val picture = rememberStudioPicture(state)
     BoxWithConstraints(modifier = Modifier.fillMaxSize().testTag("moments.studio.blur.layer")) {
         val frame = stampFrame(picture, constraints.maxWidth.toFloat(), constraints.maxHeight.toFloat())
@@ -431,7 +434,13 @@ fun MomentsStudioBlurLayer(
             modifier =
                 Modifier
                     .fillMaxSize()
-                    .then(if (ui.byHand) Modifier.pointerInput(frame) { drawBoxes(frame, { drawing = it }, viewModel::addBox) } else Modifier),
+                    .then(
+                        if (ui.byHand) {
+                            Modifier.pointerInput(frame) { drawBoxes(frame, { drawing = it }, viewModel::addBox) }
+                        } else {
+                            Modifier
+                        },
+                    ),
         ) {
             val boxes = ui.spots.map { it.box to it.blur } + listOfNotNull(drawing?.let { it to true })
             boxes.forEach { (box, on) ->
