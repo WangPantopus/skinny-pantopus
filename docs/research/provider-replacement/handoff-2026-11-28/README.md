@@ -2,7 +2,7 @@
 
 **November 28, 2026 · VENDORX · United States and territories**
 
-Production has **164 whole counties plus Boston within its city limits**. Lee County FL and Skagit County WA went live after the November 23 baseline. Connecticut gained recorded history in all nine regions. Storage holds **965 county property releases and 70,304,905 property records**. Another **800** county files are stored with property serving off. The address registry separately stores **23,327,006 named unit addresses** nationwide. Its production Add Home live-state list is empty.
+Production has **164 whole counties plus Boston within its city limits**. Lee County FL and Skagit County WA went live after the November 23 baseline. Connecticut gained recorded history in all nine regions. Storage holds **965 county property releases and 70,304,930 property records**. Of those releases, **800** have property serving off. The address registry separately stores **23,327,006 named unit addresses** nationwide. Its production Add Home live-state list is empty.
 
 **Boston has 48,431 exact apartment-address matches in the original two-/three-family cohort.** A newer City source supplies all three individual interior facts for 92 exact matches in 35 buildings that converted to condos. None is in the current production index. The founder directed that all 92 stay on hold pending source-specific clearance. Check [the Boston release receipt](boston-release.md) for the disposition of these 92 before publishing, plus [the apartment evidence](boston.md) for the remainder.
 
@@ -16,6 +16,7 @@ Production has **164 whole counties plus Boston within its city limits**. Lee Co
 
 | File | Contents |
 |---|---|
+| [Private storage verification](storage-receipt.md) | Transfer verification, dated county uploads and local research still on hold |
 | [Nationwide status](nationwide.md) | Releases after November 23, exact production scope, house field coverage, regional data upgrades, registry runtime, CI and mail status |
 | [State and territory table](state-coverage.md) | Each state-level jurisdiction, including Puerto Rico and four other US island areas |
 | [Every county and equivalent](nationwide.json) | 3,235 FIPS rows, property scope, dated release, source, stored records, Census reference count where available, and separate registry counts |
