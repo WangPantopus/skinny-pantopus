@@ -1,5 +1,6 @@
 package app.pantopus.android.data.api.models.moments
 
+import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
 
 /*
@@ -18,7 +19,7 @@ object MomentDotKinds {
     const val WHISPER = "whisper"
 
     /** Made in the Studio and drawn in the viewer by this app. */
-    val MADE = listOf(NOTE, RATING, LINK)
+    val MADE = listOf(NOTE, RATING, LINK, WHISPER)
 }
 
 /** One dot as the author places it (`x`, `y`: its place on the picture, 0 to 1 from the top left) and as a reader reads it. */
@@ -38,6 +39,9 @@ data class MomentDotDto(
     /** A link's https address (up to 500) and its optional title (up to 60). */
     val url: String? = null,
     val title: String? = null,
+    /** A whisper's three seconds (CONTRACT 7e): a short signed link and its length, null until its sound is up. */
+    @Json(name = "audio_url") val audioUrl: String? = null,
+    @Json(name = "duration_ms") val durationMs: Long? = null,
 ) {
     companion object {
         /** Up to eight dots on one picture (CONTRACT 7c). */
@@ -57,6 +61,7 @@ val MomentDotDto.drawable: Boolean
                 MomentDotKinds.NOTE -> !text.isNullOrBlank()
                 MomentDotKinds.RATING -> !label.isNullOrBlank() && stars in 1..5
                 MomentDotKinds.LINK -> linkHost != null
+                MomentDotKinds.WHISPER -> !audioUrl.isNullOrBlank()
                 else -> false
             }
 
