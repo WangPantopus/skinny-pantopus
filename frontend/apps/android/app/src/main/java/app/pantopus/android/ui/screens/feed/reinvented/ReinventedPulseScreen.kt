@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -28,6 +29,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -48,7 +50,9 @@ import app.pantopus.android.data.api.models.moments.MomentDto
 import app.pantopus.android.data.api.models.moments.MomentRingDto
 import app.pantopus.android.data.pulse.ReinventedBox
 import app.pantopus.android.ui.screens.feed.living.LivingAskBar
+import app.pantopus.android.ui.screens.feed.living.LivingAskViewModel
 import app.pantopus.android.ui.screens.feed.living.LivingAtlasSearch
+import app.pantopus.android.ui.screens.feed.living.LivingAtlasSearchViewModel
 import app.pantopus.android.ui.screens.feed.pulse.PulsePostCardContent
 import app.pantopus.android.ui.screens.feed.reinvented.after.MomentConvergenceListSheet
 import app.pantopus.android.ui.screens.feed.reinvented.after.MomentConvergenceState
@@ -67,6 +71,7 @@ import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.model.LatLng
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.launch
 
 /**
  * The three rests of the list over the map (PHASE-1 §2 piece 2; on a phone the sheet's rests since PHASE-6 A3). On a
@@ -358,6 +363,36 @@ private fun ReinventedPulseLayout(
     val mapState = if (atlas.on) pulseMap.copy(items = atlas.pins, deck = atlas.pins, atlas = true) else pulseMap
     val flight by mapModel.flight.collectAsStateWithLifecycle()
     val camera = rememberReinventedCamera()
+    val scope = rememberCoroutineScope()
+    // PHASE-6 A1 and A2: the lens in the top line, and Ask the map and Listen (shared with the map's pins).
+    val lens = rememberReinventedLens()
+    val ask: LivingAskViewModel = hiltViewModel()
+    val atlasSearch: LivingAtlasSearchViewModel = hiltViewModel()
+    ReinventedAskLifetime(ask)
+    val lensActions =
+        ReinventedLensActions(
+            onAsk = { words ->
+                if (atlas.on) atlas.onToggle(false)
+                ask.ask(words)
+                if (height == ReinventedHeight.List) onHeight(ReinventedHeight.Middle)
+            },
+            onSearchAtlas = { words ->
+                if (!atlas.on) atlas.onToggle(true)
+                atlasSearch.search(words)
+                if (height == ReinventedHeight.Map) onHeight(ReinventedHeight.Middle)
+            },
+        )
+    val rail =
+        ReinventedRailActions(
+            time = mapState.time,
+            onPickTime = mapModel::pickTime,
+            atlas = atlas.on,
+            onMyPlace = {
+                mapState.center?.let { at ->
+                    scope.launch { camera.animate(CameraUpdateFactory.newLatLng(LatLng(at.latitude, at.longitude)), FLY_MS) }
+                }
+            },
+        )
     // A card swiped to, or a place tapped in the list: the map glides there.
     LaunchedEffect(flight) {
         val to = flight?.point ?: return@LaunchedEffect
@@ -392,6 +427,8 @@ private fun ReinventedPulseLayout(
                         onAtlas = atlas.onToggle,
                         sideBySide = wide,
                         onPickCircle = onPickCircle,
+                        lens = lens,
+                        lensActions = lensActions,
                         modifier = modifier,
                     )
                 },
@@ -434,7 +471,14 @@ private fun ReinventedPulseLayout(
         if (wide) {
             ReinventedSideBySide(height, parts)
         } else {
-            ReinventedOverMap(height, onHeight, maxHeight, reinventedSheetLine(mapState.items.size, mapState.time, atlas.on), parts)
+            val line = reinventedSheetLine(mapState.items.size, mapState.time, atlas.on)
+            ReinventedOverMap(height, onHeight, maxHeight, line, parts) { top ->
+                val railTop = top + REINVENTED_RAIL_GAP
+                // The pill first, so the When card (the rail's) opens over it.
+                ReinventedRailPill(ask, Modifier.reinventedPillPlace(railTop))
+                ReinventedRail(rail, moving = camera.isMoving, top = railTop, ask = ask, modifier = Modifier.fillMaxWidth())
+                ReinventedLensSuggestions(lens, lensActions, Modifier.padding(top = top + 4.dp, start = Spacing.s4, end = Spacing.s4))
+            }
         }
     }
 }
@@ -450,6 +494,7 @@ private fun BoxScope.ReinventedOverMap(
     full: Dp,
     line: String,
     parts: ReinventedLayoutParts,
+    overMap: @Composable BoxScope.(top: Dp) -> Unit,
 ) {
     val density = LocalDensity.current
     var headerPx by remember { mutableIntStateOf(0) }
@@ -473,9 +518,12 @@ private fun BoxScope.ReinventedOverMap(
         half = half,
     )
     parts.header(Modifier.onSizeChanged { headerPx = it.height })
-    if (settled == ReinventedHeight.Map) parts.mapExtras(this, header, null)
+    // "Guess the spot" stands at the bottom left over the sheet at peek, level with +; the top is the rail's and the pill's.
+    if (settled == ReinventedHeight.Map) parts.mapExtras(this, full - REINVENTED_SHEET_PEEK - GUESS_LIFT, null)
     // + is ADD_SIZE high, with its own bottom padding under it: its edge stands 12 dp over the sheet's.
     ReinventedSheetAdd(sheet, header, full, ADD_SIZE, parts.add, half)
+    // The rail, the pill and the lens's suggestions, over the map (the full sheet covers the map: none then).
+    if (settled != ReinventedHeight.List || sheet.targetValue != ReinventedHeight.List) overMap(header)
 }
 
 /** + : the Studio, as the Moments tab's + opens it. */
@@ -526,5 +574,6 @@ private fun openMapItem(
 }
 
 private val ADD_SIZE = 58.dp
+private val GUESS_LIFT = 60.dp
 private const val MINUTE_MS = 60_000L
 private const val FLY_MS = 600
