@@ -151,6 +151,13 @@ enum MailPaper {
     static let cardRowEdge = dynamic(light: 0xE3D8C3, dark: 0xBFB49F)
     static let cardRowLine = dynamic(light: 0xE7DCC6, dark: 0xC4B9A3)
     static let cardNote = dynamic(light: 0xFBF6EC, dark: 0xE2DCCF)
+    // The photo card's three frames (cards-next 4.2), drawn in code: Heirloom Cream's cotton paper, Midnight Velvet's
+    // stock, gold and cream, and Winter Arch's alabaster mat.
+    static let photoHeirloom = Color(red: 0xF7 / 255, green: 0xF0 / 255, blue: 0xE2 / 255)
+    static let photoMidnight = Color(red: 0x1C / 255, green: 0x22 / 255, blue: 0x33 / 255)
+    static let photoGold = Color(red: 0xD8 / 255, green: 0xB7 / 255, blue: 0x6F / 255)
+    static let photoCream = Color(red: 0xF6 / 255, green: 0xEC / 255, blue: 0xD9 / 255)
+    static let photoArch = Color(red: 0xF7 / 255, green: 0xF3 / 255, blue: 0xEA / 255)
     static let cardPressed = dynamic(light: 0xF5EFE3, dark: 0xD9D2C3)
     /// A person's initial in the search rows.
     static let cardAvatar = Color(red: 0xEB / 255, green: 0xE3 / 255, blue: 0xD4 / 255)

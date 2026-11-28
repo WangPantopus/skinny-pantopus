@@ -12,7 +12,8 @@ import Foundation
 extension HolidayCardFlowViewModel {
     /// The server lets cards travel: the switch shows.
     var travelOffered: Bool {
-        cards?.travel?.on == true
+        // A photo card never travels (cards-next 4.2).
+        cards?.travel?.on == true && !isPhotoCard
     }
 
     /// This card will travel: the switch is shown and left on.

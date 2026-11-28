@@ -102,8 +102,18 @@ extension CardTableModel {
             if sending == .ready, let quick = quickSealButton { return [quick] }
             return sending == .gone ? goneButtons : []
         }
-        guard step == .out, !content.sealed, turnedOnce || fold.isSpread else { return [] }
         var items: [CardTableMenuItem] = []
+        // A covered photo card (cards-next 4.2): its photo shows on a tap, first of all.
+        if step == .out, !content.sealed, photoFrontVeiled {
+            items.append(CardTableMenuItem(
+                title: "Tap to view \(content.firstName)’s photo",
+                identifier: "cardTablePhotoFrontUncover",
+                short: "View the photo"
+            ) { [weak self] in
+                self?.uncoverPhotoFront()
+            })
+        }
+        guard step == .out, !content.sealed, turnedOnce || fold.isSpread else { return items }
         if let nextCard { items.append(nextCard) }
         // A travelling card: "See its journey", or "You passed it on to Ivy and Cass." (travelling card plan Part 4).
         items += travelButtons.quiet

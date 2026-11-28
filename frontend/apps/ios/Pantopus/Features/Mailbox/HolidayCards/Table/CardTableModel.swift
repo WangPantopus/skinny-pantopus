@@ -121,6 +121,10 @@ final class CardTableModel {
     /// The art and the card's picture, kept here so a fold's new screen has them at once.
     private(set) var art: CardTableArt?
     private(set) var picture: UIImage?
+    /// A photo card's photo (cards-next 4.2), loaded once it isn't covered.
+    var photoFrontImage: UIImage?
+    /// The reader tapped "Tap to view {first name}’s photo".
+    var photoFrontUncovered = false
     /// Art and picture are ready and the mail has arrived.
     private(set) var isReady = false
     private(set) var fold: CardTableFold = .single
@@ -247,6 +251,7 @@ final class CardTableModel {
         art = await CardTableArt.load(letter: content.isLetter)
         sounds.preload()
         picture = content.isLetter ? nil : await CardTablePicture.load(content.design)
+        if let front = content.photoFront, !front.covered { photoFrontImage = await CardPhotoFrontImage.load(front.source) }
         begin()
     }
 

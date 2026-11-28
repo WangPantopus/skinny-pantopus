@@ -10,37 +10,6 @@
 
 import SwiftUI
 
-extension CardTableContent {
-    /// A card from the Mailbox.
-    @MainActor
-    init(letter: MailLetter, card: HolidayCardLetter, now: Date = Date()) {
-        design = card.card.design
-        number = card.card.number
-        caption = card.card.caption ?? ""
-        paper = card.card.paper
-        table = card.card.table
-        slug = card.card.slug
-        year = card.card.year
-        mailedOn = card.mailedOn
-        note = card.note
-        fromName = letter.senderName
-        toName = card.envelope.to
-        sealed = card.card.sealed
-        sealedUntil = card.card.sealedUntil
-        sealedInDays = card.card.sealedUntil.map { HolidayCardWords.inDays($0, now: now) } ?? "soon"
-        sealedDayCount = card.card.sealedUntil
-            .flatMap { MailDates.parse($0) }
-            .map { MailDates.daysBetween(now, $0, calendar: .current) } ?? 0
-        verse = card.card.sealed ? nil : card.card.verse
-        signature = card.card.sealed ? nil : card.card.signature
-        photo = card.card.sealed ? nil : card.card.photo
-        voice = card.card.sealed ? nil : card.card.voice
-        mediaFrom = .piece(mailId: letter.piece.id)
-        travel = CardTravelEnvelope(card.card.travel, year: card.card.year)
-        mood = card.card.mood
-    }
-}
-
 /// Where a tab's root shows the card table. On the open Duo a cover presented from inside side-by-side Mail is shown
 /// again each time the halves redraw, and a sheet over it (Share, Who sent it) went and came back in a loop; the tab's
 /// root stays put, so the Mail screens hand it their page. Without one (another tab) a screen presents it itself.
@@ -446,9 +415,12 @@ private struct MailCardTablePage: View {
                 model.restart(animated: true)
             })
             // Share keeps its corner button, and its line here, now that it's no longer a quiet button on a reader's card.
-            items.append(CardTableMenuItem(title: "Share this card", identifier: "cardTableMenuShare") {
-                model.isSharing = true
-            })
+            // Never a photo card's (cards-next 4.2).
+            if !model.content.isPhotoCard {
+                items.append(CardTableMenuItem(title: "Share this card", identifier: "cardTableMenuShare") {
+                    model.isSharing = true
+                })
+            }
         }
         if let sendBack = model.sendBack {
             items.append(CardTableMenuItem(title: sendBack.title, identifier: "cardTableMenuSendBack", action: sendBack.action))
