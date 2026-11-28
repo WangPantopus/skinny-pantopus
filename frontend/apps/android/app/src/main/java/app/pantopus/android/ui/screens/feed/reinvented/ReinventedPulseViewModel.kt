@@ -18,6 +18,7 @@ import app.pantopus.android.data.moments.MomentsPlayback
 import app.pantopus.android.data.moments.MomentsRepository
 import app.pantopus.android.data.moments.serverCode
 import app.pantopus.android.data.posts.PostsRepository
+import app.pantopus.android.data.pulse.ReinventedFilterStore
 import app.pantopus.android.data.pulse.ReinventedPoint
 import app.pantopus.android.data.pulse.ReinventedRepository
 import app.pantopus.android.ui.screens.profile.ProfilePostCards
@@ -26,6 +27,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -50,6 +52,8 @@ class ReinventedPulseViewModel
         private val moments: MomentsRepository,
         posts: PostsRepository,
         private val auth: AuthRepository,
+        /** PHASE-5 B: the filters chosen for the List and the Map; a change reads the list again. */
+        val filterStore: ReinventedFilterStore,
     ) : ViewModel() {
         private val _state = MutableStateFlow(ReinventedPulseState())
         val state: StateFlow<ReinventedPulseState> = _state.asStateFlow()
@@ -73,6 +77,11 @@ class ReinventedPulseViewModel
 
         /** The signed-in person, for what is offered only under others' posts (CONTRACT 8f). */
         val viewer: String? get() = viewerId
+
+        init {
+            // PHASE-5 B: another choice of filters reads the list again from its first page.
+            viewModelScope.launch { filterStore.filters.drop(1).collect { refresh() } }
+        }
 
         /** The posts' cards and what the viewer's taps did to them. */
         val cards: ProfilePostCards =
@@ -203,6 +212,7 @@ class ReinventedPulseViewModel
                     at = here.takeIf { start.reach == AROUND },
                     cursor = cursor,
                     circle = start.circleId.takeIf { start.reach == CLOSE },
+                    filters = filterStore.filters.value,
                 )
             if (answer is NetworkResult.Failure && start.circleId != null && answer.error.circleGone) {
                 // No longer in that circle (it ended, or they left): all their connections again.

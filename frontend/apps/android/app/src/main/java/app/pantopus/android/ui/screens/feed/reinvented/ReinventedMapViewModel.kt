@@ -11,6 +11,7 @@ import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.location.LocationProvider
 import app.pantopus.android.data.plans.PlanLocationResolver
 import app.pantopus.android.data.pulse.ReinventedBox
+import app.pantopus.android.data.pulse.ReinventedFilterStore
 import app.pantopus.android.data.pulse.ReinventedPoint
 import app.pantopus.android.data.pulse.ReinventedRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -19,6 +20,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -103,6 +105,8 @@ class ReinventedMapViewModel
         private val repository: ReinventedRepository,
         private val location: LocationProvider,
         private val places: PlanLocationResolver,
+        /** PHASE-5 B: the same filters as the list (the time row is the map's When). */
+        private val filterStore: ReinventedFilterStore,
     ) : ViewModel() {
         private val _state = MutableStateFlow(ReinventedMapState())
         val state: StateFlow<ReinventedMapState> = _state.asStateFlow()
@@ -118,6 +122,8 @@ class ReinventedMapViewModel
         private var reading: Job? = null
 
         init {
+            // PHASE-5 B: another choice of filters reads the map again.
+            viewModelScope.launch { filterStore.filters.drop(1).collect { refresh() } }
             // The phone's place, when it already has one, without waiting: the map opens there.
             location.cachedCoordinate()?.let { fix -> _state.update { it.copy(center = ReinventedPoint(fix.latitude, fix.longitude)) } }
         }
@@ -172,7 +178,7 @@ class ReinventedMapViewModel
                 viewModelScope.launch {
                     if (waitMs > 0) delay(waitMs)
                     val time = _state.value.time
-                    val answer = repository.map(area, time) as? NetworkResult.Success ?: return@launch
+                    val answer = repository.map(area, time, filterStore.filters.value) as? NetworkResult.Success ?: return@launch
                     val map = answer.data
                     val items =
                         map.rings.filterNot { it.noLocation }.map(ReinventedMapItem::Ring) +
