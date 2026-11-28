@@ -476,7 +476,7 @@ private fun DayPhotos(
                 )
                 if (p.atHome && p.chosen) {
                     Text(
-                        "At home: others see only the area",
+                        "At home: shown as your area",
                         fontSize = 12.sp,
                         color = PantopusColors.appTextSecondary,
                         modifier = Modifier.testTag("reinventedPulse.yourDay.photo.$i.home"),
