@@ -11,7 +11,7 @@ The November 28 storage audit read the active property and registry state manife
 | Municipal only in production | Boston within Suffolk County, MA |
 | Property release stored, serving off | 800 |
 | No stored property release | 2,270 including the 13 island-area entries outside the housing table |
-| Property records stored across all releases | 70,304,905 |
+| Property records stored across all releases | 70,304,930 |
 | Stored records in the 164 countywide places | 25,633,350 |
 | Address registry in storage | 133,801,002 records in 2,606 county equivalents and 52 state-level jurisdictions |
 | Registry breakdown | 105,278,315 property addresses, 5,195,681 buildings, 23,327,006 named units |
@@ -34,7 +34,8 @@ The production switch diff from the November 23 snapshot added only Lee and Skag
 
 ## Other work visible in the audit
 
-- The current manifests identify **22 property releases** imported after the cutoff and **1,069 county registry releases across 46 state-level jurisdictions**. Besides the Connecticut, Lee, Skagit and two Texas releases above, property refreshes covered Clark WA, Stark OH, Cumberland PA, Adams CO, Denver CO, DC, Miami-Dade FL, Boulder CO and Kitsap WA. Beyond Connecticut, the refreshed releases stored 102,817 recorded-history entries in Clark WA, 153,016 in Adams CO and 113,868 in Denver. Clark also stored 118,539 permit fields. The nine non-Connecticut refreshes together added 780,433 held parcel outlines. These were stored changes. The release JSON gives each prior and current release ID, record delta and changed field occurrence counts. Those deltas count stored fields; setting a field live requires the corresponding production switch.
+- The current manifests identify **23 property releases** imported after the cutoff and **1,069 county registry releases across 46 state-level jurisdictions**. Besides the Connecticut, Lee, Skagit and two Texas releases above, property refreshes covered Clark WA, Stark OH, Cumberland PA, Adams CO, Denver CO, DC, Miami-Dade FL, Boulder CO and Kitsap WA. Oakland MI was refreshed in private storage on November 28. Its county switch is off. [Storage verification](storage-receipt.md)
+- Beyond Connecticut, the refreshed releases stored 102,817 recorded-history entries in Clark WA, 153,016 in Adams CO and 113,868 in Denver. Clark also stored 118,539 permit fields. The nine non-Connecticut refreshes together added 780,433 held parcel outlines. These were stored changes. The release JSON gives each prior and current release ID, record delta and changed field occurrence counts. Those deltas count stored fields; setting a field live requires the corresponding production switch.
 - Recorded-history code also landed for Clark WA, Pierce, Franklin, Seminole, Sarasota, Charlottesville, Geauga, Clinton OH, Hillsborough FL, Ashtabula OH, Denver, Cook IL, Adams CO and Oklahoma County. Other Home Record code covered Clark permits, gated parcel outlines, buyer reports and change notices. The two-snapshot switch comparison supplies no blanket new activation of those groups. Check the county’s current dated release, held columns and production settings before describing an individual feature as visible. [History integrations](https://github.com/WangPantopus/amber-lattice-4729/pull/4725) · [Parcel outlines](https://github.com/WangPantopus/amber-lattice-4729/pull/4700)
 - All 15 November 26 dev, master and back-merge PRs were confirmed merged on GitHub. Staging PRs were 4903, 4904, 4906, 4910, 4911 and 4915. Production PRs were 4905, 4908, 4909, 4912, 4913 and 4916. Back-merges were 4907, 4914 and 4917. Repo ID 1353785096 now resolves to [WangPantopus/amber-lattice-4729](https://github.com/WangPantopus/amber-lattice-4729); the earlier skinny-pantopus URL redirects there.
 - At the audit, production and staging health returned healthy and property_index ok. The November 26 team verified Connecticut history on all three local clients. Its Lee/Skagit phone checks used public-building controls and debug apps; house and condo rows were checked in storage. There was no fresh November 28 production-household lookup. The full scope of future user-visible releases still needs the exact-client checks in new-mac.md.
@@ -48,13 +49,13 @@ I read the release reports for all 965 county property releases. These are direc
 
 | House field | 107 countywide releases with explicitly typed houses | 580 stored-off releases with explicitly typed houses |
 |---|---:|---:|
-| House rows | 16,537,078 | 26,166,234 |
-| Year built | 16,450,752 | 19,693,327 |
-| Living area | 16,363,465 | 13,009,632 |
-| Bedrooms | 16,338,776 | 3,318,486 |
-| Bath total | 16,360,719 | 2,982,906 |
-| Lot, conservative lower count across units of measure | 16,486,019 | 22,080,833 |
-| Value, conservative lower count across assessed and market values | 16,506,407 | 24,853,476 |
+| House rows | 16,537,078 | 26,165,753 |
+| Year built | 16,450,752 | 19,693,317 |
+| Living area | 16,363,465 | 13,009,615 |
+| Bedrooms | 16,338,776 | 3,318,476 |
+| Bath total | 16,360,719 | 2,982,884 |
+| Lot, conservative lower count across units of measure | 16,486,019 | 22,080,352 |
+| Value, conservative lower count across assessed and market values | 16,506,407 | 24,853,471 |
 
 Bedroom and bath coverage are the main reasons that a nationwide storage count is much larger than the number of usable home records. Another 57 live releases and 220 stored-off releases have no explicit house cohort in their report. Older Montana/Virginia sources need their documented assessor classifications. In the stored-off typed cohort, only Oakland MI and Montgomery OH could reach 90% even under the loose upper bound from direct field marginals. Oakland still lacks documented bath semantics. Montgomery fails the lot check when overlapping columns and map agreement are tested on actual houses. Other counties can still qualify with new authoritative source data or a separately proved municipal scope. [All 965 field reports with bounds](house-field-coverage.json)
 

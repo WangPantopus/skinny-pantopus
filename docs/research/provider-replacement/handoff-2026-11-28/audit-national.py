@@ -18,8 +18,10 @@ parser.add_argument('--ref', default='origin/master')
 parser.add_argument('--out', type=Path, required=True)
 parser.add_argument('--as-of', type=date.fromisoformat, default=date.today())
 parser.add_argument('--reader-env', type=Path, help='Optional existing private Pantopus reader env file')
+parser.add_argument('--verify-objects', action='store_true',
+                    help='Check the four nonempty files of every current property, registry and estimate release')
 args = parser.parse_args()
-env = dict(os.environ, AWS_PAGER='', AWS_DEFAULT_REGION='us-west-2')
+env = dict(os.environ, AWS_PAGER='', AWS_DEFAULT_REGION='us-west-2', AWS_DEFAULT_OUTPUT='json')
 if args.reader_env:
     settings = {}
     for line in args.reader_env.read_text().splitlines():
@@ -52,10 +54,7 @@ def table(name):
     raw = subprocess.check_output(['git', '-C', str(args.repo), 'show', args.ref + ':' + path]).decode('utf-8-sig')
     return list(csv.DictReader(io.StringIO(raw)))
 
-routes = {r['fips']: r for r in table('national-routes-by-county')}
-universe = {r['County/equivalent FIPS (text)']: r for r in table('national-jurisdictions')}
-locator = {}
-for series, prefix in [('property', ''), ('registry', 'registry/')]:
+def state_entries(prefix):
     keys = inventory(prefix)
     with ThreadPoolExecutor(max_workers=8) as pool:
         manifests = list(pool.map(read, keys))
@@ -65,7 +64,26 @@ for series, prefix in [('property', ''), ('registry', 'registry/')]:
             if fips in items:
                 raise ValueError('duplicate county identifier ' + fips)
             items[fips] = entry
-    locator[series] = items
+    return items
+
+def verify_objects(prefix, entries):
+    directory = 'index/' + prefix + 'releases/'
+    listed = json.loads(aws('list-objects-v2', '--bucket', 'pantopus-property-index',
+                            '--prefix', directory, '--query', 'Contents[].[Key,Size]'))
+    present = {key for key, size in (listed or []) if size > 0}
+    components = ('data.bin', 'manifest.json.gz', 'report.json', 'ids.json.gz')
+    missing = []
+    for fips, entry in sorted(entries.items()):
+        release = entry['release']
+        for component in components:
+            if f'{directory}{fips}/{release}/{component}' not in present:
+                missing.append({'fips': fips, 'release': release, 'component': component})
+    return {'counties': len(entries), 'records': sum(e['records'] for e in entries.values()),
+            'expected_objects': len(components) * len(entries), 'absent_or_empty': missing}
+
+routes = {r['fips']: r for r in table('national-routes-by-county')}
+universe = {r['County/equivalent FIPS (text)']: r for r in table('national-jurisdictions')}
+locator = {'property': state_entries(''), 'registry': state_entries('registry/')}
 switch = read('index/switches/production.json')
 staging = read('index/switches/staging.json')
 def switch_mode(s, f):
@@ -112,3 +130,12 @@ summary = {
 args.out.mkdir(parents=True, exist_ok=True)
 (args.out/'nationwide.json').write_text(json.dumps({'summary':summary,'counties':rows}, indent=2)+'\n')
 print(json.dumps(summary, indent=2))
+if args.verify_objects:
+    checks = {'property': verify_objects('', locator['property']),
+              'registry': verify_objects('registry/', locator['registry']),
+              'estimates': verify_objects('estimates/', state_entries('estimates/'))}
+    receipt = {'checked_utc': datetime.now(timezone.utc).isoformat(), 'indexes': checks}
+    (args.out/'storage-check.json').write_text(json.dumps(receipt, indent=2)+'\n')
+    if any(not check['counties'] or check['absent_or_empty'] for check in checks.values()):
+        raise SystemExit('The storage check found an empty index or incomplete release. See storage-check.json.')
+    print(f"Verified {sum(c['expected_objects'] for c in checks.values()):,} nonempty release files.")
