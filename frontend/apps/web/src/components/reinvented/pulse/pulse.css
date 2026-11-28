@@ -474,6 +474,30 @@
   padding-right: 64px;
 }
 
+/* PHASE-6 H: the count dimmed while a read is out; "Couldn't refresh · Try again" in the header when one fails or is slow. */
+.rp-count {
+  transition: opacity 0.15s ease;
+}
+.rp-count[data-dim] {
+  opacity: 0.5;
+}
+.rp-retry {
+  position: relative;
+  min-height: 28px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 14px;
+  background: color-mix(in srgb, #b45309 14%, transparent);
+  color: #92400e;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.rp-retry::before {
+  content: '';
+  position: absolute;
+  inset: -8px -2px;
+}
 /* "No place" in the sheet's header (CONTRACT 11b): a small switch, 28 px drawn, 44 px to the finger. */
 .rp-noplace {
   position: relative;

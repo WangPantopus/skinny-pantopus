@@ -197,12 +197,32 @@ export default function ReinventedPulse() {
     getNextPageParam: (last) => last.next_cursor ?? undefined,
     enabled: !!account && filtersRead && reach !== 'explore',
     // The old rows stay, dimmed, until the new area's are there: no spinner and no empty flash between two areas. Each
-    // area's answer is kept for the visit (the cache, by the rounded box).
+    // area's answer is kept for the visit (the cache, by the rounded box; well over the last 20 areas): an area seen
+    // before shows its kept rows at once and refreshes quietly behind them (PHASE-6 H).
     placeholderData: keepPreviousData,
     staleTime: 30_000,
+    gcTime: 30 * 60_000,
     retry: (count, error) => !isSwitchedOff(error) && count < 1,
   });
-  const stale = list.isPlaceholderData;
+  // PHASE-6 H: the list is never blank because a read failed or was slow. The last rows shown stay; after 2 seconds without
+  // an answer, or on a failure (offline included), they stop being dimmed and the sheet's header says "Couldn't refresh ·
+  // Try again".
+  const lastGood = useRef<InfiniteData<ListPage, unknown> | undefined>(undefined);
+  if (list.data && !list.isPlaceholderData) lastGood.current = list.data;
+  const waiting = list.isFetching || list.isPaused;
+  const [slow, setSlow] = useState(false);
+  useEffect(() => {
+    if (!waiting) {
+      setSlow(false);
+      return undefined;
+    }
+    const t = window.setTimeout(() => setSlow(true), 2000);
+    return () => window.clearTimeout(t);
+  }, [waiting, key]);
+  const failed = list.isError && !isSwitchedOff(list.error);
+  const shownData = list.data ?? (failed || waiting ? lastGood.current : undefined);
+  const trouble = !!shownData && (failed || slow) && reach !== 'explore';
+  const stale = !!shownData && (list.isPlaceholderData || (waiting && !list.data)) && !trouble;
   // Explore (CONTRACT §6f): its own read, a page at a time, pausing with "Keep exploring?" instead of running on.
   const explore = useInfiniteQuery({
     queryKey: ['reinvented', 'explore', account, point?.latitude ?? null, point?.longitude ?? null],
@@ -315,7 +335,7 @@ export default function ReinventedPulse() {
     if (o.north > o.south && o.east > o.west) setOpenBox((was) => (was && was.south === o.south && was.west === o.west && was.north === o.north && was.east === o.east ? was : o));
   }, []);
 
-  const pages = list.data?.pages;
+  const pages = shownData?.pages;
   const first = pages?.[0];
   const items = useMemo(() => pages?.flatMap((p) => p.items) ?? [], [pages]);
   // With filters on, Heads-ups always come back (CONTRACT 10a): a list of only those is still an empty result.
@@ -735,15 +755,20 @@ export default function ReinventedPulse() {
       ? 'My Atlas · your kept Moments'
       : reach === 'explore'
         ? 'Explore · from elsewhere'
-        : list.isPending
+        : !pages && (list.isPending || waiting)
           ? 'Loading…'
-          : list.isError
+          : !pages && failed
             ? 'Pulse couldn’t load'
             : first?.needs_place
               ? 'No place yet'
-              : following && typeof first?.count === 'number'
-                ? `${first.count ? `${first.count}${first.count_more ? '+' : ''}` : 'Nothing'} here · ${whenWord}`
-                : `${shown.length ? `${shown.length}${hasNextPage ? '+' : ''}` : 'Nothing'} here · ${whenWord}`;
+              : (
+                  // The count is dimmed while a read is out, so an old number never reads as new (PHASE-6 H).
+                  <span className="rp-count" data-dim={waiting || failed || undefined}>
+                    {following && typeof first?.count === 'number'
+                      ? `${first.count ? `${first.count}${first.count_more ? '+' : ''}` : 'Nothing'} here · ${whenWord}`
+                      : `${shown.length ? `${shown.length}${hasNextPage ? '+' : ''}` : 'Nothing'} here · ${whenWord}`}
+                  </span>
+                );
   const words = canFilter ? filterWords(filters, time) : '';
   const topInset = TOP_LINE_PX + (words ? PILL_PX : 0);
   const clearFilters = () => {
@@ -886,10 +911,19 @@ export default function ReinventedPulse() {
         topInset={topInset}
         line={sheetLine}
         tools={
-          view === 'pulse' && reach === 'around' ? (
-            <button type="button" className="rp-noplace" role="switch" aria-checked={noPlace} onClick={() => setNoPlace((on) => !on)}>
-              No place
-            </button>
+          view === 'pulse' && reach !== 'explore' && (trouble || reach === 'around') ? (
+            <>
+              {trouble && (
+                <button type="button" className="rp-retry" onClick={() => void list.refetch()}>
+                  Couldn’t refresh · Try again
+                </button>
+              )}
+              {reach === 'around' && (
+                <button type="button" className="rp-noplace" role="switch" aria-checked={noPlace} onClick={() => setNoPlace((on) => !on)}>
+                  No place
+                </button>
+              )}
+            </>
           ) : undefined
         }
         create={
@@ -947,13 +981,13 @@ export default function ReinventedPulse() {
                 )}
               />
             )
-          ) : list.isPending ? (
+          ) : !pages && (list.isPending || waiting) ? (
             <div className="rp-skeleton" role="status" aria-label="Loading Pulse">
               <span />
               <span />
               <span />
             </div>
-          ) : list.isError && !isSwitchedOff(list.error) ? (
+          ) : !pages && failed ? (
             <div className="rp-empty">
               <p>Pulse couldn’t load.</p>
               <button type="button" className="rp-button" onClick={() => void list.refetch()}>
