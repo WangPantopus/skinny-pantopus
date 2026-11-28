@@ -188,8 +188,11 @@ final class ReinventedPulseModel {
     /// read in flight; the old rows stay, dimmed, until the new ones come. An area seen this visit shows at once.
     func follow(_ next: ReinventedMapBox?) {
         let next = reach == "around" ? next : nil
+        // A read pending for another area is dropped either way (panned away and back: the list stays).
         following?.cancel()
-        guard next != box else { return }
+        // The same area to ~10 m (the map nudged by a location update, the sheet back at the same rest): the list stays
+        // as it is, with the pages it has already loaded.
+        guard Self.area(next) != Self.area(box) else { return }
         following = Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(250))
             guard let self, !Task.isCancelled else { return }
@@ -211,9 +214,19 @@ final class ReinventedPulseModel {
         await refresh()
     }
 
+    /// A box to about ten metres, or the reach's whole list.
+    private static func area(_ box: ReinventedMapBox?) -> String {
+        box.map { String(format: "%.4f,%.4f,%.4f,%.4f", $0.south, $0.west, $0.north, $0.east) } ?? "reach"
+    }
+
+    /// Which page the list reads next: a new one asks again (the "loading more" row's read runs once per page).
+    var nextPage: String? {
+        cursor
+    }
+
     /// What one first page is kept under.
     private var keepKey: String {
-        let area = box.map { String(format: "%.4f,%.4f,%.4f,%.4f", $0.south, $0.west, $0.north, $0.east) } ?? "reach"
+        let area = Self.area(box)
         let filtered = (filters ?? [:]).sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: "&")
         return "\(area)|\(chip)|\(filtered)|\(noPlace)"
     }

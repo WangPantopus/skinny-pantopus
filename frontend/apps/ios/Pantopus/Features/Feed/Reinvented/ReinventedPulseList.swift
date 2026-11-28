@@ -145,7 +145,9 @@ struct ReinventedPulseList: View {
             ProgressView()
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, Spacing.s4)
-                .task { await model.loadMore() }
+                // Once per page: a row that stays on screen after a page came (or after the area's first page came back)
+                // reads the next one, instead of spinning.
+                .task(id: model.nextPage) { await model.loadMore() }
         } else if let end = model.end, !(model.reach == "explore" && model.isEmpty) {
             Text(end)
                 .font(.system(size: 14, weight: .semibold))
