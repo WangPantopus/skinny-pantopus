@@ -86,4 +86,6 @@ data class ReinventedFilterQuery(
     val from: String? = null,
     val state: String? = null,
     val since: String? = null,
+    /** CONTRACT 11b, the list only: the posts and Moments without a place follow, under "Without a place". */
+    val noPlace: Boolean = false,
 )

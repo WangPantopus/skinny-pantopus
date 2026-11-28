@@ -83,6 +83,38 @@ class ReinventedRepository
                     from = filters?.from,
                     state = filters?.state,
                     since = filters?.since,
+                    noPlace = "1".takeIf { filters?.noPlace == true },
+                )
+            }
+
+        /**
+         * One page of what the map shows in [box] (CONTRACT 11a, `around`), nearest the box's middle first, with the chip
+         * or the filters, and the things without a place after them when [ReinventedFilterQuery.noPlace] (11b).
+         */
+        suspend fun listInBox(
+            box: ReinventedBox,
+            chip: String,
+            filters: ReinventedFilterQuery?,
+            cursor: String?,
+        ): NetworkResult<ReinventedListResponse> =
+            guarded {
+                api.list(
+                    reach = "around",
+                    miles = null,
+                    chip = chip.takeIf { filters == null || (filters.kinds == null && it != "all") },
+                    latitude = null,
+                    longitude = null,
+                    cursor = cursor,
+                    kinds = filters?.kinds,
+                    whenTime = filters?.whenTime,
+                    from = filters?.from,
+                    state = filters?.state,
+                    since = filters?.since,
+                    south = degrees(box.south),
+                    west = degrees(box.west),
+                    north = degrees(box.north),
+                    east = degrees(box.east),
+                    noPlace = "1".takeIf { filters?.noPlace == true },
                 )
             }
 

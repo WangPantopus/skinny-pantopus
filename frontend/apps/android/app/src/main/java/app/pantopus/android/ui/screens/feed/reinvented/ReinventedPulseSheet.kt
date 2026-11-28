@@ -41,6 +41,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
@@ -119,6 +120,19 @@ internal fun rememberReinventedHalf(): Pair<Float?, Modifier> {
     return half to Modifier.onGloballyPositioned { boxTop = it.positionInWindow().y }
 }
 
+/**
+ * The window's height under Pulse's box top, in the box's pixels; null until the box has been placed. The map is laid out
+ * this tall, so today's tab bar sliding away (the box growing by its height) never resizes it: a resize moves what the map
+ * shows, and the list that follows the map would be read again under the finger.
+ */
+@Composable
+internal fun rememberReinventedBelow(): Pair<Float?, Modifier> {
+    val window = LocalView.current.rootView.height.toFloat()
+    var boxTop by remember { mutableFloatStateOf(Float.NaN) }
+    val below = if (boxTop.isNaN() || window <= 0f) null else window - boxTop
+    return below to Modifier.onGloballyPositioned { boxTop = it.positionInWindow().y }
+}
+
 /** The share of the window's height above the sheet's top at half. */
 private const val WINDOW_HALF = 0.5f
 
@@ -189,6 +203,7 @@ internal fun ReinventedSheet(
     headerEnd: @Composable RowScope.() -> Unit,
     list: @Composable (Modifier) -> Unit,
     half: Float? = null,
+    lineDim: Boolean = false,
 ) {
     val density = LocalDensity.current
     val settled = sheet.settledValue
@@ -209,7 +224,7 @@ internal fun ReinventedSheet(
                 .background(PantopusColors.appBg)
                 .testTag("reinventedPulse.sheet"),
     ) {
-        SheetHeader(sheet, line, headerEnd)
+        SheetHeader(sheet, line, lineDim, headerEnd)
         list(Modifier.fillMaxWidth().weight(1f).padding(bottom = hidden))
     }
 }
@@ -219,6 +234,7 @@ internal fun ReinventedSheet(
 private fun SheetHeader(
     sheet: AnchoredDraggableState<ReinventedHeight>,
     line: String,
+    dim: Boolean,
     end: @Composable RowScope.() -> Unit,
 ) {
     val settled = sheet.settledValue
@@ -270,7 +286,8 @@ private fun SheetHeader(
                 color = PantopusColors.appText,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f).testTag("reinventedPulse.sheet.line"),
+                // Dimmed while a read for a new area is out: an old count never reads as the new one (PHASE-6 H).
+                modifier = Modifier.weight(1f).alpha(if (dim) 0.5f else 1f).testTag("reinventedPulse.sheet.line"),
             )
             end()
         }

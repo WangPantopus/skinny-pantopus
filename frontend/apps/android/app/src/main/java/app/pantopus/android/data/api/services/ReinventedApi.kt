@@ -56,6 +56,13 @@ interface ReinventedApi {
         @Query("from") from: String? = null,
         @Query("state") state: String? = null,
         @Query("since") since: String? = null,
+        // CONTRACT 11a: the map's box (all four or none), with `around`: the list is what the map shows there.
+        @Query("south") south: String? = null,
+        @Query("west") west: String? = null,
+        @Query("north") north: String? = null,
+        @Query("east") east: String? = null,
+        // CONTRACT 11b: "1" adds the posts and Moments without a place, as one band at the end.
+        @Query("no_place") noPlace: String? = null,
     ): ReinventedListResponse
 
     /**
