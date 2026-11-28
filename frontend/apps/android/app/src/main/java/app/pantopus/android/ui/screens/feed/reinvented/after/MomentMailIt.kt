@@ -281,42 +281,63 @@ private fun MomentMailItSheet(
                 )
                 return@Column
             }
-            ToField(
-                to = to,
-                account = account,
+            MailItForm(
+                MailItFormState(account, to, words, ui.busy, ui.error),
                 names = if (others) connections.orEmpty().map { it.id to it.name } else emptyList(),
-                enabled = !ui.busy,
-            ) { to = it }
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("Words", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = PantopusColors.appTextSecondary)
-                OutlinedTextField(
-                    value = words,
-                    onValueChange = { words = it.take(WORDS_MAX) },
-                    placeholder = { Text("A few words to go with it") },
-                    minLines = 3,
-                    maxLines = 6,
-                    enabled = !ui.busy,
-                    modifier = Modifier.fillMaxWidth().testTag("together.mailIt.words"),
-                )
-            }
-            Text(
-                "It goes as a letter with this photo, by today’s mail rules.",
-                fontSize = 12.5.sp,
-                color = PantopusColors.appTextSecondary,
+                onTo = { to = it },
+                onWords = { words = it },
+                onCancel = onDone,
+                onSend = { viewModel.send(moment, to, toName.takeIf { to != account }, words, onDone) },
             )
-            ui.error?.let {
-                Text(it, fontSize = 13.5.sp, color = PantopusColors.error, modifier = Modifier.testTag("together.mailIt.error"))
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
-                FormButton("Cancel", primary = false, enabled = !ui.busy, tag = "together.mailIt.cancel", onClick = onDone)
-                FormButton(
-                    if (ui.busy) "Mailing…" else "Mail it",
-                    primary = true,
-                    enabled = !ui.busy,
-                    tag = "together.mailIt.send",
-                ) { viewModel.send(moment, to, toName.takeIf { to != account }, words, onDone) }
-            }
         }
+    }
+}
+
+/** What the form shows. */
+private data class MailItFormState(
+    val account: String,
+    val to: String,
+    val words: String,
+    val busy: Boolean,
+    val error: String?,
+)
+
+/** To, Words, the line about today's mail rules, the server's words if it refused, and Cancel / Mail it. */
+@Composable
+@Suppress("LongParameterList") // What it shows and the four things it does.
+private fun MailItForm(
+    form: MailItFormState,
+    names: List<Pair<String, String>>,
+    onTo: (String) -> Unit,
+    onWords: (String) -> Unit,
+    onCancel: () -> Unit,
+    onSend: () -> Unit,
+) {
+    ToField(to = form.to, account = form.account, names = names, enabled = !form.busy, onPick = onTo)
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text("Words", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = PantopusColors.appTextSecondary)
+        OutlinedTextField(
+            value = form.words,
+            onValueChange = { onWords(it.take(WORDS_MAX)) },
+            placeholder = { Text("A few words to go with it") },
+            minLines = 3,
+            maxLines = 6,
+            enabled = !form.busy,
+            modifier = Modifier.fillMaxWidth().testTag("together.mailIt.words"),
+        )
+    }
+    Text(
+        "It goes as a letter with this photo, by today’s mail rules.",
+        fontSize = 12.5.sp,
+        color = PantopusColors.appTextSecondary,
+    )
+    form.error?.let {
+        Text(it, fontSize = 13.5.sp, color = PantopusColors.error, modifier = Modifier.testTag("together.mailIt.error"))
+    }
+    Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+        FormButton("Cancel", primary = false, enabled = !form.busy, tag = "together.mailIt.cancel", onClick = onCancel)
+        val send = if (form.busy) "Mailing…" else "Mail it"
+        FormButton(send, primary = true, enabled = !form.busy, tag = "together.mailIt.send", onClick = onSend)
     }
 }
 
