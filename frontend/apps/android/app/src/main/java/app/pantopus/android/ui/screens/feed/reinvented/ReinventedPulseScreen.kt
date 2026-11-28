@@ -439,11 +439,14 @@ private fun BoxScope.ReinventedOverMap(
     val density = LocalDensity.current
     var headerPx by remember { mutableIntStateOf(0) }
     val header = with(density) { headerPx.toDp() }
-    val sheet = rememberReinventedSheet(height, onHeight, header, full)
+    // PHASE-6 A3: the half rest against the window, so today's tab bar sliding away never moves the sheet.
+    val (half, placed) = rememberReinventedHalf()
+    Box(Modifier.matchParentSize().then(placed))
+    val sheet = rememberReinventedSheet(height, onHeight, header, full, half)
     val settled = sheet.settledValue
     // The map keeps its middle above the part the sheet covers once it rests (never re-laid while it moves).
     val covered =
-        with(density) { full - reinventedSheetTop(settled, header.toPx(), full.toPx(), REINVENTED_SHEET_PEEK.toPx()).toDp() }
+        with(density) { full - reinventedSheetTop(settled, header.toPx(), full.toPx(), REINVENTED_SHEET_PEEK.toPx(), half).toDp() }
     parts.map(covered)
     ReinventedSheet(
         sheet = sheet,
@@ -452,11 +455,12 @@ private fun BoxScope.ReinventedOverMap(
         line = line,
         headerEnd = { if (settled == ReinventedHeight.List) ReinventedSheetHeaderAdd(parts.onAdd) },
         list = parts.list,
+        half = half,
     )
     parts.header(Modifier.onSizeChanged { headerPx = it.height })
     if (settled == ReinventedHeight.Map) parts.mapExtras(this, header, null)
     // + is ADD_SIZE high, with its own bottom padding under it: its edge stands 12 dp over the sheet's.
-    ReinventedSheetAdd(sheet, header, full, ADD_SIZE, parts.add)
+    ReinventedSheetAdd(sheet, header, full, ADD_SIZE, parts.add, half)
 }
 
 /** + : the Studio, as the Moments tab's + opens it. */

@@ -33,6 +33,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -45,7 +46,10 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.onClick
@@ -84,21 +88,39 @@ private val ADD_GAP = 12.dp
 
 /**
  * Where the sheet's top rests for each height, measured from the screen's top: under the top line ([top]) at List, at
- * 55% of the height at Middle, [REINVENTED_SHEET_PEEK] over the bottom at Map. On a short window the rests never cross.
+ * [half] at Middle (55% of the height when not given), [REINVENTED_SHEET_PEEK] over the bottom at Map. On a short
+ * window the rests never cross.
  */
 internal fun reinventedSheetTop(
     height: ReinventedHeight,
     top: Float,
     full: Float,
     peek: Float,
+    half: Float? = null,
 ): Float {
     val peekAt = (full - peek).coerceAtLeast(top)
     return when (height) {
         ReinventedHeight.List -> top
-        ReinventedHeight.Middle -> (full * (1f - HALF_SHARE)).coerceIn(top, peekAt)
+        ReinventedHeight.Middle -> (half ?: (full * (1f - HALF_SHARE))).coerceIn(top, peekAt)
         ReinventedHeight.Map -> peekAt
     }
 }
+
+/**
+ * The half rest set against the window, not against Pulse's own box: today's tab bar slides away while a list scrolls
+ * and the box grows by its height, and a rest measured in the box would follow it down under the finger. Half of the
+ * window's height, in the box's pixels; null until the box has been placed.
+ */
+@Composable
+internal fun rememberReinventedHalf(): Pair<Float?, Modifier> {
+    val window = LocalView.current.rootView.height.toFloat()
+    var boxTop by remember { mutableFloatStateOf(Float.NaN) }
+    val half = if (boxTop.isNaN() || window <= 0f) null else window * WINDOW_HALF - boxTop
+    return half to Modifier.onGloballyPositioned { boxTop = it.positionInWindow().y }
+}
+
+/** The share of the window's height above the sheet's top at half. */
+private const val WINDOW_HALF = 0.5f
 
 /**
  * The sheet's drag state, kept in step with [height]: a drag or a fling that settles reports its rest through
@@ -110,6 +132,7 @@ internal fun rememberReinventedSheet(
     onHeight: (ReinventedHeight) -> Unit,
     top: Dp,
     full: Dp,
+    half: Float? = null,
 ): AnchoredDraggableState<ReinventedHeight> {
     val density = LocalDensity.current
     val decay = rememberSplineBasedDecay<Float>()
@@ -130,7 +153,7 @@ internal fun rememberReinventedSheet(
             val fullPx = full.toPx()
             val peekPx = REINVENTED_SHEET_PEEK.toPx()
             DraggableAnchors {
-                ReinventedHeight.entries.forEach { it at reinventedSheetTop(it, topPx, fullPx, peekPx) }
+                ReinventedHeight.entries.forEach { it at reinventedSheetTop(it, topPx, fullPx, peekPx, half) }
             }
         }
     SideEffect { sheet.updateAnchors(anchors, sheet.targetValue) }
@@ -165,6 +188,7 @@ internal fun ReinventedSheet(
     line: String,
     headerEnd: @Composable RowScope.() -> Unit,
     list: @Composable (Modifier) -> Unit,
+    half: Float? = null,
 ) {
     val density = LocalDensity.current
     val settled = sheet.settledValue
@@ -172,7 +196,7 @@ internal fun ReinventedSheet(
     val shape = RoundedCornerShape(topStart = corner, topEnd = corner)
     val hidden =
         with(density) {
-            (reinventedSheetTop(settled, top.toPx(), full.toPx(), REINVENTED_SHEET_PEEK.toPx()) - top.toPx()).toDp()
+            (reinventedSheetTop(settled, top.toPx(), full.toPx(), REINVENTED_SHEET_PEEK.toPx(), half) - top.toPx()).toDp()
         }
     Column(
         modifier =
@@ -264,13 +288,14 @@ internal fun BoxScope.ReinventedSheetAdd(
     full: Dp,
     size: Dp,
     add: @Composable (Modifier) -> Unit,
+    half: Float? = null,
 ) {
     if (sheet.settledValue == ReinventedHeight.List && sheet.targetValue == ReinventedHeight.List) return
     val density = LocalDensity.current
     val topPx = with(density) { top.toPx() }
     val fullPx = with(density) { full.toPx() }
     val peekPx = with(density) { REINVENTED_SHEET_PEEK.toPx() }
-    val halfAt = reinventedSheetTop(ReinventedHeight.Middle, topPx, fullPx, peekPx)
+    val halfAt = reinventedSheetTop(ReinventedHeight.Middle, topPx, fullPx, peekPx, half)
     val peekAt = reinventedSheetTop(ReinventedHeight.Map, topPx, fullPx, peekPx)
     val lift = with(density) { (size + ADD_GAP).toPx() }
     add(
