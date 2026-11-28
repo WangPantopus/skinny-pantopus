@@ -23,7 +23,7 @@ import { useBackWhenMissing } from '../serverBehind';
 import { MAP_TIME_WORDS, readAtlasBox, readExplore, readList, readMap, readStrip, type Box, type ExploreItem, type ExplorePage, type ListMoment, type Chip, type ListItem, type ListPage, type MapTime, type Point, type Reach } from './listApi';
 import MomentRow from './MomentRow';
 import PostRow from './PostRow';
-import { itemPoint, type FlyTarget } from './PulseMap';
+import { itemPoint, type FlyTarget, type MapView } from './PulseMap';
 import PulseSheet, { type Rest } from './PulseSheet';
 import PulseRail from './PulseRail';
 import { explorePins, keptPins, pinsOf, roundBox, type Pin } from './pins';
@@ -70,6 +70,27 @@ const PILL_PX = 34;
 /** A pull down this far on the top line drops the Filters sheet (PHASE-6 A3). */
 const PULL_PX = 40;
 
+/**
+ * Back from a post or a plan opened here (PHASE-6 G): the map's view, the sheet's rest and the row in view, kept for this tab
+ * for half an hour and read once when the new Pulse opens again.
+ */
+const BACK_KEY = 'pantopus.pulse.back';
+interface Back {
+  at: number;
+  view: MapView | null;
+  rest: Rest;
+  row: string | null;
+  rowTop: number;
+}
+function readBack(): Back | null {
+  try {
+    const b = JSON.parse(window.sessionStorage.getItem(BACK_KEY) || 'null') as Back | null;
+    return b && typeof b.at === 'number' && Date.now() - b.at < 30 * 60_000 ? b : null;
+  } catch {
+    return null;
+  }
+}
+
 const REACH_NAMES: Record<Reach, string> = { close: 'Close circle', around: 'Around me', explore: 'The world' };
 
 type ListData = InfiniteData<ListPage, string | null>;
@@ -88,7 +109,18 @@ export default function ReinventedPulse() {
   // One of the person's circles inside Close circle (CONTRACT 8d); null is all their connections.
   const [circle, setCircle] = useState<{ id: string; name: string } | null>(null);
   // The sheet's rest (phone width) and the panel's fold (wide); the sheet opens at half, as the list opened at its middle.
-  const [rest, setRest] = useState<Rest>('half');
+  const [back] = useState(readBack);
+  useEffect(() => {
+    try {
+      window.sessionStorage.removeItem(BACK_KEY);
+    } catch {
+      /* storage blocked: nothing was kept */
+    }
+  }, []);
+  const [rest, setRest] = useState<Rest>(back?.rest ?? 'half');
+  // The map shows the view it was left at until the person changes the scope (then it fits the list as always).
+  const [restoreView, setRestoreView] = useState<MapView | null>(back?.view ?? null);
+  const mapView = useRef<(() => MapView | null) | null>(null);
   const [folded, setFolded] = useState(false);
   const [lensOpen, setLensOpen] = useState(false);
   const [point, setPoint] = useState<Point | null>(null);
@@ -346,6 +378,9 @@ export default function ReinventedPulse() {
 
   // More as the list nears its end.
   const scroller = useRef<HTMLDivElement>(null);
+  // A row kept where it was while the list is read for a new area: the row the person came Back to, or the one whose tap
+  // flew the map (PHASE-6 G: the list used to jump to its top and the row left the finger).
+  const pendingRow = useRef<{ key: string; top: number } | null>(back?.row ? { key: back.row, top: back.rowTop } : null);
   const sentinel = useRef<HTMLDivElement>(null);
   const { hasNextPage, isFetchingNextPage, fetchNextPage } = list;
   useEffect(() => {
@@ -364,6 +399,7 @@ export default function ReinventedPulse() {
   // A new reach, other filters or (while the list follows the map) a new area start the list from its top.
   const areaKey = listBox ? `${listBox.south},${listBox.west},${listBox.north},${listBox.east}` : '';
   useEffect(() => {
+    if (pendingRow.current) return;
     scroller.current?.scrollTo({ top: 0 });
   }, [reach, filterKey, areaKey, noPlace]);
 
@@ -419,7 +455,47 @@ export default function ReinventedPulse() {
       });
     }
   }, []);
-  const openPost = useCallback((id: string) => router.push(`/app/feed/post/${encodeURIComponent(id)}`), [router]);
+  // Keep the place before opening another page: Back then finds the map, the sheet and the row as they were.
+  const saveBack = useCallback(
+    (hint?: string) => {
+      if (view !== 'pulse' || reach !== 'around') return;
+      try {
+        const list = scroller.current;
+        let row: string | null = null,
+          rowTop = 0;
+        if (list) {
+          const box = list.getBoundingClientRect();
+          const el =
+            (hint ? list.querySelector<HTMLElement>(`[data-row="${CSS.escape(hint)}"]`) : null) ||
+            [...list.querySelectorAll<HTMLElement>('[data-row]')].find((r) => r.getBoundingClientRect().bottom > box.top + 1) ||
+            null;
+          if (el) {
+            row = el.dataset.row ?? null;
+            rowTop = el.getBoundingClientRect().top - box.top;
+          }
+        }
+        const kept: Back = { at: Date.now(), view: mapView.current?.() ?? null, rest, row, rowTop };
+        window.sessionStorage.setItem(BACK_KEY, JSON.stringify(kept));
+      } catch {
+        /* storage blocked: Back opens the new Pulse as new */
+      }
+    },
+    [view, reach, rest],
+  );
+  const openPost = useCallback(
+    (id: string) => {
+      saveBack(`post:${id}`);
+      router.push(`/app/feed/post/${encodeURIComponent(id)}`);
+    },
+    [router, saveBack],
+  );
+  const openPlan = useCallback(
+    (id: string) => {
+      saveBack();
+      router.push(`/app/plans/${encodeURIComponent(id)}`);
+    },
+    [router, saveBack],
+  );
   const card = {
     currentUserId: account ?? undefined,
     surface: reach === 'close' ? 'connections' : 'place',
@@ -509,6 +585,17 @@ export default function ReinventedPulse() {
       return true;
     });
   }, [items]);
+  // Put the kept row back where it was once the list for the map's area is there (not the reach's first read, not the old
+  // area's rows still shown); a row no longer in the list leaves the list where it is.
+  useLayoutEffect(() => {
+    const keep = pendingRow.current,
+      box = scroller.current;
+    if (!keep || !box || !following || stale || waiting || !list.data || list.isPlaceholderData) return;
+    pendingRow.current = null;
+    const el = box.querySelector<HTMLElement>(`[data-row="${CSS.escape(keep.key)}"]`);
+    if (el) box.scrollTop += el.getBoundingClientRect().top - box.getBoundingClientRect().top - keep.top;
+  }, [shown, following, stale, waiting]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const momentIds = useMemo(
     () =>
       [
@@ -598,9 +685,9 @@ export default function ReinventedPulse() {
         const start = pin.ring.moments.find((m) => !m.seen)?.id || ids[0];
         setViewing({ id: start, ids });
       } else if (pin.type === 'mark') openPost(pin.mark.post.id);
-      else router.push(`/app/plans/${encodeURIComponent(pin.ticket.id)}`);
+      else openPlan(pin.ticket.id);
     },
-    [openPost, router, openExplored],
+    [openPost, openPlan, openExplored],
   );
   // The row chosen from the map, or the map from a row (PHASE-6 B): its pin and its row are lit together.
   const [selectedRow, setSelectedRow] = useState<string | null>(null);
@@ -653,13 +740,25 @@ export default function ReinventedPulse() {
   );
   // A row tapped while the list follows the map flies the map to it and lights its pin; a second tap opens it. The row's own
   // controls (reactions, replies, "show on the map") stay theirs.
-  const onRowTap = (e: ReactMouseEvent, it: ListItem) => {
-    if (!following || selectedRow === rowKey(it)) return;
+  const onRowTap = (e: ReactMouseEvent<HTMLElement>, it: ListItem) => {
+    if (!following) return;
     if ((e.target as HTMLElement).closest('button, a, input, textarea, select, label, [role="menu"], [role="menuitem"]')) return;
     const p = itemPoint(it);
-    if (!p) return;
+    if (selectedRow === rowKey(it) || !p) {
+      // The second tap (or the first, on a post with no place to fly to) opens it. A Moment's own picture opens it; today's
+      // post card has no open on its body, so a post opens here (PHASE-6 G: it could not be opened by tapping twice).
+      if (it.type === 'post') {
+        e.preventDefault();
+        e.stopPropagation();
+        openPost(it.post.id);
+      }
+      return;
+    }
     e.preventDefault();
     e.stopPropagation();
+    // The row stays under the finger while the map flies and the list is read for the new area.
+    const list = scroller.current;
+    if (list) pendingRow.current = { key: rowKey(it), top: e.currentTarget.getBoundingClientRect().top - list.getBoundingClientRect().top };
     setSelectedRow(rowKey(it));
     setSelected(pinKeyOf(it));
     setFly({ ...p, serial: Date.now(), keepZoom: true });
@@ -755,6 +854,11 @@ export default function ReinventedPulse() {
   // shared), never because the list was read again for another area (LEAD-7's look, 05:26: a fit on each read undid every
   // pan, zoom and fly). Around me follows the map, so its filters don't move the map; Close circle fits again on new filters.
   const fitBase = `${reach}|${reach === 'around' ? '' : filterKey}|${point?.latitude ?? ''}|${point?.longitude ?? ''}`;
+  // The view the person came Back to holds until they change the scope; then the map fits the list as always.
+  const backBase = useRef(fitBase);
+  useEffect(() => {
+    if (fitBase !== backBase.current) setRestoreView(null);
+  }, [fitBase]);
   const firstShown = reach === 'explore' ? !!explore.data : !!list.data && !list.isPlaceholderData;
   const [fitFor, setFitFor] = useState<string | null>(null);
   useEffect(() => {
@@ -869,11 +973,13 @@ export default function ReinventedPulse() {
       ref={board}
       className="rp-board"
       data-wide={wide || undefined}
+      data-rest={wide ? undefined : rest}
       // PHASE-6 G: in the viewer opened from here, a mouse swipe across the picture is the viewer's swipe, not the browser
       // dragging the image away (the drag cancelled the swipe's pointer). Today's viewer file is untouched: its drag
       // events reach this board through React, a portal included.
       onDragStart={(e) => {
-        if ((e.target as HTMLElement).closest?.('.mo-watch-media')) e.preventDefault();
+        // Also a picture in the list under the sheet's header: a long drag of the header is the sheet's (PHASE-6 G, e1).
+        if ((e.target as HTMLElement).closest?.('.mo-watch-media, .rp-sheet img')) e.preventDefault();
       }}
     >
       <div className="rp-map-layer" aria-hidden={(!wide && rest === 'full') || undefined}>
@@ -888,6 +994,8 @@ export default function ReinventedPulse() {
           onBox={onBox}
           onPick={onPick}
           onMoving={onMoving}
+          restore={restoreView}
+          view={mapView}
           float={view === 'pulse' && reach !== 'explore' && !!map.data?.heights_on && !!map.data?.float_on}
           lit={view === 'pulse' && reach !== 'explore' ? lit : null}
           sounds={listening && view === 'pulse' && reach !== 'explore' ? sounds.data?.sounds ?? null : null}
@@ -1051,7 +1159,7 @@ export default function ReinventedPulse() {
                   bandLabel={(b) => (b ? bandLabels.get(b) || null : null)}
                   now={now}
                   onMoments={(ids, start) => setViewing({ id: start, ids })}
-                  onPlan={(t) => router.push(`/app/plans/${encodeURIComponent(t.id)}`)}
+                  onPlan={(t) => openPlan(t.id)}
                 />
               )}
               {reach === 'around' && account && shows('ask') && (
