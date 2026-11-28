@@ -549,6 +549,7 @@ internal fun StudioStampTray(
     cutoutsAccount: String? = null,
     beforeAfter: StudioBeforeAfterActions = StudioBeforeAfterActions(),
     onMovingWords: (() -> Unit)? = null,
+    onPlayKind: ((String) -> Unit)? = null,
     stamps: MomentsStudioStampsViewModel = hiltViewModel(),
 ) {
     val ui by stamps.state.collectAsStateWithLifecycle()
@@ -571,14 +572,14 @@ internal fun StudioStampTray(
         onDone = onDone,
         // Play: "Guess the spot", for a photo or video with a place away from home; film looks, for a photo.
         play =
-            if (offersPlay(state.offersGuess || looks || pair != null, onMovingWords)) {
+            if (offersPlay(state.offersGuess || looks || pair != null, onMovingWords, onPlayKind)) {
                 {
                     if (state.offersGuess) StudioGuessRow(on = state.guess, onToggle = { onGuess(!state.guess) })
                     if (looks) StudioLooksRow(picture = asItCame, picked = state.marks.look, onPick = onLook)
                     if (strip > 0) StudioPhotostripRow(more = strip, onMake = onPhotostrip)
                     if (looks) StudioYourCutoutsRow(account = cutoutsAccount, onPlace = onPlaceCutout)
                     StudioBeforeAfterRow(pair, offersPair, beforeAfter.make, beforeAfter.words, beforeAfter.takeApart)
-                    onMovingWords?.let { StudioMovingWordsRow(onMake = it) }
+                    StudioPlaySection(onMovingWords, onPlayKind)
                 }
             } else {
                 null
@@ -598,7 +599,8 @@ internal fun StudioStampTray(
 private fun offersPlay(
     offers: Boolean,
     onMovingWords: (() -> Unit)?,
-): Boolean = offers || onMovingWords != null
+    onPlayKind: ((String) -> Unit)? = null,
+): Boolean = offers || onMovingWords != null || onPlayKind != null
 
 /** The screen's size in pixels, where a picture is drawn to fill it. */
 @Composable
