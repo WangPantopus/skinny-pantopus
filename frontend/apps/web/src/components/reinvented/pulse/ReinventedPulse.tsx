@@ -170,6 +170,8 @@ export default function ReinventedPulse() {
   const [skyOpen, setSkyOpen] = useState<string | null>(null);
   // A pinboard (CONTRACT 8i) opened from its row, and one being added to.
   const [boardOpen, setBoardOpen] = useState<string | null>(null);
+  // The board a piece was opened from: closing the viewer comes back to it.
+  const boardBack = useRef<string | null>(null);
   const [addingPiece, setAddingPiece] = useState<{ id: string; prompt: string } | null>(null);
   const [addingFrame, setAddingFrame] = useState<{ id: string; title: string; ghost: string | null } | null>(null);
   // Answering an Eyes-on Ask with a Live photo (CONTRACT 8f).
@@ -1393,6 +1395,11 @@ export default function ReinventedPulse() {
             setBoardOpen(null);
             setAddingPiece(start);
           }}
+          onPiece={(piece, pieces) => {
+            boardBack.current = boardOpen;
+            setBoardOpen(null);
+            setViewing({ id: piece, ids: pieces });
+          }}
         />
       )}
       {addingPiece && account && (
@@ -1484,16 +1491,23 @@ export default function ReinventedPulse() {
             account={account}
             ids={viewing.ids}
             wide={false}
-            onClose={() => setViewing(null)}
+            onClose={() => {
+              setViewing(null);
+              if (boardBack.current) setBoardOpen(boardBack.current);
+              boardBack.current = null;
+            }}
             onSelect={(id) => setViewing((v) => (v ? { ...v, id } : v))}
             onSeen={() => undefined}
             onWatchedPlace={() => undefined}
             onRemove={(id) => {
               setViewing(null);
               dropItem(id);
+              if (boardBack.current) setBoardOpen(boardBack.current);
+              boardBack.current = null;
             }}
             onPlace={(p) => {
               setViewing(null);
+              boardBack.current = null;
               flyTo(p);
             }}
             studio={studioViewer}
