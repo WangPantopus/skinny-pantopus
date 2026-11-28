@@ -326,6 +326,7 @@ export default function CardTablePiece({
       // The joined pair is laid out with room for the reply under the card: a new table when it comes.
       key={reply ? 'joined' : 'card'}
       card={card}
+      improved={improved}
       // Its photo and greeting open through the reader's own route (memories contract section 4); on a reply, the card is
       // the reader's own, from their Sent.
       mediaFrom={replyPiece ? (original ? (fileId) => ({ sent: original.id, fileId }) : null) : (fileId) => ({ piece: piece.id, fileId })}

@@ -51,11 +51,14 @@ import { cardMood, cardPicture, clockTime, emailGoesAt, firstNameOf, SERIF, shor
 type Step = 'to' | 'pick' | 'write' | 'seal' | 'look' | 'sent';
 /** Someone on a list (digital stamps on): a person found by name, or an address. */
 type ListEntry = { kind: 'person'; userId: string; name: string } | { kind: 'email'; email: string };
-export type Recipient = ListEntry | { kind: 'link' }
+/** By link, `name` (only while `improved`, Wave 3.2): the name written on its envelope, if any. */
+export type Recipient = ListEntry | { kind: 'link'; name?: string }
   /** Two or more people or addresses: a card each (POST /cards/batch). */
   | { kind: 'list'; entries: ListEntry[] };
 
 const STEPS: Step[] = ['to', 'pick', 'write', 'seal', 'look'];
+/** Pick a card first (Wave 3.1, only while GET /cards says `improved`). */
+const STEPS_PICK_FIRST: Step[] = ['pick', 'to', 'write', 'seal', 'look'];
 const TITLES: Record<Step, string> = {
   to: 'Who it’s for',
   pick: 'Pick a card',
@@ -86,6 +89,14 @@ const fadeOf = (rgb: string, shade = 1) => {
 };
 const PAGE_FADE = fadeOf('rgb(245, 240, 232)');
 const PAGE_TINT = tintOf('rgb(245, 240, 232)');
+
+/**
+ * Quick seal (Wave 3.5): set on this device once a card was sealed on the table here; until then the table shows only
+ * the full sealing. Storage blocked reads as never sealed.
+ */
+const SEALED_ONCE = 'pantopus:card-sealed-once';
+const sealedOnceHere = () => { try { return window.localStorage.getItem(SEALED_ONCE) === '1'; } catch { return false; } };
+const markSealedOnce = () => { try { window.localStorage.setItem(SEALED_ONCE, '1'); } catch { /* storage blocked */ } };
 
 /** Step 4 when the server can't show the look; "Seal and send" is then on step 4. */
 const LOOK_UNAVAILABLE = 'Pantopus can’t show how your card will look yet. You can still seal and send it.';
@@ -240,7 +251,7 @@ function toName(to: Recipient | null): string {
 /** The name on the envelope: a card by link has none until someone opens it; a list's first card shows. */
 function envelopeName(to: Recipient): string {
   if (to.kind === 'list') return entryName(to.entries[0]);
-  return to.kind === 'link' ? 'Their name' : toName(to);
+  return to.kind === 'link' ? to.name || 'Their name' : toName(to);
 }
 
 /**
@@ -288,7 +299,9 @@ export function arrivalLine(card: SentHolidayCard, improved = false): string {
 }
 
 /** Before it's sent we don't know their clock; the sent card says the time on this one. */
-function takeBackBefore(to: Recipient): string {
+function takeBackBefore(to: Recipient, arrival: HolidayCardArrival | null = null): string {
+  // Right away to a person (Wave 3.3, offered only while `improved`): it's in their mailbox the moment it's sealed.
+  if (to.kind === 'person' && arrival === 'now') return 'This card delivers right away, so it can’t be taken back after you seal it.';
   if (to.kind === 'list') {
     const people = to.entries.some((entry) => entry.kind === 'person');
     const emails = to.entries.some((entry) => entry.kind === 'email');
@@ -318,8 +331,8 @@ export function takeBackLine(card: SentHolidayCard): string | null {
 // After sending a card that travels (travelling card Part 2).
 const TRAVEL_SENT_LINE = 'It can travel. You’ll hear when it reaches a town.';
 
-function StepHeader({ step, title, onBack, headingRef, trailing = null }: { step: Step; title?: string; onBack: () => void; headingRef: RefObject<HTMLHeadingElement | null>; trailing?: ReactNode }) {
-  const index = STEPS.indexOf(step);
+function StepHeader({ step, title, onBack, headingRef, trailing = null, steps = STEPS }: { step: Step; title?: string; onBack: () => void; headingRef: RefObject<HTMLHeadingElement | null>; trailing?: ReactNode; steps?: Step[] }) {
+  const index = steps.indexOf(step);
   return (
     <header className="flex items-center gap-1 px-1 pt-2">
       <button
@@ -333,8 +346,8 @@ function StepHeader({ step, title, onBack, headingRef, trailing = null }: { step
       <h1 ref={headingRef} tabIndex={-1} className="flex-1 text-[18px] font-semibold leading-6 focus:outline-none">{title ?? TITLES[step]}</h1>
       {trailing}
       {index >= 0 ? (
-        <div role="img" aria-label={`Step ${index + 1} of ${STEPS.length}`} className="flex gap-[5px] pr-3.5">
-          {STEPS.map((s, i) => (
+        <div role="img" aria-label={`Step ${index + 1} of ${steps.length}`} className="flex gap-[5px] pr-3.5">
+          {steps.map((s, i) => (
             <span
               key={s}
               className="h-[7px] rounded-full"
@@ -349,6 +362,30 @@ function StepHeader({ step, title, onBack, headingRef, trailing = null }: { step
 
 // ── Step 1: who it's for ─────────────────────────────────────
 
+/** A name for a link's envelope (Wave 3.2): runs of whitespace folded, trimmed, at most 40 characters. */
+const LINK_NAME_MAX = 40;
+const linkEnvelopeName = (typed: string) => [...typed.replace(/\s+/g, ' ').trim()].slice(0, LINK_NAME_MAX).join('').trim();
+
+/** Pick a card first (Wave 3.1): on Who it's for, the card just chosen, small, with its caption and "Change". */
+function ChosenCardLine({ design, onChange }: { design: HolidayCardDesign; onChange: () => void }) {
+  return (
+    <div data-testid="sendCardChosenCard" className="mx-4 mt-2 flex min-h-[52px] items-center gap-3 rounded-xl border border-[#e3d8c3] bg-[#fffdf8] py-1.5 pl-3 pr-1.5">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={cardPicture(design.id, 'thumb')} alt="" className="w-8 flex-shrink-0 -rotate-2 rounded-[2px] shadow-[0_3px_8px_rgba(60,40,10,0.25)]" />
+      <p className="min-w-0 flex-1 truncate text-[14px] font-medium leading-[18px] text-[#374151]">{design.caption}</p>
+      <button
+        type="button"
+        data-testid="sendCardChangeCard"
+        onClick={onChange}
+        aria-label={`Change the card (${design.caption})`}
+        className="flex min-h-[44px] flex-shrink-0 items-center rounded-lg px-2.5 text-[14px] font-semibold text-[#8b1d1d] underline underline-offset-4 hover:bg-black/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8b1d1d]"
+      >
+        Change
+      </button>
+    </div>
+  );
+}
+
 export function ToStep({
   onChoose,
   max = 1,
@@ -357,7 +394,10 @@ export function ToStep({
   onAdd,
   onContinue,
   onPaper = false,
+  linkName = false,
 }: {
+  /** By link, ask first for an optional name for its envelope (Wave 3.2, only while `improved`). */
+  linkName?: boolean;
   onChoose: (to: Recipient) => void;
   /** On the cream paper of a sheet (Pass it on): the same picker, its lines always in the paper's ink. */
   onPaper?: boolean;
@@ -372,6 +412,8 @@ export function ToStep({
   const [debounced, setDebounced] = useState('');
   const [byEmail, setByEmail] = useState(false);
   const [email, setEmail] = useState('');
+  const [byLink, setByLink] = useState(false);
+  const [envelope, setEnvelope] = useState('');
   useEffect(() => {
     const t = window.setTimeout(() => setDebounced(query), 250);
     return () => window.clearTimeout(t);
@@ -418,6 +460,44 @@ export function ToStep({
       </button>
     </div>
   ) : null;
+
+  // By link (Wave 3.2): an optional name in ink on the envelope, laid out as the email form is.
+  if (byLink) {
+    return (
+      <form
+        className="mt-4 px-4"
+        data-testid="sendCardLinkForm"
+        onSubmit={(event) => {
+          event.preventDefault();
+          const name = linkEnvelopeName(envelope);
+          onChoose(name ? { kind: 'link', name } : { kind: 'link' });
+        }}
+      >
+        <label htmlFor="card-link-name" className="text-[14px] font-semibold">Name on the envelope (optional)</label>
+        <input
+          id="card-link-name"
+          type="text"
+          autoComplete="off"
+          autoFocus
+          maxLength={LINK_NAME_MAX}
+          value={envelope}
+          onChange={(event) => setEnvelope(event.target.value)}
+          placeholder="e.g. Mom, Aunt Lin, The Patel family"
+          data-testid="sendCardLinkName"
+          className="mt-2 h-12 w-full rounded-xl border border-[#d6cbb6] bg-[#fffdf8] px-4 text-[16px] text-[#111827] focus:border-[#8b1d1d] focus:outline-none focus:ring-2 focus:ring-[#8b1d1d]/30"
+        />
+        <p className={`mt-2 text-[14px] leading-5 ${m}`}>
+          Written in ink on the front of the envelope. Leave blank if you&rsquo;d rather keep it unnamed.
+        </p>
+        <p className={`mt-3 text-[14px] leading-5 ${m}`}>
+          Anyone with the link can open and read your card right away — no account needed. The first person to save it
+          to a mailbox keeps it.
+        </p>
+        <button type="submit" data-testid="sendCardLinkDone" className={`${primary} mt-5`} style={{ backgroundColor: WAX }}>Continue</button>
+        <button type="button" onClick={() => setByLink(false)} className={`${secondary} mt-2.5`}>Search Pantopus instead</button>
+      </form>
+    );
+  }
 
   if (byEmail) {
     return (
@@ -569,7 +649,7 @@ export function ToStep({
           <button
             type="button"
             data-testid="sendCardByLink"
-            onClick={() => onChoose({ kind: 'link' })}
+            onClick={() => (linkName ? setByLink(true) : onChoose({ kind: 'link' }))}
             className={`flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl text-[15px] font-semibold text-[#8b1d1d] hover:bg-black/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8b1d1d]${onPaper ? '' : ' [@media(prefers-color-scheme:dark)]:text-[#e8b996]'}`}
           >
             <Link2 className="h-[18px] w-[18px]" aria-hidden />
@@ -596,7 +676,10 @@ function PickStep({
   onChoose,
   onNext,
   shelving = null,
+  nextLabel = 'Write on this card',
 }: {
+  /** The button on to the next step (Pick a card first, `improved`: "Choose who it’s for" while no one is chosen). */
+  nextLabel?: string;
   designs: HolidayCardDesign[];
   /** The server's collections, in order; none (a server from before collections): one grid of every design. */
   collections: HolidayCardCollection[];
@@ -607,8 +690,8 @@ function PickStep({
   /** The shelves (server key card_shelves; null: today's screen) and the collection whose page is open. */
   shelving?: ShelvesState | null;
 }) {
-  if (shelving) return <ShelvesPick designs={designs} year={year} chosen={chosen} onChoose={onChoose} onNext={onNext} shelving={shelving} />;
-  return <TodaysPick designs={designs} collections={collections} year={year} chosen={chosen} onChoose={onChoose} onNext={onNext} />;
+  if (shelving) return <ShelvesPick designs={designs} year={year} chosen={chosen} onChoose={onChoose} onNext={onNext} shelving={shelving} nextLabel={nextLabel} />;
+  return <TodaysPick designs={designs} collections={collections} year={year} chosen={chosen} onChoose={onChoose} onNext={onNext} nextLabel={nextLabel} />;
 }
 
 /** Step 2 as shelves (card shelves SPEC Part C): what the flow keeps while it's open. */
@@ -627,7 +710,8 @@ type ShelvesState = {
  * "Pick a card" as shelves: the shelves or a collection's page, the card rack among the collection's cards (with
  * card_table on; off, a tap chooses the card as today's grid does), and the bar, which shows only once a card is chosen.
  */
-function ShelvesPick({ designs: list, year, chosen, onChoose, onNext, shelving }: {
+function ShelvesPick({ designs: list, year, chosen, onChoose, onNext, shelving, nextLabel }: {
+  nextLabel: string;
   designs: HolidayCardDesign[];
   year: number;
   chosen: string | null;
@@ -679,7 +763,7 @@ function ShelvesPick({ designs: list, year, chosen, onChoose, onNext, shelving }
               See it larger
             </button>
           </div>
-          <button type="button" data-testid="sendCardWriteOn" onClick={onNext} className={`${primary} mt-2`} style={{ backgroundColor: WAX }}>Write on this card</button>
+          <button type="button" data-testid="sendCardWriteOn" onClick={onNext} className={`${primary} mt-2`} style={{ backgroundColor: WAX }}>{nextLabel}</button>
           </div>
         </div>
       ) : null}
@@ -691,6 +775,7 @@ function ShelvesPick({ designs: list, year, chosen, onChoose, onNext, shelving }
           year={year}
           onClose={(lastSeen) => { onChoose(lastSeen); setRack(null); }}
           onWrite={(id) => { onChoose(id); setRack(null); onNext(); }}
+          writeLabel={nextLabel}
         />
       ) : null}
       {large ? <LargeCard design={large} year={year} onClose={() => setLarge(null)} onChoose={(id) => { onChoose(id); setLarge(null); }} /> : null}
@@ -715,8 +800,9 @@ function LargeCard({ design, year, onClose, onChoose }: { design: HolidayCardDes
 
 /** Today's "Pick a card": a row of the collections' names and one collection's grid at a time. */
 function TodaysPick({
-  designs, collections, year, chosen, onChoose, onNext,
+  designs, collections, year, chosen, onChoose, onNext, nextLabel,
 }: {
+  nextLabel: string;
   designs: HolidayCardDesign[];
   collections: HolidayCardCollection[];
   year: number;
@@ -887,7 +973,7 @@ function TodaysPick({
               <p className={`flex-1 text-center text-[14px] ${muted}`}>Tap a picture to choose it.</p>
             )}
           </div>
-          <button type="button" data-testid="sendCardWriteOn" disabled={!picked} onClick={onNext} className={`${primary} mt-2`} style={{ backgroundColor: WAX }}>Write on this card</button>
+          <button type="button" data-testid="sendCardWriteOn" disabled={!picked} onClick={onNext} className={`${primary} mt-2`} style={{ backgroundColor: WAX }}>{nextLabel}</button>
         </div>
       ) : (
         <div className="mt-6 space-y-2.5 pb-4">
@@ -896,7 +982,7 @@ function TodaysPick({
           ) : (
             <p className={`text-center text-[14px] ${muted}`}>Tap a picture to choose it.</p>
           )}
-          <button type="button" data-testid="sendCardWriteOn" disabled={!picked} onClick={onNext} className={primary} style={{ backgroundColor: WAX }}>Write on this card</button>
+          <button type="button" data-testid="sendCardWriteOn" disabled={!picked} onClick={onNext} className={primary} style={{ backgroundColor: WAX }}>{nextLabel}</button>
         </div>
       )}
 
@@ -908,6 +994,7 @@ function TodaysPick({
           year={year}
           onClose={(lastSeen) => { onChoose(lastSeen); setRack(null); }}
           onWrite={(id) => { onChoose(id); setRack(null); onNext(); }}
+          writeLabel={nextLabel}
         />
       ) : null}
       {large ? (
@@ -1318,6 +1405,8 @@ function arrivalChoice(
     case 'christmas_morning':
       return { title: 'On Christmas morning', detail: `${shortDay(cards.christmas_morning_at)}, with the 7 a.m. mail.` };
     default:
+      // Right away to someone on Pantopus (Wave 3.3): offered only while `improved` (arrivals.person_all).
+      if (to.kind === 'person') return { title: 'Right away', detail: 'Drops into their mailbox now, with a gentle notice.' };
       if (to.kind === 'link') {
         return { title: 'Right away', detail: improved ? 'Whoever opens your link can open and read the card right away — no account needed.' : 'Whoever opens your link can open the card as soon as they join.' };
       }
@@ -1468,8 +1557,17 @@ function SealStep({
           <div className={onCloth ? 'mt-2.5' : 'mx-auto mt-2.5 max-w-[420px]'}>
             <div className={travelStyles.travelRow} onClick={travel.onToggle} data-testid="sendCardTravelRow">
               <span className={travelStyles.words}>
-                <b id="card-travel-label">Let it travel</b>
-                <span>{travel.who} can pass this card on. Its towns show on a map, never names.</span>
+                {cards.improved ? (
+                  <>
+                    <b id="card-travel-label">Let this card travel</b>
+                    <span>Let them pass this card on free to two people. Only your city appears on the postmark — never your note, photo, or street address.</span>
+                  </>
+                ) : (
+                  <>
+                    <b id="card-travel-label">Let it travel</b>
+                    <span>{travel.who} can pass this card on. Its towns show on a map, never names.</span>
+                  </>
+                )}
               </span>
               <button
                 type="button"
@@ -1488,7 +1586,7 @@ function SealStep({
       })()}
       <p className="mx-auto mt-3.5 max-w-[420px] rounded-xl border border-[#e7dcc6] bg-[#fbf6ec] px-3.5 py-3 text-[13px] leading-[18px] text-[#374151]">
         {/* Before it's sent we don't know their clock; the sent card says the time on this one. */}
-        {takeBackBefore(to)}
+        {takeBackBefore(to, arrival)}
       </p>
       {/* The postage line too (5.1), so a sender who goes straight to the table has read both. */}
       {stamps ? <div className="mx-auto mt-3 max-w-[420px]"><PostageLine stamps={stamps} design={design.id} count={to.kind === 'list' ? count : undefined} /></div> : null}
@@ -1533,9 +1631,12 @@ function LookStep({
   onCloth = false,
   fade = PAGE_FADE,
   improved = false,
+  arrival = null,
 }: {
   /** GET /cards `improved`: the card improvements of November 28 are on. */
   improved?: boolean;
+  /** The arrival chosen on Seal it for the day (Right away can't be taken back). */
+  arrival?: HolidayCardArrival | null;
   preview: HolidayCardPreview;
   to: Recipient;
   sending: boolean;
@@ -1559,7 +1660,7 @@ function LookStep({
       {/* The take-back and postage lines end the page and scroll with it (5.2); they were on Seal it for the day too. */}
       <div className="mx-auto mt-7 max-w-[420px] px-4">
         <p className="rounded-xl border border-[#e7dcc6] bg-[#fbf6ec] px-3.5 py-3 text-[13px] leading-[18px] text-[#374151]">
-          {takeBackBefore(to)}
+          {takeBackBefore(to, arrival)}
         </p>
         {stamps ? <div className="mt-3"><PostageLine stamps={stamps} design={design} /></div> : null}
       </div>
@@ -1928,7 +2029,12 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null,
   const saveSignature = useSaveCardSignature();
   const forgetSignature = useForgetCardSignature();
 
-  const [step, setStep] = useState<Step>('to');
+  // The step they're on; null: the flow's first step (`first`, below), which depends on the GET /cards read.
+  const [stepState, setStep] = useState<Step | null>(null);
+  // The step a new card starts on, once one was started here (null: `start`, below).
+  const [firstState, setFirstState] = useState<Step | null>(null);
+  // Pick a card first (Wave 3.1): where Write on the back was entered from, for its Back.
+  const [writeFrom, setWriteFrom] = useState<'pick' | 'to'>('to');
   // What they will get, from the server's look (step 5).
   const [look, setLook] = useState<HolidayCardPreview | null>(null);
   // A choice that closed while they looked it over, or why a card sent from step 4 didn't go: step 4 says so.
@@ -1980,7 +2086,7 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null,
   const [stampReason, setStampReason] = useState<string | null>(null);
   // Sealing it by hand (design plan Part 2, launch key card_table): after Look it over, the card lies on the table and
   // goes the moment the seal is pressed home. What the table shows is kept here, so it stays through the send.
-  const [sealing, setSealing] = useState<{ card: TableCard; note: string; fromName: string; toName: string; who: string; count: number } | null>(null);
+  const [sealing, setSealing] = useState<{ card: TableCard; note: string; fromName: string; toName: string; who: string; count: number; quick: boolean } | null>(null);
   const [sealShare, setSealShare] = useState(false);
   const [linkSaid, setLinkSaid] = useState<string | null>(null);
   // "Let it travel" (server key card_travel): on to begin with (D5). Someone with no town is asked once, "Where does it
@@ -1993,7 +2099,27 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null,
   const data = cards.data;
   // The card improvements of November 28 (contract section 1): only while this read says so; never kept beyond it.
   const improved = Boolean(data?.improved);
+  // Pick a card first (Wave 3.1, `improved`): Pick a card → Who it's for → Write. Arriving with a card chosen (a card's
+  // page, Send this card again) starts at Who it's for; arriving with a person chosen, at Pick a card, then Write.
+  // Without `improved`: Who it's for → Pick a card → Write, as before.
+  const steps = improved ? STEPS_PICK_FIRST : STEPS;
+  const designArrival = Boolean(chosenDesign && data?.designs.some((d) => d.id === chosenDesign));
+  const start: Step = improved && !designArrival ? 'pick' : 'to';
+  const first = firstState ?? start;
+  const step: Step = stepState ?? first;
+  /** A new card's first step: everything the first step carries (today's card, the taken-back note, Back) is there. */
+  const restart = (at: Step) => { setFirstState(at); setStep(at); };
+  /** On to Write on the back, remembering where from (its Back goes there). */
+  const toWrite = (from: 'pick' | 'to') => { setWriteFrom(from); setStep('write'); };
   const travelOffer = data?.travel ?? null;
+  // Let this card travel (Wave 3.4): while `improved` the switch starts from `travel.default_on` (absent: on, as before).
+  const travelStartsOn = improved ? travelOffer?.default_on ?? true : true;
+  const travelStarted = useRef(false);
+  useEffect(() => {
+    if (travelStarted.current || !data) return;
+    travelStarted.current = true;
+    setTravel(travelStartsOn);
+  }, [data, travelStartsOn]);
   const travelling = Boolean(travelOffer) && travel;
   // Runs `then` now, or once they've given their town (asked only while it travels and they have none).
   const withTown = (then: () => void) => {
@@ -2069,9 +2195,14 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null,
     // By email every choice the server offers (arrivals.email_all); a link keeps its two.
     const byEmail = data.arrivals.email_all ?? data.arrivals.email;
     if (to.kind === 'list') return to.entries.some((entry) => entry.kind === 'person') ? data.arrivals.person : byEmail;
-    if (to.kind === 'person') return theirs.data?.arrivals ?? data.arrivals.person;
+    // Right away for a person (Wave 3.3): every choice, `now` included, only while `improved`.
+    if (to.kind === 'person') {
+      return improved
+        ? theirs.data?.arrivals_all ?? data.arrivals.person_all ?? theirs.data?.arrivals ?? data.arrivals.person
+        : theirs.data?.arrivals ?? data.arrivals.person;
+    }
     return to.kind === 'email' ? byEmail : data.arrivals.email;
-  }, [data, to, theirs.data]);
+  }, [data, to, theirs.data, improved]);
 
   const listId = (entry: ListEntry) => {
     const key = entryKey(entry);
@@ -2086,6 +2217,7 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null,
   const continueWithList = () => {
     if (!listed.length) return;
     setTo(listed.length === 1 ? listed[0] : { kind: 'list', entries: listed });
+    if (improved) { if (designId) toWrite('to'); else setStep('pick'); return; }
     setStep(keepPicture && designId ? 'write' : 'pick');
   };
 
@@ -2124,7 +2256,8 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null,
     const draft = readCardDraft(me.id);
     if (!draft || !data.open) return;
     if (draft.to) {
-      setTo(draft.to);
+      // A link's envelope name is kept only while `improved` (Wave 3.2).
+      setTo(!improved && draft.to.kind === 'link' ? { kind: 'link' } : draft.to);
       setListed(draft.to.kind === 'list' ? draft.to.entries : draft.to.kind === 'link' ? [] : [draft.to]);
     }
     const designHere = Boolean(draft.designId && data.designs.some((d) => d.id === draft.designId));
@@ -2140,7 +2273,10 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null,
     setArrival(draft.arrival);
     requestId.current = draft.requestId;
     listIds.current = new Map(draft.listIds);
-    const at = !draft.to ? 'to' : !designHere ? 'pick' : draft.step;
+    // Pick a card first (`improved`): no picture yet, Pick a card; a picture and no one yet, Who it's for.
+    const at = improved
+      ? (!designHere ? 'pick' : !draft.to ? 'to' : draft.step)
+      : (!draft.to ? 'to' : !designHere ? 'pick' : draft.step);
     setStep(at);
     // A card from the assistant opens on Look it over, where the person sees all of it (below).
     lookOnOpen.current = Boolean(draft.fromAssistant) && at === 'seal';
@@ -2184,8 +2320,14 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null,
   const back = () => {
     if (openShelf) { closeCollection(); return; }
     if (step === 'pick') leavePick();
-    if (step === 'to' || step === 'sent') { router.push('/app/mailbox/personal'); return; }
-    setStep(STEPS[STEPS.indexOf(step) - 1]);
+    if (step === first || step === 'sent') { router.push('/app/mailbox/personal'); return; }
+    if (improved) {
+      // Pick a card first: Write goes back where it came from; Who it's for to Pick a card, and Pick a card (opened
+      // from Who it's for, a card having been chosen on arriving) back to Who it's for.
+      setStep(step === 'write' ? writeFrom : step === 'to' ? 'pick' : step === 'pick' ? 'to' : STEPS[STEPS.indexOf(step) - 1]);
+    } else {
+      setStep(STEPS[STEPS.indexOf(step) - 1]);
+    }
     setLook(null);
     setListLook(null);
     setSealError(null);
@@ -2257,7 +2399,9 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null,
       design: design.id,
       message: message.trim(),
       arrival,
-      to: to.kind === 'person' ? { user_id: to.userId } : to.kind === 'email' ? { email: to.email } : { link: true as const },
+      // A link's envelope name (Wave 3.2) goes only while `improved`; without one the card is as before.
+      to: to.kind === 'person' ? { user_id: to.userId } : to.kind === 'email' ? { email: to.email }
+        : improved && to.name ? { link: true as const, name: to.name } : { link: true as const },
       request_id: requestId.current,
       ...(data?.postage_enabled ? { use_stamp: true } : {}),
       ...(signature ? { signature } : {}),
@@ -2278,7 +2422,9 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null,
     setTo(null); setDesignId(null); setMessage(''); setSignature(savedSignature); removePhoto(); removeVoice(); setArrival(null); setLook(null); setLookUnavailable(false);
     setListed([]); setListLook(null); setListSent(null); setListError(null); setListTakenBack(new Set()); setListTakeBackError(null);
     setKeepPicture(false);
-    setStep('to');
+    // A new card's travel switch starts where the server says (Wave 3.4, `improved`); before, it kept the last one's.
+    if (improved) setTravel(travelStartsOn);
+    restart(improved ? 'pick' : 'to');
   };
 
   // "Send this card to someone else" (mail-cards-experience Part 6): the same picture and the saved signature; the note
@@ -2286,7 +2432,7 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null,
   const sendThisAgain = () => {
     const picture = designId;
     startOver();
-    if (picture) { setDesignId(picture); setKeepPicture(true); }
+    if (picture) { setDesignId(picture); setKeepPicture(true); if (improved) restart('to'); }
   };
 
   // This card already went with an earlier try whose answer was lost: show the card it sent, or, once it was taken
@@ -2344,6 +2490,8 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null,
       onError: (error) => {
         if (wentEarlier(error)) return;
         if (error.serverCode === 'CARD_TRAVEL_NEEDS_TOWN') { preview.reset(); setTownFor({ then: doLook }); return; }
+        // Right away twice to one person in a day (Wave 3.3): their morning mail is offered, the server's words above it.
+        if (error.serverCode === 'CARD_SAME_DAY') setArrival('next_morning');
         if (lookIsUnavailable(error)) setLookUnavailable(true);
         // Its photo or voice needs a bought stamp: the stamp books open; step 4 says why, and the card stays as it is.
         if (error.serverCode === 'CARD_MEDIA_NEEDS_STAMP') {
@@ -2424,6 +2572,7 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null,
       onError: (error) => {
         if (wentEarlier(error)) return;
         if (error.serverCode === 'CARD_TRAVEL_NEEDS_TOWN') { preview.reset(); setTownFor({ then: doSealFromSeal }); return; }
+        if (error.serverCode === 'CARD_SAME_DAY') setArrival('next_morning');
         if (lookIsUnavailable(error)) {
           setLookUnavailable(true);
           preview.reset();
@@ -2469,10 +2618,12 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null,
           setStampSheet(true);
           return;
         }
-        if (error.serverCode !== 'CARD_ARRIVAL_CLOSED') {
+        if (error.serverCode !== 'CARD_ARRIVAL_CLOSED' && error.serverCode !== 'CARD_SAME_DAY') {
           if (fromSeal) { setSealError(sendMessage(error, to?.kind === 'email')); send.reset(); }
           return;
         }
+        // Right away twice to one person in a day (Wave 3.3): back on step 4 with their morning mail chosen.
+        if (error.serverCode === 'CARD_SAME_DAY') setArrival('next_morning');
         // Their 7 a.m. came while they looked it over: choose again on step 4, with what's open now.
         setSealError(sendMessage(error));
         send.reset();
@@ -2549,6 +2700,8 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null,
       toName: (to.kind !== 'list' && piece?.recipient_name) || envelopeName(to),
       who: to.kind === 'person' ? firstName(to.name) : toName(to),
       count: to.kind === 'list' ? to.entries.length : 1,
+      // Quick seal (Wave 3.5, `improved`): only after a card was sealed on the table on this device.
+      quick: improved && sealedOnceHere(),
     });
   };
 
@@ -2632,8 +2785,10 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null,
           refused(error.message || mediaNeedsStampLine);
           return;
         }
-        if (error.serverCode === 'CARD_ARRIVAL_CLOSED') {
-          // Their 7 a.m. came while they looked it over: choose again on step 4, as before.
+        if (error.serverCode === 'CARD_ARRIVAL_CLOSED' || error.serverCode === 'CARD_SAME_DAY') {
+          // Their 7 a.m. came while they looked it over: choose again on step 4, as before. Right away twice to one
+          // person in a day (Wave 3.3): the same, with their morning mail chosen.
+          if (error.serverCode === 'CARD_SAME_DAY') setArrival('next_morning');
           refused();
           setSealing(null);
           setSealError(sendMessage(error));
@@ -2711,7 +2866,7 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null,
 
   // Today's card, once it's sent. A card sent from elsewhere while this one is being written doesn't take over: its
   // step says why this one can't go (one card a day).
-  if (today && step === 'to') {
+  if (today && step === first) {
     return (
       <div className={page}>
         <div className="mx-auto w-full max-w-[560px]">
@@ -2750,12 +2905,13 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null,
         title={step === 'sent' && sent?.by_link ? 'Your card is ready.' : openShelf ? 'All collections' : undefined}
         onBack={back}
         headingRef={headingRef}
+        steps={steps}
         trailing={data.postage_enabled ? <StampChip stamps={stamps} onOpen={() => { setStampShort(null); setStampReason(null); setStampSheet(true); }} /> : null}
       />
       {data.postage_enabled ? (
         <StampSheet open={stampSheet} onClose={() => { setStampSheet(false); setStampShort(null); setStampReason(null); }} stamps={stamps} short={stampShort} reason={stampReason} overTable={Boolean(sealing)} />
       ) : null}
-      {(tookBack || takenBackNote) && step === 'to' ? (
+      {(tookBack || takenBackNote) && step === first ? (
         <p role="status" className="mx-4 mt-2 rounded-xl border border-[#e7dcc6] bg-[#fbf6ec] px-3.5 py-2.5 text-[14px] text-[#374151]">
           {takenBackNote ?? (data.postage_enabled ? 'You took your card back, and its stamp is back with you.' : 'You took your card back. You can send a card again today.')}
         </p>
@@ -2764,9 +2920,17 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null,
         <p className={`mt-1 px-4 text-[14px] leading-5 ${muted}`}>To {toName(to)}</p>
       ) : null}
 
+      {step === 'to' && improved && design ? (
+        <ChosenCardLine design={design} onChange={() => setStep('pick')} />
+      ) : null}
       {step === 'to' ? (
         <ToStep
-          onChoose={(next) => { setTo(next); setStep(keepPicture && designId ? 'write' : 'pick'); }}
+          onChoose={(next) => {
+            setTo(next);
+            if (improved) { if (design) toWrite('to'); else setStep('pick'); return; }
+            setStep(keepPicture && designId ? 'write' : 'pick');
+          }}
+          linkName={improved}
           max={max}
           listed={listed}
           onToggle={toggleListed}
@@ -2781,7 +2945,9 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null,
           year={data.year}
           chosen={designId}
           onChoose={setDesignId}
-          onNext={() => { leavePick(); setStep('write'); }}
+          // Pick a card first (`improved`): on to Who it's for while no one is chosen yet, else straight to Write.
+          onNext={() => { leavePick(); if (improved && !to) setStep('to'); else toWrite('pick'); }}
+          nextLabel={improved && !to ? 'Choose who it’s for' : 'Write on this card'}
           shelving={shelves ? { shelves, open: openShelf, onOpenCollection: openCollection, opening: data.opening ?? null, restoreTop: shelvesTop } : null}
         />
       ) : null}
@@ -2872,6 +3038,7 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null,
         <LookStep
           preview={look}
           to={to}
+          arrival={arrival}
           sending={send.isPending}
           error={send.isError ? sendMessage(send.error, to.kind === 'email') : null}
           onSend={doSend}
@@ -2954,13 +3121,15 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null,
           sendMoment={{
             firstName: sealing.who,
             count: sealing.count,
-            onSeal: sealAndSend,
+            // Once a sealing here ends with the card sent, this device offers Quick seal next time (Wave 3.5, `improved`).
+            onSeal: () => sealAndSend().then((answer) => { if (answer.ok && improved) markSealedOnce(); return answer; }),
+            quickSeal: sealing.quick,
             goneWords: listSent
               ? (listWent === 1 ? 'One card on its way.' : `${listWent} cards on their way.`)
               : sent?.by_link ? 'Your card is ready.' : `On its way to ${sealing.who}.`,
             gone: listSent ? (
               <>
-                <p>{listMissed ? `${listMissed === 1 ? 'One card' : `${listMissed} cards`} didn’t go. See which, and send them again.` : to ? takeBackBefore(to) : ''}</p>
+                <p>{listMissed ? `${listMissed === 1 ? 'One card' : `${listMissed} cards`} didn’t go. See which, and send them again.` : to ? takeBackBefore(to, arrival) : ''}</p>
                 {listSent.some((result) => result.status !== 'not_sent' && result.card.travel) ? <p data-testid="sealTravelLine">{TRAVEL_SENT_LINE}</p> : null}
                 <div data-row>
                   <button type="button" data-strong data-testid="sealDone" onClick={sealingDone}>{listMissed ? 'See which' : 'Done'}</button>

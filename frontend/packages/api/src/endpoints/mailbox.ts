@@ -813,7 +813,9 @@ export interface HolidayCards {
    * server has it) all four, its email going at your next 7 a.m. (`next_round_at`) or on Christmas morning. A link keeps
    * `email`.
    */
-  arrivals: { person: HolidayCardArrival[]; email: HolidayCardArrival[]; email_all?: HolidayCardArrival[] };
+  arrivals: { person: HolidayCardArrival[]; email: HolidayCardArrival[]; email_all?: HolidayCardArrival[];
+    /** While `improved`: every choice to a person, Right away (`now`) included; `person` stays as older apps read it. */
+    person_all?: HolidayCardArrival[] };
   /** Your next 7 a.m. round and Christmas morning, where you are. */
   next_round_at: string;
   christmas_morning_at: string;
@@ -829,7 +831,9 @@ export interface HolidayCards {
    * sender's town ("Boise, ID"), or null: ask "Where does it start?" once. `places`: how many people one person may pass
    * a card to.
    */
-  travel?: { on: boolean; town: string | null; places: number };
+  travel?: { on: boolean; town: string | null; places: number;
+    /** While `improved`: where the switch starts (false: off); absent, it starts on as before. */
+    default_on?: boolean };
 }
 
 /** GET /api/mailbox/cards */
@@ -892,6 +896,8 @@ export async function suggestHolidayCardNote(data: {
 export interface HolidayCardArrivalsFor {
   /** The arrivals open to them now. */
   arrivals: HolidayCardArrival[];
+  /** While the card improvements are on: every choice open to them now, Right away (`now`) included. */
+  arrivals_all?: HolidayCardArrival[];
   /** The day of their next 7 a.m. mail where they live ("2026-10-31"). */
   next_round_on: string;
 }
@@ -906,7 +912,11 @@ export async function sendHolidayCard(data: {
   design: string;
   message: string;
   arrival: HolidayCardArrival;
-  to: { user_id: string } | { email: string } | { link: true };
+  /**
+   * `link.name` (only while GET /cards says `improved`): the name written on the link's envelope, at most 40
+   * characters; left out for none.
+   */
+  to: { user_id: string } | { email: string } | { link: true; name?: string };
   /**
    * One per card draft, sent again with every look and retry of it: a repeat of a send answers with the card it
    * stored (200), CARD_TAKEN_BACK once that card was taken back, or CARD_REQUEST_SENT (with `card`) when the draft

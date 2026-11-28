@@ -1046,6 +1046,7 @@ export default function OpenLetterView({ mailId, token, isCard = false }: {
       return (
         <CardTable
           card={guestCard.card}
+          improved={improved}
           note={guestCard.note}
           fromName={guestCard.senderName}
           toName={guestCard.toName || 'You'}
