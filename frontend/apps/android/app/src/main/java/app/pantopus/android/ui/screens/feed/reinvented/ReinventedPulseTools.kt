@@ -5,6 +5,7 @@ package app.pantopus.android.ui.screens.feed.reinvented
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
@@ -120,11 +121,17 @@ internal fun ReinventedFiltersHost(
     )
 }
 
-/** Over the map under the top line ([top]): the pill, the rail (its When card over the pill) and the lens's suggestions. */
+/**
+ * Over the map under the top line ([top]): the pill (right of [left], the panel's edge on a wide window), the rail (its
+ * When card over the pill) and the lens's suggestions ([lensWidth] wide, under the top line).
+ */
 @Composable
+@Suppress("LongParameterList") // The tools, where they go, and the map's state.
 internal fun BoxScope.ReinventedPhoneOverMap(
     tools: ReinventedPhoneTools,
     top: Dp,
+    left: Dp,
+    lensWidth: Dp?,
     atlas: Boolean,
     moving: Boolean,
     mapModel: ReinventedMapViewModel,
@@ -135,13 +142,15 @@ internal fun BoxScope.ReinventedPhoneOverMap(
         // The server's own account of what it applied (CONTRACT 10a), the phone's choice until it answers.
         filterWords = reinventedFilterLine(tools.applied, tools.filters, tools.rail.time).takeUnless { atlas },
         onClearFilters = { tools.clearFilters(mapModel) },
-        modifier = Modifier.reinventedPillPlace(railTop),
+        modifier = Modifier.padding(start = left).reinventedPillPlace(railTop),
     )
     ReinventedRail(tools.rail, moving = moving, top = railTop, ask = tools.ask, modifier = Modifier.fillMaxWidth())
     ReinventedLensSuggestions(
         tools.lens,
         tools.lensActions,
-        Modifier.padding(top = top + 4.dp, start = Spacing.s4, end = Spacing.s4),
+        Modifier
+            .padding(top = top + 4.dp, start = Spacing.s4, end = Spacing.s4)
+            .then(if (lensWidth != null) Modifier.width(lensWidth) else Modifier),
     )
 }
 

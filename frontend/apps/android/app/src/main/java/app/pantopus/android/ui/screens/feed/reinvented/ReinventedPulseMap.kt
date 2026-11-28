@@ -47,7 +47,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -80,14 +79,14 @@ private const val OPEN_ZOOM = 12.5f
 /**
  * The one map (PHASE-1 §2 piece 7, flat first: board B4): a ring is a Moment (today's ring pin), a mark on the ground is
  * a post that stays (a kept Moment too), a ticket is a plan. A Heads-up is red, pulsing and always on top. A tap on a
- * pin opens it ([onOpen]). [bottomPadding] is the part of the map the list covers: the map keeps its middle above it.
+ * pin opens it ([onOpen]). [padding] is the part of the map the list covers: the map keeps its middle clear of it.
  */
 @Composable
 internal fun ReinventedPulseMap(
     state: ReinventedMapState,
     camera: CameraPositionState,
     focused: String?,
-    bottomPadding: Dp,
+    padding: PaddingValues,
     onMoved: (ReinventedBox) -> Unit,
     onOpen: (ReinventedMapItem) -> Unit,
     modifier: Modifier = Modifier,
@@ -126,7 +125,7 @@ internal fun ReinventedPulseMap(
             cameraPositionState = camera,
             properties = properties,
             uiSettings = uiSettings,
-            contentPadding = PaddingValues(bottom = bottomPadding),
+            contentPadding = padding,
             onMapLoaded = { ready = true },
         )
         // Live beams (phase 4); never on My Atlas, the person's own private map.

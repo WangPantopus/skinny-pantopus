@@ -8,7 +8,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -52,7 +52,6 @@ import app.pantopus.android.data.api.models.moments.MomentDto
 import app.pantopus.android.data.api.models.moments.MomentRingDto
 import app.pantopus.android.data.pulse.ReinventedBox
 import app.pantopus.android.data.pulse.ReinventedFilterQuery
-import app.pantopus.android.ui.screens.feed.living.LivingAskBar
 import app.pantopus.android.ui.screens.feed.living.LivingAtlasSearch
 import app.pantopus.android.ui.screens.feed.pulse.PulsePostCardContent
 import app.pantopus.android.ui.screens.feed.reinvented.after.MomentConvergenceListSheet
@@ -174,7 +173,6 @@ fun ReinventedPulseScreen(
         followModel = followModel,
         onPinPicked = { pinPicked.value = true },
         actions = actions,
-        onPickChip = viewModel::pickChip,
         onPickReach = viewModel::pickReach,
         onPickCircle = viewModel::pickCircle,
         mapModel = mapModel,
@@ -460,8 +458,8 @@ private fun ReinventedListPane(
 }
 
 /**
- * The map and the list: on a phone the map behind and the list over it at its height, the header over both, and +; on a
- * wide window (a tablet, an open foldable) the list beside the map ([ReinventedSideBySide]).
+ * The map and the list: on a phone the map behind and the list a sheet over it ([ReinventedOverMap]); on a window 700 dp
+ * wide or more (a tablet, an open foldable) the list a floating panel at the left over the whole map ([ReinventedPanelLayout]).
  */
 @Composable
 // What the layout shows, its height, and where each part's taps go; the phone's and the wide window's parts, built once.
@@ -474,7 +472,6 @@ private fun ReinventedPulseLayout(
     followModel: ReinventedFollowViewModel,
     onPinPicked: () -> Unit,
     actions: ReinventedPulseActions,
-    onPickChip: (String) -> Unit,
     onPickReach: (String, Int) -> Unit,
     onPickCircle: (String, String) -> Unit,
     mapModel: ReinventedMapViewModel,
@@ -501,12 +498,12 @@ private fun ReinventedPulseLayout(
                 PantopusColors.appBg,
             ).semantics { testTagsAsResourceId = true }.testTag("reinventedPulse"),
     ) {
-        val wide = reinventedSideBySide(maxWidth)
-        // PHASE-6 B: at peek and half, Around me's list is what the map shows now.
-        val followable = !wide && !atlas.on && state.reach == ReinventedPulseViewModel.AROUND
-        val followOn = followable && height != ReinventedHeight.List
+        val wide = reinventedPanel(maxWidth)
+        // PHASE-6 B: Around me's list is what the map shows now: at peek and half on a phone, in the open panel when wide.
+        val followable = !atlas.on && state.reach == ReinventedPulseViewModel.AROUND
+        val followOn = followable && height != (if (wide) ReinventedHeight.Map else ReinventedHeight.List)
         LaunchedEffect(followOn) { followModel.follow(followOn) }
-        val follow = rememberFollowArea(camera, followModel, followOn, with(LocalDensity.current) { maxWidth.toPx() })
+        val follow = rememberFollowArea(camera, followModel, followOn)
         val open = { item: ReinventedMapItem ->
             // Following, a first tap on a pin lights it and the map glides there (its row comes first); a second opens it.
             if (followOn && item !is ReinventedMapItem.Ticket && mapState.focused != item.id) {
@@ -530,13 +527,10 @@ private fun ReinventedPulseLayout(
                         state = state,
                         onOpenMenu = actions.onOpenMenu,
                         onHeight = onHeight,
-                        onPickChip = onPickChip,
                         onPickReach = onPickReach,
-                        time = mapState.time,
-                        onPickTime = mapModel::pickTime,
                         atlas = atlas.on,
                         onAtlas = atlas.onToggle,
-                        sideBySide = wide,
+                        overList = !wide && height == ReinventedHeight.List,
                         onPickCircle = onPickCircle,
                         lens = tools.lens,
                         lensActions = tools.lensActions,
@@ -544,12 +538,12 @@ private fun ReinventedPulseLayout(
                         modifier = modifier,
                     )
                 },
-                map = { bottomPadding ->
+                map = { padding ->
                     ReinventedPulseMap(
                         state = mapState,
                         camera = camera,
                         focused = mapState.focused.takeIf { height == ReinventedHeight.Map || followOn },
-                        bottomPadding = bottomPadding,
+                        padding = padding,
                         onMoved = { box ->
                             atlas.onMoved(box)
                             if (!atlas.on) mapModel.moved(box)
@@ -558,51 +552,40 @@ private fun ReinventedPulseLayout(
                         onOpen = open,
                     )
                 },
-                timeRow =
-                    if (atlas.on) {
-                        null
-                    } else {
-                        { modifier ->
-                            Column(modifier) {
-                                ReinventedTimeRow(mapState.time, mapModel::pickTime)
-                                LivingAskBar()
-                            }
-                        }
-                    },
-                mapExtras = { guessTop, deck ->
-                    if (!atlas.on) {
-                        val at = Modifier.align(Alignment.TopStart).padding(top = guessTop + Spacing.s2, start = Spacing.s4)
-                        ReinventedGuessSpotsChip(mapState, at)
-                    }
-                    // On a phone the sheet's peek line stands where the deck was (PHASE-6 A): the deck is the wide map's.
-                    deck?.let { ReinventedPeekDeck(deck = mapState.deck, onFocus = mapModel::focus, onOpen = open, modifier = it) }
-                },
+                mapExtras = { chip -> if (!atlas.on) ReinventedGuessSpotsChip(mapState, chip) },
                 add = { modifier -> AddButton(onAdd, modifier) },
                 onAdd = onAdd,
                 list = list,
             )
         ReinventedFiltersHost(tools, mapState.time, mapModel)
+        val followState by followModel.state.collectAsStateWithLifecycle()
+        val noPlace by filtersModel.noPlace.collectAsStateWithLifecycle()
+        // Before the first answer for this area the line names only the time: never "Nothing here yet" before a read.
+        val line =
+            if (followOn) {
+                reinventedFollowLine(followState, mapState.time) ?: reinventedWhenWords(mapState.time)
+            } else {
+                reinventedSheetLine(mapState.items.size, mapState.time, atlas.on)
+            }
+        val noPlaceToggle: @Composable () -> Unit = {
+            // PHASE-6 H: after a failed or slow read the last rows stay and the header offers to try again.
+            if (followOn && followState.failed) ReinventedFollowRetry(followModel::refresh)
+            if (!atlas.on && state.reach == ReinventedPulseViewModel.AROUND) ReinventedNoPlaceToggle(noPlace, filtersModel::noPlace)
+        }
+        val lineDim = followOn && followState.stale
         if (wide) {
-            ReinventedSideBySide(height, parts)
+            val size = maxWidth to maxHeight
+            ReinventedPanelLayout(height, onHeight, size, line, parts, { noPlaceToggle() }, follow::uncovered, lineDim) { top, left ->
+                ReinventedPhoneOverMap(tools, top, left, REINVENTED_PANEL, atlas.on, camera.isMoving, mapModel)
+            }
         } else {
-            val followState by followModel.state.collectAsStateWithLifecycle()
-            val noPlace by filtersModel.noPlace.collectAsStateWithLifecycle()
-            // Before the first answer for this area the line names only the time: never "Nothing here yet" before a read.
-            val line =
-                if (followOn) {
-                    reinventedFollowLine(followState, mapState.time) ?: reinventedWhenWords(mapState.time)
-                } else {
-                    reinventedSheetLine(mapState.items.size, mapState.time, atlas.on)
-                }
             val sheetEnd: @Composable RowScope.(ReinventedHeight) -> Unit = { settled ->
-                // PHASE-6 H: after a failed or slow read the last rows stay and the header offers to try again.
-                if (followOn && followState.failed) ReinventedFollowRetry(followModel::refresh)
-                if (!atlas.on && state.reach == ReinventedPulseViewModel.AROUND) ReinventedNoPlaceToggle(noPlace, filtersModel::noPlace)
+                noPlaceToggle()
                 if (settled == ReinventedHeight.List) ReinventedSheetHeaderAdd(onAdd)
             }
-            val lineDim = followOn && followState.stale
-            ReinventedOverMap(height, onHeight, maxHeight, line, parts, sheetEnd, follow::uncovered, lineDim) { top ->
-                ReinventedPhoneOverMap(tools, top, atlas.on, camera.isMoving, mapModel)
+            val phone = maxHeight to maxWidth
+            ReinventedOverMap(height, onHeight, phone, line, parts, sheetEnd, follow::uncovered, lineDim) { top ->
+                ReinventedPhoneOverMap(tools, top, 0.dp, null, atlas.on, camera.isMoving, mapModel)
             }
         }
     }
@@ -617,14 +600,15 @@ private fun ReinventedPulseLayout(
 private fun BoxScope.ReinventedOverMap(
     height: ReinventedHeight,
     onHeight: (ReinventedHeight) -> Unit,
-    full: Dp,
+    size: Pair<Dp, Dp>,
     line: String,
     parts: ReinventedLayoutParts,
     sheetEnd: @Composable RowScope.(ReinventedHeight) -> Unit,
-    onUncovered: (top: Float, bottom: Float) -> Unit,
+    onUncovered: (left: Float, top: Float, right: Float, bottom: Float) -> Unit,
     lineDim: Boolean,
     overMap: @Composable BoxScope.(top: Dp) -> Unit,
 ) {
+    val (full, width) = size
     val density = LocalDensity.current
     var headerPx by remember { mutableIntStateOf(0) }
     val header = with(density) { headerPx.toDp() }
@@ -642,10 +626,12 @@ private fun BoxScope.ReinventedOverMap(
     Box(Modifier.matchParentSize().then(placedBelow))
     val mapHeight = below?.let { with(density) { it.toDp() } }?.coerceAtLeast(full) ?: full
     Box(Modifier.fillMaxWidth().wrapContentHeight(Alignment.Top, unbounded = true).height(mapHeight)) {
-        parts.map(covered + (mapHeight - full))
+        parts.map(PaddingValues(bottom = covered + (mapHeight - full)))
     }
     // What the map shows uncovered, between the top line and the sheet once it rests: the list follows it there.
-    LaunchedEffect(headerPx, covered, full) { with(density) { onUncovered(headerPx.toFloat(), (full - covered).toPx()) } }
+    LaunchedEffect(headerPx, covered, full, width) {
+        with(density) { onUncovered(0f, headerPx.toFloat(), width.toPx(), (full - covered).toPx()) }
+    }
     ReinventedSheet(
         sheet = sheet,
         top = header,
@@ -658,7 +644,10 @@ private fun BoxScope.ReinventedOverMap(
     )
     parts.header(Modifier.onSizeChanged { headerPx = it.height })
     // "Guess the spot" stands at the bottom left over the sheet at peek, level with +; the top is the rail's and the pill's.
-    if (settled == ReinventedHeight.Map) parts.mapExtras(this, full - REINVENTED_SHEET_PEEK - GUESS_LIFT, null)
+    if (settled == ReinventedHeight.Map) {
+        val chip = Modifier.align(Alignment.TopStart).padding(top = full - REINVENTED_SHEET_PEEK - GUESS_LIFT, start = Spacing.s4)
+        parts.mapExtras(this, chip)
+    }
     // + is ADD_SIZE high, with its own bottom padding under it: its edge stands 12 dp over the sheet's.
     ReinventedSheetAdd(sheet, header, full, ADD_SIZE, parts.add, half)
     // The rail, the pill and the lens's suggestions, over the map (the full sheet covers the map: none then).

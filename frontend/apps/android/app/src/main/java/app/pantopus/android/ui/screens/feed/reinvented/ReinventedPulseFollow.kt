@@ -350,16 +350,21 @@ internal class ReinventedFollowArea(
     private val model: ReinventedFollowViewModel,
 ) {
     var on: Boolean = false
-    var width: Float = 0f
+    private var left = 0f
     private var top = 0f
+    private var right = 0f
     private var bottom = 0f
 
-    /** The sheet settled: the uncovered part runs from [top] to [bottom], in the map's pixels. */
+    /** The sheet or the panel settled: the uncovered part of the map, in its pixels. */
     fun uncovered(
+        left: Float,
         top: Float,
+        right: Float,
         bottom: Float,
     ) {
+        this.left = left
         this.top = top
+        this.right = right
         this.bottom = bottom
         read()
     }
@@ -367,7 +372,7 @@ internal class ReinventedFollowArea(
     /** The map rested (or following began): ask for what it shows uncovered. */
     fun read() {
         if (!on || camera.isMoving) return
-        camera.boxBetween(top, bottom, width)?.let(model::moved)
+        camera.boxIn(left, top, right, bottom)?.let(model::moved)
     }
 }
 
@@ -376,33 +381,30 @@ internal fun rememberFollowArea(
     camera: CameraPositionState,
     model: ReinventedFollowViewModel,
     on: Boolean,
-    width: Float,
 ): ReinventedFollowArea {
     val area = remember(camera, model) { ReinventedFollowArea(camera, model) }
-    SideEffect {
-        area.width = width
-        area.on = on
-    }
+    SideEffect { area.on = on }
     LaunchedEffect(on) { if (on) area.read() }
     return area
 }
 
 /**
- * The map's area between two heights on screen (its four corners, so a turned map is held whole); null when unknown.
+ * The map's area inside a part of the screen (its four corners, so a turned map is held whole); null when unknown.
  * Across the date line the box is the side holding the area's middle (as the web's), never the whole width of the world.
  */
-internal fun CameraPositionState.boxBetween(
+internal fun CameraPositionState.boxIn(
+    left: Float,
     top: Float,
+    right: Float,
     bottom: Float,
-    width: Float,
 ): ReinventedBox? {
     val projection = projection ?: return null
-    if (bottom <= top || width <= 0f) return null
+    if (bottom <= top || right <= left) return null
     val corners =
-        listOf(0f to top, width to top, 0f to bottom, width to bottom).map { (x, y) ->
+        listOf(left to top, right to top, left to bottom, right to bottom).map { (x, y) ->
             projection.fromScreenLocation(Point(x.roundToInt(), y.roundToInt()))
         }
-    val middle = projection.fromScreenLocation(Point((width / 2f).roundToInt(), ((top + bottom) / 2f).roundToInt())).longitude
+    val middle = projection.fromScreenLocation(Point(((left + right) / 2f).roundToInt(), ((top + bottom) / 2f).roundToInt())).longitude
     // Each corner's longitude as a step east or west of the middle, so a corner past the date line stays on its own side.
     val steps = corners.map { wrapLongitude(it.longitude - middle) }
     val south = corners.minOf { it.latitude }.coerceIn(-MAX_LAT, MAX_LAT)
