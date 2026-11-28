@@ -264,10 +264,50 @@
    (PHASE-6 J), so the switch draws a little tighter and the place pill gives way first. */
 .rp-top[data-phone] {
   top: max(8px, env(safe-area-inset-top));
-  gap: 4px;
+  gap: 3px;
+  padding: 0 3px;
+}
+/* Map | Atlas as two small icons here, and the pill drawn tighter, so the town reads in full at 375 and its first letters at
+   320 (LEAD-7's look, 08:39); the reach lives in the dial alone at this width. */
+.rp-top[data-phone] .rp-switch {
+  padding: 2px;
 }
 .rp-top[data-phone] .rp-switch button {
-  padding: 0 9px;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  padding: 0;
+}
+.rp-top[data-phone] .rp-scope {
+  gap: 4px;
+  padding: 0 6px;
+}
+.rp-top[data-phone] .rp-scope strong {
+  font-size: 14px;
+}
+.rp-top[data-phone] .rp-scope-dot {
+  width: 8px;
+  height: 8px;
+}
+@media (max-width: 340px) {
+  .rp-top[data-phone] {
+    left: 6px;
+    right: 6px;
+    gap: 2px;
+    padding: 0 2px;
+  }
+  .rp-top[data-phone] .rp-lens {
+    width: 34px;
+  }
+  .rp-top[data-phone] .rp-bell {
+    min-width: 34px;
+  }
+  .rp-top[data-phone] .rp-bell button {
+    padding: 7px;
+  }
+  .rp-top[data-phone] .rp-scope {
+    padding: 0 4px;
+  }
 }
 .rp-bell {
   display: grid;

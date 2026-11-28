@@ -11,7 +11,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import { keepPreviousData, useInfiniteQuery, useQuery, useQueryClient, type InfiniteData } from '@tanstack/react-query';
-import { ChevronDown, LocateFixed, Menu, Plus, Search, UserRoundSearch, X } from 'lucide-react';
+import { BookOpen, ChevronDown, LocateFixed, Map as MapGlyph, Menu, Plus, Search, UserRoundSearch, X } from 'lucide-react';
 import * as api from '@pantopus/api';
 import type { Post } from '@pantopus/api';
 import { useMe } from '@/lib/me';
@@ -836,7 +836,7 @@ export default function ReinventedPulse() {
           {!phoneTop && (
             <span className="rp-scope-reach">{reach === 'around' && miles < 25 ? `${REACH_NAMES.around} · ${miles} mi` : REACH_NAMES[reach]}</span>
           )}
-          <ChevronDown size={14} aria-hidden />
+          <ChevronDown size={phoneTop ? 12 : 14} aria-hidden />
         </button>
         {scopeOpen && (
           <ReachDial
@@ -858,12 +858,28 @@ export default function ReinventedPulse() {
         )}
       </div>
 
+      {/* At a phone's width the line also holds the menu, the bell and Messages: Map | Atlas draws as two small icons there so
+          the place pill keeps the town's name readable (LEAD-7's look, 08:39). */}
       <div className="rp-switch" role="group" aria-label="Map or Atlas">
-        <button type="button" aria-pressed={view === 'pulse'} data-lit={view === 'pulse' || undefined} onClick={() => toView('pulse')}>
-          Map
+        <button
+          type="button"
+          aria-pressed={view === 'pulse'}
+          aria-label={phoneTop ? 'Map' : undefined}
+          title={phoneTop ? 'Map' : undefined}
+          data-lit={view === 'pulse' || undefined}
+          onClick={() => toView('pulse')}
+        >
+          {phoneTop ? <MapGlyph size={16} aria-hidden /> : 'Map'}
         </button>
-        <button type="button" aria-pressed={view === 'atlas'} data-lit={view === 'atlas' || undefined} onClick={() => toView('atlas')}>
-          Atlas
+        <button
+          type="button"
+          aria-pressed={view === 'atlas'}
+          aria-label={phoneTop ? 'Atlas' : undefined}
+          title={phoneTop ? 'Atlas' : undefined}
+          data-lit={view === 'atlas' || undefined}
+          onClick={() => toView('atlas')}
+        >
+          {phoneTop ? <BookOpen size={16} aria-hidden /> : 'Atlas'}
         </button>
       </div>
 
