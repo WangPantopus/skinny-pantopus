@@ -1300,6 +1300,11 @@
 .rp-post .rp-place-button {
   color: var(--rp-brand);
 }
+/* PHASE-6 C: today's post card (PostCard, a file of today's) drawn one step smaller inside the new Pulse only, as Android draws
+   its rows at a font scale of 0.9; nothing in the card's own file changes. */
+.rp-post-card {
+  zoom: 0.92;
+}
 
 /* ── Desktop width: the list and the map side by side ── */
 /* ── Alive right now: tall previews over the list ── */
