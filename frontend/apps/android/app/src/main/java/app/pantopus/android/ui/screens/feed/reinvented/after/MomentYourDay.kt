@@ -402,7 +402,7 @@ private fun DayMap(photos: List<YourDayPhoto>) {
                 MarkerComposable(
                     keys = arrayOf<Any>(i, p.chosen),
                     state = remember(p) { MarkerState(position = LatLng(p.latitude, p.longitude)) },
-                    anchor = Offset(0.5f, 0.5f),
+                    anchor = PIN_CENTER,
                 ) {
                     Box(
                         Modifier.size(PIN.dp).clip(CircleShape).background(if (p.chosen) PantopusColors.primary600 else Color.Gray),
@@ -516,6 +516,9 @@ private val DAY_MAP_SETTINGS =
         mapToolbarEnabled = false,
     )
 private val DOTTED = listOf(Dash(18f), Gap(12f))
+
+/** A numbered pin sits centred on its place. */
+private val PIN_CENTER = Offset(0.5f, 0.5f)
 private const val LINE_WIDTH = 6f
 private const val EVENING_HOUR = 20
 private const val DEFAULT_ZOOM = 14f
