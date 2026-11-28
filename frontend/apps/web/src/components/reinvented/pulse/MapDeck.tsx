@@ -34,7 +34,7 @@ export function TimeRow({ time, onTime }: { time: MapTime; onTime(t: MapTime): v
     if (!r || !on || r.scrollWidth <= r.clientWidth) return;
     const a = on.getBoundingClientRect(), b = r.getBoundingClientRect();
     r.scrollLeft += a.left + a.width / 2 - (b.left + b.width / 2);
-  }, [time]);
+  }, [time, row]);
   return (
     <div ref={row} className="rp-time" role="group" aria-label="When" onPointerDown={onPointerDown} onClickCapture={onClickCapture}>
       {MAP_TIMES.map((t) => (
