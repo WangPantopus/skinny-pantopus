@@ -148,6 +148,8 @@ final class CardTableModel {
     // Sealing a card by hand (plan Part 2, CardTableSending.swift); nil while reading one.
     var sending: CardTableSending?
     var sendingSetup: CardTableSendingSetup?
+    /// "Quick seal" is running: one short seal-and-stamp beat instead of the ritual (cards-next 3.5).
+    @ObservationIgnored var quickSealing = false
     /// The wax seal shows: always on a card being read; on one being sent, once it's pressed home.
     var sealShown = true
     /// The stamp head pressing the seal, 0 to 1 over 0.6 s.

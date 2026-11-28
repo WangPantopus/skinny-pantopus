@@ -105,7 +105,8 @@ struct HolidayCardSealStep: View {
                 if viewModel.travelOffered {
                     HolidayCardTravelRow(
                         isOn: Binding(get: { viewModel.travels }, set: { viewModel.setTravels($0) }),
-                        firstName: travelFirstName
+                        firstName: travelFirstName,
+                        improved: viewModel.improved
                     )
                 }
             }
@@ -133,6 +134,7 @@ struct HolidayCardSealStep: View {
     /// Until when it can be taken back (each card on a list on its own).
     private var sealNote: String {
         if let entries = recipient.entries { return HolidayCardWords.sealNote(list: entries) }
+        if case .person = recipient, viewModel.arrival == .now { return HolidayCardWords.rightAwayNote }
         return recipient.isLink ? HolidayCardWords.sealNoteByLink : HolidayCardWords.sealNote(byEmail: recipient.isEmail)
     }
 
@@ -148,7 +150,7 @@ struct HolidayCardSealStep: View {
             trust: .neighbor,
             from: viewModel.fromName,
             fromLine: nil,
-            to: recipient.envelopeName,
+            to: viewModel.envelopeName(recipient),
             toLine: nil,
             note: nil,
             postmarkTown: nil,

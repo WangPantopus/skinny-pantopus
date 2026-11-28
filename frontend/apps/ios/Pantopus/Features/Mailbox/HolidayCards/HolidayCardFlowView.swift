@@ -218,7 +218,7 @@ struct HolidayCardFlowView: View {
                     .accessibilityAddTraits(.isHeader)
                     .accessibilityIdentifier("sendCardTitle")
                 if let step = heading.dots {
-                    StepDots(current: step)
+                    StepDots(current: step, order: viewModel.steps)
                         .padding(.trailing, 14)
                 }
             }
@@ -352,7 +352,7 @@ struct HolidayCardFlowView: View {
             HolidayCardsClosedView(onDone: onClose)
         } else {
             VStack(alignment: .leading, spacing: Spacing.s3) {
-                if let note = viewModel.backNote, viewModel.step == .to {
+                if let note = viewModel.backNote, viewModel.step == viewModel.firstStep {
                     Text(note)
                         .font(.system(size: 14))
                         .foregroundStyle(MailPaper.cardTextSoft)
@@ -576,18 +576,20 @@ extension EnvironmentValues {
 /// The five steps as dots: wax red up to this one (a longer dash), cream ahead.
 private struct StepDots: View {
     let current: HolidayCardStep
+    /// The steps in the flow's order (Pick a card first with `improved`).
+    var order = HolidayCardStep.counted
 
     var body: some View {
-        let index = HolidayCardStep.counted.firstIndex(of: current) ?? 0
+        let index = order.firstIndex(of: current) ?? 0
         HStack(spacing: 5) {
-            ForEach(Array(HolidayCardStep.counted.enumerated()), id: \.offset) { position, _ in
+            ForEach(Array(order.enumerated()), id: \.offset) { position, _ in
                 Capsule()
                     .fill(position <= index ? MailPaper.wax : MailPaper.cardDotAhead)
                     .frame(width: position == index ? 20 : 7, height: 7)
             }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Step \(index + 1) of \(HolidayCardStep.counted.count)")
+        .accessibilityLabel("Step \(index + 1) of \(order.count)")
         .accessibilityIdentifier("sendCardStepDots")
     }
 }

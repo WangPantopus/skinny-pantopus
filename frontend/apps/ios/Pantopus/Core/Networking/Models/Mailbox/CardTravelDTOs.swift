@@ -173,9 +173,13 @@ public struct HolidayCardsTravel: Decodable, Sendable, Hashable {
     public let town: String?
     /// How many people one person may pass a card to (two, D1).
     public let places: Int
+    /// Where "Let this card travel" starts for a new card (cards-next 3.4, `default_on`, sent with `improved`); nil:
+    /// on, as before.
+    public let defaultOn: Bool?
 
     private enum CodingKeys: String, CodingKey {
         case on, town, places
+        case defaultOn = "default_on"
     }
 
     public init(from decoder: any Decoder) throws {
@@ -183,12 +187,14 @@ public struct HolidayCardsTravel: Decodable, Sendable, Hashable {
         on = (try? c.decodeIfPresent(Bool.self, forKey: .on)) ?? false
         town = (try? c.decodeIfPresent(String.self, forKey: .town)).flatMap { $0.isEmpty ? nil : $0 }
         places = (try? c.decodeIfPresent(Int.self, forKey: .places)) ?? 2
+        defaultOn = try? c.decodeIfPresent(Bool.self, forKey: .defaultOn)
     }
 
-    public init(on: Bool, town: String?, places: Int) {
+    public init(on: Bool, town: String?, places: Int, defaultOn: Bool? = nil) {
         self.on = on
         self.town = town
         self.places = places
+        self.defaultOn = defaultOn
     }
 }
 

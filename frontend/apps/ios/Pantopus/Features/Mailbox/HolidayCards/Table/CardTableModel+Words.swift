@@ -98,7 +98,10 @@ extension CardTableModel {
     /// side; all of them are in the ⋯ menu too. "Share this card" (plan 11.1) is a quiet button only on the sender's
     /// own look at their card; on a reader's card it keeps its corner and its ⋯ line. Never on a sealed card.
     var secondaries: [CardTableMenuItem] {
-        if let sending { return sending == .gone ? goneButtons : [] }
+        if let sending {
+            if sending == .ready, let quick = quickSealButton { return [quick] }
+            return sending == .gone ? goneButtons : []
+        }
         guard step == .out, !content.sealed, turnedOnce || fold.isSpread else { return [] }
         var items: [CardTableMenuItem] = []
         if let nextCard { items.append(nextCard) }
