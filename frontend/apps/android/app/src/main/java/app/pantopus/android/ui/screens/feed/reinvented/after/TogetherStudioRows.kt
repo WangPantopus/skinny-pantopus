@@ -61,6 +61,7 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
+import java.time.temporal.ChronoUnit
 import java.util.Locale
 
 /*
@@ -293,7 +294,9 @@ private fun pickSealTime(
         DatePickerDialog(context, { _, year, month, day ->
             TimePickerDialog(context, { _, hour, minute ->
                 val picked = ZonedDateTime.of(year, month + 1, day, hour, minute, 0, 0, zone).toInstant()
-                TogetherStudio.sealAt.value = picked
+                // Sooner than that is sent as that: the line under the choices says so at once, not a time already gone.
+                val soonest = Instant.now().plus(Duration.ofMinutes(TogetherStudio.SEAL_SOONEST_MIN)).truncatedTo(ChronoUnit.MINUTES)
+                TogetherStudio.sealAt.value = maxOf(picked, soonest)
             }, start.hour, start.minute, DateFormat.is24HourFormat(context)).show()
         }, start.year, start.monthValue - 1, start.dayOfMonth)
     val now = System.currentTimeMillis()
