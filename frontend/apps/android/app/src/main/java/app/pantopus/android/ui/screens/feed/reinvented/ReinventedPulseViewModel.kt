@@ -183,6 +183,11 @@ class ReinventedPulseViewModel
             moments.playback = MomentsPlayback(rings = listOf(moment.asRing(viewerId)), startIndex = 0, newOnly = false)
         }
 
+        /** Several Moments (tonight's film, 8k) play one after another in today's viewer, oldest first. */
+        fun watchRun(run: List<MomentDto>) {
+            moments.playback = MomentsPlayback(rings = run.map { it.asRing(viewerId) }, startIndex = 0, newOnly = false)
+        }
+
         /** A ring (a person's Moments, a ring on the map) plays in today's viewer. */
         fun watch(ring: MomentRingDto) {
             moments.playback = MomentsPlayback(rings = listOf(ring), startIndex = 0, newOnly = false)

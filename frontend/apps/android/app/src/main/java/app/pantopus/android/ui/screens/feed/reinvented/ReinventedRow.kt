@@ -179,6 +179,8 @@ data class ReinventedListActions(
     val onShowOnMap: (ReinventedPoint) -> Unit = {},
     /** The signed-in person ("Pass it on" is offered only under others' posts). */
     val viewer: String? = null,
+    /** "Tonight in <town>" (8k): the film's Moments, played as one run in the viewer. */
+    val onOpenRun: (List<MomentDto>) -> Unit = {},
 )
 
 /** What a tile of the strip opens. */

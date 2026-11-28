@@ -5,6 +5,7 @@ import app.pantopus.android.data.api.models.reinvented.ConvergenceEnvelope
 import app.pantopus.android.data.api.models.reinvented.CrowdEnvelope
 import app.pantopus.android.data.api.models.reinvented.EyesOnNearBody
 import app.pantopus.android.data.api.models.reinvented.EyesOnNearResponse
+import app.pantopus.android.data.api.models.reinvented.MailItEnclosedDto
 import app.pantopus.android.data.api.models.reinvented.MomentPinEnvelope
 import app.pantopus.android.data.api.models.reinvented.MomentPinReactionBody
 import app.pantopus.android.data.api.models.reinvented.MomentPinsResponse
@@ -18,6 +19,8 @@ import app.pantopus.android.data.api.models.reinvented.RelicsNearResponse
 import app.pantopus.android.data.api.models.reinvented.RetakeEnvelope
 import app.pantopus.android.data.api.models.reinvented.SealPlaceBody
 import app.pantopus.android.data.api.models.reinvented.SkyStripResponse
+import app.pantopus.android.data.api.models.reinvented.TownFilmEnvelope
+import okhttp3.ResponseBody
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
@@ -125,6 +128,28 @@ interface TogetherApi {
         @Path("id") id: String,
         @Body body: SealPlaceBody,
     ): MomentEnvelope
+
+    /** CONTRACT 8j: the sender's own Moment's picture kept as one of their mail enclosures (a video's poster). */
+    @POST("api/reinvented/moments/{id}/enclosure")
+    suspend fun mailItEnclosure(
+        @Path("id") id: String,
+        @Body body: Map<String, @JvmSuppressWildcards Any?>,
+    ): MailItEnclosedDto
+
+    /**
+     * Today's `POST /api/mailbox/send` (`backend/routes/mailbox.js`) with the letter "Mail it" writes (CONTRACT 8j): the
+     * structured letter the web sends, so every rule of today's letters applies.
+     */
+    @POST("api/mailbox/send")
+    suspend fun sendLetter(
+        @Body body: Map<String, @JvmSuppressWildcards Any?>,
+    ): ResponseBody
+
+    /** CONTRACT 8k: the town's film tonight, the reader's place in the body only (never kept). */
+    @POST("api/reinvented/town-film")
+    suspend fun townFilm(
+        @Body body: SealPlaceBody,
+    ): TownFilmEnvelope
 
     /**
      * `POST /api/moments` (`backend/routes/moments.js`, create) with phase 3's keys beside today's body (CONTRACT 8):
