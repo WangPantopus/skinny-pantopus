@@ -517,6 +517,8 @@ private fun StudioRail(
                 )
             }
         }
+        // Sound (phase 2, CONTRACT 7e): place sound; the tool draws itself only with the switch on, under one's own name.
+        if (media != null) app.pantopus.android.ui.screens.moments.studio.sound.MomentsStudioSoundTool(enabled)
         if (media != null) {
             MarksTool(MomentMarksTool.Draw, media, enabled, onOpen)
             MarksTool(MomentMarksTool.Resize, media, enabled, onOpen)
