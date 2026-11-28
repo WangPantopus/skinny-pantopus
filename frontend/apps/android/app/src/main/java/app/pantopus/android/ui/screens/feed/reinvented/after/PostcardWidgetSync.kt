@@ -47,8 +47,10 @@ import kotlin.math.max
  * placed (no request otherwise), never in the app's first five seconds, at most every five minutes, one read at a time:
  * the newest letter "A postcard from …" through today's `GET /api/mailbox`, its first enclosed picture through today's
  * enclosure link, a 700 px copy kept in the app's own files. The widget fetches nothing and holds no token. The kept
- * letter is the signed-in person's only: another account or a sign-out removes it at once. While that person's app lock
- * is on (today's lock covers the whole app, the Mail with it), nothing but "A postcard is waiting" is kept or drawn.
+ * letter is the signed-in person's only: another account or a sign-out removes it at once. Wherever today's Mail would ask
+ * before opening (the phone has a screen lock, or the whole-app lock is on: the test today's `verifySensitiveScreen`
+ * makes), nothing but "A postcard is waiting" is kept or drawn; a tap opens the Mail, which asks as today. Only where the
+ * Mail opens without asking does the widget show the name and picture (LEAD-8).
  */
 @Singleton
 @OptIn(FlowPreview::class)
@@ -79,8 +81,8 @@ class PostcardWidgetSync
             scope.launch { feature.on.debounce(SETTLE_MS).collect { on -> follow(on && LaunchFeatures.mailbox) } }
             // Another account (or none): the first one's letter goes at once, and the next read isn't held back.
             scope.launch { auth.state.map(::person).distinctUntilChanged().collect { id -> followPerson(id) } }
-            // The app lock turned on: the name and picture go at once; turned off: read again.
-            scope.launch { appLock.preferenceEnabled.collect { locked -> followLock(locked) } }
+            // The whole-app lock turned on: the name and picture go at once; turned off: asked again (the screen lock too).
+            scope.launch { appLock.preferenceEnabled.collect { followLock(mailAsks()) } }
         }
 
         private suspend fun followPerson(id: String?) {
@@ -107,7 +109,23 @@ class PostcardWidgetSync
 
         /** The app came to the foreground: read again if a widget is placed (and it's been five minutes). */
         fun foregrounded() {
-            if (started && store.on()) scope.launch { refresh() }
+            // A screen lock set or removed while the app was away: the face follows before the next read.
+            if (started && store.on()) {
+                scope.launch {
+                    followLock(mailAsks())
+                    refresh()
+                }
+            }
+        }
+
+        /**
+         * Whether today's Mail would ask before opening: the whole-app lock is on, or the phone can ask (anything but no
+         * screen lock at all, as `AppLockManager.verifySensitiveScreen` decides; its grace after a recent check is not
+         * counted, so the home screen never shows more than the Mail would).
+         */
+        private fun mailAsks(): Boolean {
+            appLock.refreshCapability()
+            return appLock.preferenceEnabled.value || appLock.capability.value != AppLockManager.Capability.PasscodeNotSet
         }
 
         private suspend fun follow(on: Boolean) {
@@ -164,8 +182,8 @@ class PostcardWidgetSync
                     store.setOn(feature.on.value)
                     PostcardWidgetProvider.redraw(context)
                 }
-                appLock.preferenceEnabled.value -> {
-                    // The app lock is on: only that one is waiting, and nothing of it is fetched or kept.
+                mailAsks() -> {
+                    // Today's Mail would ask first: only that one is waiting, and nothing of it is fetched or kept.
                     store.clearLetter()
                     store.write(PostcardWidgetSnapshot(letter.id, "", "", null, owner, hidden = true))
                     PostcardWidgetProvider.redraw(context)
@@ -186,7 +204,7 @@ class PostcardWidgetSync
                     val link = (safeApiCall { mailbox.enclosureLink(letter.id, found.id) } as? NetworkResult.Success)?.data?.url
                     link?.let { keepPicture(it) }
                 }
-            if (!feature.on.value || person(auth.state.value) != owner || appLock.preferenceEnabled.value) {
+            if (!feature.on.value || person(auth.state.value) != owner || mailAsks()) {
                 store.pictureFile.delete()
                 return
             }
