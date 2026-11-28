@@ -204,5 +204,7 @@ struct MomentsStudioItemsOnTop: View {
         }
         .modifier(MomentsStudioWholeFrame(model: model))
         .ignoresSafeArea()
+        // While a Post is in flight nothing moves: what goes out is what was there when Post was tapped.
+        .allowsHitTesting(!model.isPosting)
     }
 }
