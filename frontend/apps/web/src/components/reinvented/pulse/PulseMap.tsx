@@ -11,7 +11,7 @@
 // The map is a globe zoomed all the way out, as today's maps are (Mapbox GL, pulseMapEngine.ts), or the flat Leaflet map
 // where the globe can't load. Leaflet touches `window` at import: this file is loaded with next/dynamic and `ssr: false` only.
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type MutableRefObject } from 'react';
 import { MAP_PUBLIC_TOKEN } from '@/components/map/constants';
 import { colors } from '@/components/moments/momentState';
 import { ticketWhen, type Box, type ListItem, type Point } from './listApi';
@@ -52,6 +52,18 @@ interface Props {
   sounds?: PlaceSound[] | null;
   /** The map started moving (true) and came to rest (false): the rail fades meanwhile (PHASE-6 A2). */
   onMoving?(moving: boolean): void;
+  /**
+   * Back from a page opened from here (PHASE-6 G): the view the person left. While it is given, the map shows it instead of
+   * fitting the list, once.
+   */
+  restore?: MapView | null;
+  /** Filled with a reader of the view now, so the page can keep it before it opens another page. */
+  view?: MutableRefObject<(() => MapView | null) | null>;
+}
+
+export interface MapView {
+  center: Point;
+  zoom: number;
 }
 
 // How near, in pixels, the pointer must come to a place sound to hear it; it is louder nearer.
@@ -207,7 +219,7 @@ function coveredInsets(mapEl: HTMLElement | null): Cover {
   return { top, bottom, left };
 }
 
-export default function PulseMap({ pins, listItems, fitKey, fallback, layoutKey, flyTo, selected, onBox, onPick, float = false, beams, lit = null, sounds = null, onMoving }: Props) {
+export default function PulseMap({ pins, listItems, fitKey, fallback, layoutKey, flyTo, selected, onBox, onPick, float = false, beams, lit = null, sounds = null, onMoving, restore = null, view }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   // The globe where it can load, else the flat map (also when the globe's basemap errors or is slow).
   const [flat, setFlat] = useState(() => !globePossible());
@@ -290,9 +302,30 @@ export default function PulseMap({ pins, listItems, fitKey, fallback, layoutKey,
     };
   }, [flat]);
 
+  // The page can read the view now (to come Back to it).
+  useEffect(() => {
+    if (!view) return undefined;
+    view.current = () => (mapNow.current ? { center: mapNow.current.center(), zoom: mapNow.current.zoom() } : null);
+    return () => {
+      view.current = null;
+    };
+  }, [view]);
+
+  // Back to a view the person left: shown once, and no fit while it is given.
+  const restored = useRef(false);
+  useEffect(() => {
+    if (!map || !restore) return;
+    fitted.current = fitKey;
+    if (restored.current) return;
+    restored.current = true;
+    insets.current = coveredInsets(ref.current);
+    map.show(restore.center, restore.zoom);
+    map.settle();
+  }, [map, restore, fitKey]);
+
   // The first view: the list's points (or home), once per fresh list.
   useEffect(() => {
-    if (!map || fitted.current === fitKey) return;
+    if (!map || restore || fitted.current === fitKey) return;
     const points = listItems.map(itemPoint).filter((p): p is Point => !!p);
     if (!points.length && !fallback && !listItems.length) return;
     fitted.current = fitKey;
@@ -304,7 +337,7 @@ export default function PulseMap({ pins, listItems, fitKey, fallback, layoutKey,
       map.panBy(-cover.left / 2, (cover.bottom - cover.top) / 2);
     }
     map.settle();
-  }, [map, listItems, fitKey, fallback]);
+  }, [map, listItems, fitKey, fallback, restore]);
 
   // The pins: tickets under marks under rings, and Heads-ups over everything.
   useEffect(() => {

@@ -324,6 +324,12 @@
 .rp-board[data-moving] .rp-rail {
   opacity: 0.4;
 }
+/* At full the sheet covers the map, so the rail steps away: it covered the list's right edge and a card's menu button
+   (PHASE-6 G). Filters stay a pull down on the top line away. */
+.rp-board[data-rest='full'] .rp-rail {
+  visibility: hidden;
+  opacity: 0;
+}
 .rp-rail-item {
   position: relative;
 }

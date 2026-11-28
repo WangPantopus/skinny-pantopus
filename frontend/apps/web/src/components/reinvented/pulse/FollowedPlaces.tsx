@@ -4,7 +4,7 @@
 // whose Explore items come into Explore. They are the reader's own choice, private: nobody is ever told or shown what
 // someone follows. A place is picked with today's address search, or followed straight from an Explore item's place.
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { MapPin, Plus, X } from 'lucide-react';
 import { del, get, post } from '@pantopus/api/client';
@@ -60,6 +60,11 @@ export default function FollowedPlaces({ account, near }: { account: string; nea
   const places = usePlaces(account);
   const follow = useFollow(account);
   const [adding, setAdding] = useState(false);
+  // The picker takes the focus as it opens (PHASE-6 G).
+  const pick = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (adding) pick.current?.querySelector<HTMLInputElement>('input')?.focus();
+  }, [adding]);
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -99,7 +104,18 @@ export default function FollowedPlaces({ account, near }: { account: string; nea
         )}
       </div>
       {adding && (
-        <div className="fp-pick">
+        <div
+          className="fp-pick"
+          ref={pick}
+          onKeyDown={(e) => {
+            // Escape closes the picker, as Cancel does (PHASE-6 G, e2).
+            if (e.key !== 'Escape') return;
+            e.preventDefault();
+            e.stopPropagation();
+            setText('');
+            setAdding(false);
+          }}
+        >
           <AddressAutocomplete
             value={text}
             onChange={setText}
