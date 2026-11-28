@@ -186,8 +186,13 @@ extension View {
         picture: CGSize?,
         room: MomentsStudioRoom
     ) -> some View {
-        overlay { MomentsStudioItemsOnTop(model: model, stamps: stamps, picture: picture) }
-            .studioRoom(room)
+        overlay {
+            ZStack(alignment: .leading) {
+                MomentsStudioEdgeBack(model: model)
+                MomentsStudioItemsOnTop(model: model, stamps: stamps, picture: picture)
+            }
+        }
+        .studioRoom(room)
     }
 }
 
@@ -206,5 +211,28 @@ struct MomentsStudioItemsOnTop: View {
         .ignoresSafeArea()
         // While a Post is in flight nothing moves: what goes out is what was there when Post was tapped.
         .allowsHitTesting(!model.isPosting)
+    }
+}
+
+/// The edge back-swipe in the Studio (PHASE-6 G; LEAD-8's yes): from the screen's left edge, the X's job, asking exactly as
+/// the X does before anything is lost (`askRetake`). It lies under the stamps and items, so one at the edge takes the
+/// finger, and over the picture's own touches, so the swipe never moves the picture. Only in the Studio.
+private struct MomentsStudioEdgeBack: View {
+    let model: MomentsComposerModel
+
+    var body: some View {
+        Color.clear
+            .frame(width: 16)
+            .frame(maxHeight: .infinity)
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 10, coordinateSpace: .global).onEnded { value in
+                    let across = value.translation.width > 60 || value.predictedEndTranslation.width > 140
+                    guard across, abs(value.translation.height) < 120, !model.isSending else { return }
+                    model.askRetake()
+                }
+            )
+            .ignoresSafeArea()
+            .accessibilityHidden(true)
     }
 }
