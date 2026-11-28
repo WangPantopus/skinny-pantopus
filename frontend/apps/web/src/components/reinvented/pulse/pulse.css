@@ -260,6 +260,39 @@
 .rp-lens-card .am-ask {
   margin: 0;
 }
+/* At a phone's width the app's top bar steps aside on the new Pulse: this line holds the side menu, the bell and Messages too
+   (PHASE-6 J), so the switch draws a little tighter and the place pill gives way first. */
+.rp-top[data-phone] {
+  top: max(8px, env(safe-area-inset-top));
+  gap: 4px;
+}
+.rp-top[data-phone] .rp-switch button {
+  padding: 0 9px;
+}
+.rp-bell {
+  display: grid;
+  flex: none;
+  place-items: center;
+  min-width: 36px;
+}
+.rp-messages {
+  color: var(--rp-ink);
+}
+.rp-lens-more {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 44px;
+  margin-top: 6px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--rp-ink) 6%, transparent);
+  color: var(--rp-ink);
+  font-size: 13px;
+  font-weight: 600;
+}
 /* One small pill under the top line says which filters are on; nothing shows when none is. */
 .rp-filter-pill {
   position: absolute;
