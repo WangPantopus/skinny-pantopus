@@ -52,6 +52,7 @@ import app.pantopus.android.ui.screens.feed.living.LivingWindowsRow
 import app.pantopus.android.ui.screens.feed.pulse.PulsePostCard
 import app.pantopus.android.ui.screens.feed.pulse.PulsePostCardContent
 import app.pantopus.android.ui.screens.feed.reinvented.after.EyesOnNearSection
+import app.pantopus.android.ui.screens.feed.reinvented.after.MomentYourDayCard
 import app.pantopus.android.ui.screens.feed.reinvented.after.PulsePassItOn
 import app.pantopus.android.ui.screens.feed.reinvented.after.PulseTravelLine
 import app.pantopus.android.ui.screens.feed.reinvented.after.ReinventedTownFilmCard
@@ -156,6 +157,8 @@ private fun LoadedRows(
         if (state.chip == SPOTS_CHIP) item(key = "relics") { RelicsNearSection() }
         // Tonight in <town> (8k): in the evening, on Around me's whole list, read once the list has come.
         if (state.reach == ReinventedPulseViewModel.AROUND && state.chip == ReinventedPulseViewModel.ALL) {
+            // "Your day" (8k) above it: from 8 pm, the person's own picked photos, private until shared.
+            item(key = "yourDay") { MomentYourDayCard(actions.viewer) }
             item(key = "townFilm") { ReinventedTownFilmCard(actions.onOpenRun) }
         }
         // Places you follow (phase 4, `feed/living/LivingPlaces.kt`), at the top of Explore only.
