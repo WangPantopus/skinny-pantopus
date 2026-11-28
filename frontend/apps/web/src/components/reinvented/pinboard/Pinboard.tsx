@@ -38,8 +38,21 @@ interface Board {
   can_add: boolean;
 }
 
-/** Over Pulse: the prompt, its pieces newest first, and "Add your piece" while it's open. */
-export default function PinboardView({ id, onClose, onAdd }: { id: string; onClose(): void; onAdd(start: { id: string; prompt: string }): void }) {
+/**
+ * Over Pulse: the prompt, its pieces newest first, and "Add your piece" while it's open. A tap on a piece opens it in the
+ * viewer, with the board's other pieces next to it; closing the viewer comes back to the board (LEAD-8, 10:37).
+ */
+export default function PinboardView({
+  id,
+  onClose,
+  onAdd,
+  onPiece,
+}: {
+  id: string;
+  onClose(): void;
+  onAdd(start: { id: string; prompt: string }): void;
+  onPiece?(piece: string, pieces: string[]): void;
+}) {
   const reread = useRereadSwitch();
   const board = useQuery({
     queryKey: ['reinvented', 'pinboard', id],
@@ -89,6 +102,19 @@ export default function PinboardView({ id, onClose, onAdd }: { id: string; onClo
                   <figcaption>
                     <MomentFace author={p.author} /> {p.author?.name}
                   </figcaption>
+                  {onPiece && (
+                    <button
+                      type="button"
+                      className="pb-open"
+                      aria-label={`Open ${p.author?.name || 'someone'}’s piece`}
+                      onClick={() =>
+                        onPiece(
+                          p.id,
+                          b.pieces.map((x) => x.id),
+                        )
+                      }
+                    />
+                  )}
                 </figure>
               ))}
             </div>
