@@ -68,8 +68,6 @@ import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.model.LatLng
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 /**
@@ -219,8 +217,8 @@ private fun ReadsFiltered(
     val kept = remember(filtersModel) { filtersModel.keptTime }
     var taken by remember(filtersModel) { mutableStateOf(kept == null) }
     LaunchedEffect(kept) { kept?.let(mapModel::pickTime) }
-    val mapTime by remember(mapModel) { mapModel.state.map { it.time }.distinctUntilChanged() }
-        .collectAsStateWithLifecycle(mapModel.state.value.time)
+    val mapState by mapModel.state.collectAsStateWithLifecycle()
+    val mapTime = mapState.time
     LaunchedEffect(mapTime) { if (mapTime == kept) taken = true }
     val time = if (taken || kept == null) mapTime else kept
     val filters by filtersModel.filters.collectAsStateWithLifecycle()
