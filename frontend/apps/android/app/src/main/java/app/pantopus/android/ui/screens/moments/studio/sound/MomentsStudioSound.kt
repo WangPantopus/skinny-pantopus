@@ -136,7 +136,8 @@ class MomentsStudioSoundViewModel
                 }
                 _ui.value = StudioSoundUi(working = true, dot = dot)
                 val kept = withContext(Dispatchers.IO) { write(app, heard, heard, cleaned = false) }
-                _ui.value = StudioSoundUi(dot = dot, error = "Your sound couldn't be saved on your phone. Try again.".takeIf { kept == null })
+                val failed = "Your sound couldn't be saved on your phone. Try again.".takeIf { kept == null }
+                _ui.value = StudioSoundUi(dot = dot, error = failed)
                 if (kept == null) return@launch
                 if (dot == null) MomentsStudioSounds.setPlace(app, kept) else MomentsStudioSounds.setWhisper(app, dot, kept)
             }
@@ -476,7 +477,7 @@ fun MomentsStudioWhisperEditor(
                     enabled = !ui.working && !ui.recording,
                     tag = "moments.studio.dot.whisper.record",
                     onClick = {
-                        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                        if (micAllowed(context)) {
                             denied = false
                             viewModel.record(context, dot)
                         } else {
@@ -508,6 +509,9 @@ fun MomentsStudioWhisperEditor(
         note?.let { Text(it, color = Color.White.copy(alpha = 0.75f), fontSize = 13.sp) }
     }
 }
+
+private fun micAllowed(context: Context): Boolean =
+    ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
 
 /** "0:03". */
 internal fun seconds(ms: Long): String {

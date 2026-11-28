@@ -68,7 +68,7 @@ fun MomentWhisperPlay(dot: MomentDotDto) {
             player = null
         }
     }
-    val length = dot.durationMs?.let { " · 0:${((it + 500) / 1_000).toString().padStart(2, '0')}" }.orEmpty()
+    val length = dot.durationMs?.let { " · " + app.pantopus.android.ui.screens.moments.studio.sound.seconds(it) }.orEmpty()
     Row(
         modifier =
             Modifier
