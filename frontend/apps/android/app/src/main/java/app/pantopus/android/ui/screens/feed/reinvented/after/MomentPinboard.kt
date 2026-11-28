@@ -187,6 +187,7 @@ private fun MomentPinboardSheet(
         Column(
             modifier =
                 Modifier
+                    .keepsSheetStill()
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState())
                     .padding(horizontal = Spacing.s4)

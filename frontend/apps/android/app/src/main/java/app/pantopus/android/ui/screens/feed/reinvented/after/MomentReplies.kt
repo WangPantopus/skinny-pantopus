@@ -313,7 +313,13 @@ private fun RepliesSheet(
         modifier = Modifier.sheetKeyboardRules().testTag("moments.viewer.replies.sheet"),
     ) {
         Column(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.s5).padding(bottom = Spacing.s4).navigationBarsPadding(),
+            modifier =
+                Modifier
+                    .keepsSheetStill()
+                    .fillMaxWidth()
+                    .padding(horizontal = Spacing.s5)
+                    .padding(bottom = Spacing.s4)
+                    .navigationBarsPadding(),
             verticalArrangement = Arrangement.spacedBy(Spacing.s3),
         ) {
             Text("Replies", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = PantopusColors.appText)

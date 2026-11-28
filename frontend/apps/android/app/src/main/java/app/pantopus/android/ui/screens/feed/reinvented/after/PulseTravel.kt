@@ -208,7 +208,13 @@ private fun PassOnSheet(
         modifier = Modifier.testTag("reinventedPulse.passOn.sheet"),
     ) {
         Column(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.s5).padding(bottom = Spacing.s5).navigationBarsPadding(),
+            modifier =
+                Modifier
+                    .keepsSheetStill()
+                    .fillMaxWidth()
+                    .padding(horizontal = Spacing.s5)
+                    .padding(bottom = Spacing.s5)
+                    .navigationBarsPadding(),
             verticalArrangement = Arrangement.spacedBy(Spacing.s3),
         ) {
             Text("Pass it on from where you are", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = PantopusColors.appText)
