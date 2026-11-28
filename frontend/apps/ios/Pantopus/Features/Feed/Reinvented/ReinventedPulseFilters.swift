@@ -166,6 +166,7 @@ struct ReinventedPulseFiltersSheet: View {
                 VStack(alignment: .leading, spacing: Spacing.s5) {
                     group("What") {
                         chips(
+                            "what",
                             ReinventedPulseFilters.kinds,
                             title: ReinventedPulseFilterStore.kindTitle,
                             on: picked.kinds.contains
@@ -175,6 +176,7 @@ struct ReinventedPulseFiltersSheet: View {
                     }
                     group("When") {
                         chips(
+                            "when",
                             ReinventedPulseFilterStore.whens.map(\.time),
                             title: whenTitle,
                             on: { $0 == time },
@@ -183,6 +185,7 @@ struct ReinventedPulseFiltersSheet: View {
                     }
                     group("From") {
                         chips(
+                            "from",
                             ["everyone", "connections"],
                             title: { $0 == "everyone" ? "Everyone" : "Connections only" },
                             on: { $0 == picked.from },
@@ -259,6 +262,7 @@ struct ReinventedPulseFiltersSheet: View {
     }
 
     private func chips(
+        _ group: String,
         _ keys: [String],
         title: @escaping (String) -> String,
         on: @escaping (String) -> Bool,
@@ -281,7 +285,7 @@ struct ReinventedPulseFiltersSheet: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityAddTraits(lit ? [.isButton, .isSelected] : .isButton)
-                    .accessibilityIdentifier("reinventedPulse.filters.\(key)")
+                    .accessibilityIdentifier("reinventedPulse.filters.\(group).\(key)")
                 }
             }
         }

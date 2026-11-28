@@ -215,9 +215,11 @@ struct ReinventedFilterPill: View {
                     .lineLimit(1)
                     .padding(.leading, Spacing.s3)
                     .frame(minHeight: 32)
-                    .contentShape(Rectangle())
+                    // 32 drawn, 44 to the finger.
+                    .contentShape(Rectangle().inset(by: -6))
             }
             .buttonStyle(.plain)
+            .accessibilityHint("Opens what is filtered")
             .accessibilityIdentifier("reinventedPulse.filterPill")
             Button(action: onClear) {
                 Icon(.x, size: 13, strokeWidth: 2.4, color: Theme.Color.appTextSecondary)

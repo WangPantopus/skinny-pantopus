@@ -121,7 +121,9 @@ struct ReinventedPulseView: View {
     /// The top line (PHASE-6 A1): one row, 44 pt high: the side menu, the scope pill, Map | Atlas, the search lens and
     /// the chat button. Pulled down (here, the map's top), it drops the Filters sheet.
     private func topLine(sideBySide: Bool) -> some View {
-        HStack(spacing: 6) {
+        // The round buttons are 36 drawn in 44 to the finger, so 2 pt between them still leaves 10 between the circles:
+        // the room goes to the scope pill (it read "Aroun…" on a 402 pt iPhone).
+        HStack(spacing: 2) {
             NavigationMenuButton(accessibilityIdentifier: "reinventedPulse.menu", floating: false)
                 .background(Circle().fill(.regularMaterial).frame(width: 36, height: 36))
             scopePill
@@ -154,14 +156,14 @@ struct ReinventedPulseView: View {
     /// The town's name (or Close circle, or Explore); it opens the reach dial.
     private var scopePill: some View {
         Button { showsDial = true } label: {
-            HStack(spacing: 6) {
+            HStack(spacing: 5) {
                 Icon(scopeIcon, size: 14, strokeWidth: 2.2, color: Theme.Color.primaryTint)
                 Text(scopeTitle)
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Theme.Color.appText)
                     .lineLimit(1)
+                    .minimumScaleFactor(0.85)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                Icon(.chevronDown, size: 14, color: Theme.Color.appText)
             }
             .padding(.horizontal, 10)
             .frame(height: 36)
@@ -211,7 +213,7 @@ struct ReinventedPulseView: View {
             Text(title)
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(on ? Color.white : Theme.Color.appText)
-                .padding(.horizontal, 10)
+                .padding(.horizontal, 8)
                 .frame(height: 32)
                 .background(Capsule().fill(on ? Theme.Color.primarySolid : Color.clear))
                 .frame(minHeight: 44)
@@ -247,7 +249,6 @@ struct ReinventedPulseView: View {
             } onClear: {
                 clearFilters()
             }
-            .accessibilityLabel("Filtered: \(filterStore.words(time: map.time))")
         }
         if let asked = askedLine {
             ReinventedFilterPill(words: asked) {
