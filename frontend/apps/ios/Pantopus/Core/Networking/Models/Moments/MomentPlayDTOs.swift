@@ -423,9 +423,11 @@ public struct MomentLayersDTO: Sendable, Hashable {
     public let placement: MomentWholePlacementDTO?
     /// The two colours around a whole picture (CONTRACT 10c), nil when the viewer makes them from the picture.
     public let backdrop: MomentBackdropDTO?
+    /// A Live Photo's motion (CONTRACT 10b): its clip and length; nil for any other Moment, or until its check passed.
+    public let motion: MomentMotionDTO?
 
     private enum CodingKeys: String, CodingKey {
-        case play, mentions, dots, sound, deck, loop, whole, placement, backdrop
+        case play, mentions, dots, sound, deck, loop, whole, placement, backdrop, motion
     }
 
     init(from decoder: any Decoder) {
@@ -439,6 +441,7 @@ public struct MomentLayersDTO: Sendable, Hashable {
         whole = (try? c?.decodeIfPresent(Bool.self, forKey: .whole)).flatMap { $0 } ?? false
         placement = try? c?.decodeIfPresent(MomentWholePlacementDTO.self, forKey: .placement)
         backdrop = try? c?.decodeIfPresent(MomentBackdropDTO.self, forKey: .backdrop)
+        motion = try? c?.decodeIfPresent(MomentMotionDTO.self, forKey: .motion)
     }
 
     /// The before and after on a photo, if it has one (one at most).
@@ -467,4 +470,16 @@ public struct MomentWholePlacementDTO: Codable, Sendable, Hashable {
 public struct MomentBackdropDTO: Codable, Sendable, Hashable {
     public let top: String
     public let bottom: String
+}
+
+/// CONTRACT 10b: a Live Photo's motion on a Moment. `url` is a short signed link, nil while the photo's own link is held
+/// back.
+public struct MomentMotionDTO: Codable, Sendable, Hashable {
+    public let url: String?
+    public let durationMs: Double?
+
+    private enum CodingKeys: String, CodingKey {
+        case url
+        case durationMs = "duration_ms"
+    }
 }

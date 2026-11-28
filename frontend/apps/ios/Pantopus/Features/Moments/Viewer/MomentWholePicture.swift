@@ -29,8 +29,18 @@ struct MomentWholePicture: View {
                 .scaledToFit()
                 .accessibilityLabel("\(moment.author.shortName)'s photo")
                 .accessibilityIdentifier("moments.viewer.photo")
+                // A Live Photo's motion (phase 5 C), fitted as the picture is.
+                .overlay {
+                    if let motion = moment.layers.motion, motion.url != nil { MomentMotionLayer(motion: motion, fills: false) }
+                }
                 // The layers' frame is the fitted picture, so they fill it exactly as on the author's canvas.
                 .overlay { MomentLayersOverlay(moment: moment, picture: image.size) }
+            if moment.layers.motion?.url != nil {
+                MomentMotionMark()
+                    .padding(.leading, 16)
+                    .padding(.bottom, 120)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+            }
         }
         .task(id: moment.id) {
             guard moment.layers.backdrop == nil else { return }

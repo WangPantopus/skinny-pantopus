@@ -334,6 +334,7 @@ extension MomentsViewer {
                 if let image = model.image {
                     // The photo with its stamps; "Pulse, reinvented"'s layers only while the switch is on for you.
                     MomentPhotoSurface(moment: moment, image: image)
+                        .environment(\.momentHolding, model.holding) // A Live Photo's motion replays while held (CONTRACT 10b).
                 }
             case .video:
                 ZStack {

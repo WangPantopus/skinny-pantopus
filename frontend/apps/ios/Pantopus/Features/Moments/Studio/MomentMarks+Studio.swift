@@ -217,6 +217,10 @@ struct MomentsStudioTools {
     var pickedPlay: String?
     /// Loop (`MomentsStudioLoop`, CONTRACT 7j): the loop made from the video, and the video it was made from.
     var loop: MomentsStudioLoopMade?
+    /// A Live Photo's motion (`MomentsStudioMotion`): its clip, the photo it's being copied for, and "Motion on".
+    var motion: MomentsStudioMotionClip?
+    var motionFor: String?
+    var keepsMotion = true
 
     /// A line just begun: made with the pen and ink picked here.
     func dress(_ stroke: inout MomentMarks.Stroke) {
