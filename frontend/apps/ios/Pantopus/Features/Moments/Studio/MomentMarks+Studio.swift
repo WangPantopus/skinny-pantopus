@@ -217,6 +217,8 @@ struct MomentsStudioTools {
     var pickedPlay: String?
     /// Loop (`MomentsStudioLoop`, CONTRACT 7j): the loop made from the video, and the video it was made from.
     var loop: MomentsStudioLoopMade?
+    /// Trim (`MomentsStudioTrim`, PHASE-5 A2): the part of the video that goes out, and the video it was cut from.
+    var trim: MomentsStudioTrimmed?
     /// A Live Photo's motion (`MomentsStudioMotion`): its clip, the photo it's being copied for, and "Motion on".
     var motion: MomentsStudioMotionClip?
     var motionFor: String?
