@@ -61,6 +61,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.moments.MomentMediaFile
+import app.pantopus.android.data.pulse.PulseReinventedFeature
 import app.pantopus.android.ui.screens.moments.components.stampFrame
 import app.pantopus.android.ui.screens.moments.compose.MomentsComposeUiState
 import app.pantopus.android.ui.screens.moments.compose.MomentsComposeViewModel
@@ -114,9 +115,13 @@ class MomentsStudioBlurViewModel
     @Inject
     constructor(
         @ApplicationContext private val context: Context,
+        feature: PulseReinventedFeature,
     ) : ViewModel() {
         private val _ui = MutableStateFlow(StudioBlurUi())
         val ui: StateFlow<StudioBlurUi> = _ui.asStateFlow()
+
+        /** The switch as the app reads it now: Blur is never offered, nor the photo looked at, while it reads off. */
+        val switchOn: StateFlow<Boolean> = feature.on
 
         /** The photo as it came that the spots were found on. */
         private var foundOn = WeakReference<Bitmap>(null)
@@ -195,7 +200,8 @@ fun MomentsStudioBlurTool(
     compose: MomentsComposeViewModel = hiltViewModel(),
 ) {
     val state by compose.state.collectAsStateWithLifecycle()
-    val offered = state.offersBlur
+    val on by viewModel.switchOn.collectAsStateWithLifecycle()
+    val offered = on && state.offersBlur
     LaunchedEffect(offered, state.media?.file) {
         if (!offered) return@LaunchedEffect
         compose.readLookPicture()
@@ -234,10 +240,11 @@ fun MomentsStudioBlurOffer(
     viewModel: MomentsStudioBlurViewModel = hiltViewModel(),
 ) {
     val ui by viewModel.ui.collectAsStateWithLifecycle()
+    val on by viewModel.switchOn.collectAsStateWithLifecycle()
     // Only for what the phone found (a box drawn by hand was the person's own choice already).
     val found = ui.spots.any { it.kind != MomentBlurKind.Hand }
-    val offered = state.offersBlur && state.marks.blur.isEmpty() && !ui.searching
-    if (!offered || !found) return
+    val offered = on && state.offersBlur && state.marks.blur.isEmpty()
+    if (!offered || ui.searching || !found) return
     val words = "Blur before posting? ${blurSummary(ui.spots)}"
     Row(
         modifier =
@@ -421,8 +428,9 @@ fun MomentsStudioBlurLayer(
     viewModel: MomentsStudioBlurViewModel = hiltViewModel(),
 ) {
     val ui by viewModel.ui.collectAsStateWithLifecycle()
+    val on by viewModel.switchOn.collectAsStateWithLifecycle()
     val shown = ui.byHand || (ui.sheet && state.marks.blur.isEmpty())
-    if (!state.offersBlur || !shown) return
+    if (!on || !state.offersBlur || !shown) return
     val picture = rememberStudioPicture(state)
     BoxWithConstraints(modifier = Modifier.fillMaxSize().testTag("moments.studio.blur.layer")) {
         val frame = stampFrame(picture, constraints.maxWidth.toFloat(), constraints.maxHeight.toFloat())
