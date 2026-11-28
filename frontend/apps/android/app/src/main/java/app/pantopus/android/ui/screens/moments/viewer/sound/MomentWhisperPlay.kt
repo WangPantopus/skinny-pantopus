@@ -27,6 +27,9 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import app.pantopus.android.data.api.models.moments.MomentDotDto
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
@@ -61,9 +64,21 @@ fun MomentWhisperPlay(dot: MomentDotDto) {
                 }
             }.getOrNull()
     }
-    DisposableEffect(dot.id, url) {
+    // It stops when the card closes or the app goes to the background.
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    DisposableEffect(dot.id, url, lifecycle) {
         play()
+        val away =
+            LifecycleEventObserver { _, event ->
+                if (event == Lifecycle.Event.ON_STOP) {
+                    player?.release()
+                    player = null
+                    playing = false
+                }
+            }
+        lifecycle.addObserver(away)
         onDispose {
+            lifecycle.removeObserver(away)
             player?.release()
             player = null
         }
