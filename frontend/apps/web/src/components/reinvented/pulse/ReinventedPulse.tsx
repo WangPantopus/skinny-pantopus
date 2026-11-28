@@ -1366,22 +1366,17 @@ export default function ReinventedPulse() {
                   here."), offers the way to Explore (round 7, g7). */}
               {!hasNextPage && last?.end && (
                 <p className="rp-end">
-                  {last.end.replace(/\s*Keep exploring\?$/, '')}
-                  {reach !== 'explore' && (
-                    <>
-                      {' '}
-                      <button
-                        type="button"
-                        className="rp-end-more"
-                        onClick={() => {
-                          setReach('explore');
-                          setCircle(null);
-                        }}
-                      >
-                        Keep exploring?
-                      </button>
-                    </>
-                  )}
+                  {last.end.replace(/\s*Keep exploring\?$/, '')}{' '}
+                  <button
+                    type="button"
+                    className="rp-end-more"
+                    onClick={() => {
+                      setReach('explore');
+                      setCircle(null);
+                    }}
+                  >
+                    Keep exploring?
+                  </button>
                 </p>
               )}
             </>
