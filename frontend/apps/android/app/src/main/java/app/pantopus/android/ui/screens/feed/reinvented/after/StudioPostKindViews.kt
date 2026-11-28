@@ -181,6 +181,7 @@ private fun StudioKindSheet(
         Column(
             modifier =
                 Modifier
+                    .keepsSheetStill()
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState())
                     .padding(horizontal = Spacing.s5)
