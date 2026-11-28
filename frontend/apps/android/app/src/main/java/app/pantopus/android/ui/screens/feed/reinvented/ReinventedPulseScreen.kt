@@ -52,6 +52,7 @@ import app.pantopus.android.ui.screens.feed.living.LivingAtlasSearch
 import app.pantopus.android.ui.screens.feed.pulse.PulsePostCardContent
 import app.pantopus.android.ui.screens.feed.reinvented.after.MomentConvergenceListSheet
 import app.pantopus.android.ui.screens.feed.reinvented.after.MomentConvergenceState
+import app.pantopus.android.ui.screens.feed.reinvented.after.MomentMailItHost
 import app.pantopus.android.ui.screens.feed.reinvented.after.MomentPinboardListSheet
 import app.pantopus.android.ui.screens.feed.reinvented.after.MomentPinboardState
 import app.pantopus.android.ui.screens.feed.reinvented.after.MomentRetakeListSheet
@@ -166,6 +167,7 @@ fun ReinventedPulseScreen(
     MomentRetakeListSheet()
     MomentConvergenceListSheet()
     MomentPinboardListSheet()
+    MomentMailItHost(viewModel.viewer)
     TogetherStudioOpener(actions.onCompose)
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
         ReinventedToast(toast, onDismiss = viewModel::dismissToast)
@@ -258,6 +260,13 @@ private class ReinventedWatch(
         viewModel.watch(ring)
         onWatch()
     }
+
+    /** "Tonight in <town>" (8k): the film's Moments, oldest first, as one run. */
+    fun run(moments: List<MomentDto>) {
+        if (moments.isEmpty()) return
+        viewModel.watchRun(moments)
+        onWatch()
+    }
 }
 
 /** What the list pane draws. */
@@ -303,6 +312,7 @@ private fun ReinventedListPane(
             onExplore = { viewModel.pickReach(ReinventedPulseViewModel.EXPLORE, state.miles) },
             onKeepExploring = viewModel::keepExploring,
             viewer = viewModel.viewer,
+            onOpenRun = watch::run,
         )
     val stripActions = ReinventedStripActions(onOpenMoment = watch::moment, onOpenPlan = actions.onOpenPlan, onOpenRing = watch::ring)
     Box(modifier.pullRefresh(pull)) {

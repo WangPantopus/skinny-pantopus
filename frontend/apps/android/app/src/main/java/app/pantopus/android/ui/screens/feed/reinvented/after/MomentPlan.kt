@@ -165,6 +165,8 @@ fun MomentPlanOffer(
     viewModel: MomentPlanViewModel = hiltViewModel(),
 ) {
     val flags by viewModel.flags.collectAsStateWithLifecycle()
+    // "Mail it" (8j) rides the same hook: it sets its own item in the same More menu.
+    MomentMailItOffer(moment, mine, onClose)
     val offers = moment.offersPlan(mine, flags.plans)
     DisposableEffect(moment.id, offers) {
         MomentPlanMenu.offer.value =
@@ -186,9 +188,18 @@ fun MomentPlanOffer(
     }
 }
 
-/** "Want to come? Start a plan" in one's own Moment's More menu, while [MomentPlanOffer] offers it; else nothing. */
+/**
+ * "Want to come? Start a plan" in one's own Moment's More menu, while [MomentPlanOffer] offers it; then "Mail it" while
+ * [MomentMailItOffer] offers it (8j); else nothing.
+ */
 @Composable
 fun MomentPlanMenuItem() {
+    MomentPlanStartItem()
+    MomentMailItMenuItem()
+}
+
+@Composable
+private fun MomentPlanStartItem() {
     val start = MomentPlanMenu.offer.value ?: return
     DropdownMenuItem(
         text = { Text("Want to come? Start a plan", color = Color.White) },
