@@ -58,12 +58,14 @@ import app.pantopus.android.ui.screens.moments.compose.marks.MomentLook
 import app.pantopus.android.ui.screens.moments.compose.marks.MomentMarks
 import app.pantopus.android.ui.screens.moments.compose.marks.MomentMarksEditing
 import app.pantopus.android.ui.screens.moments.compose.marks.MomentMarksKeeper
+import app.pantopus.android.ui.screens.moments.compose.marks.MomentMarksPainter
 import app.pantopus.android.ui.screens.moments.compose.marks.MomentMarksTool
 import app.pantopus.android.ui.screens.moments.compose.marks.MomentPlacement
 import app.pantopus.android.ui.screens.moments.compose.marks.MomentPlacementPainter
 import app.pantopus.android.ui.screens.moments.compose.marks.shape
 import app.pantopus.android.ui.screens.moments.map.metersBetween
 import app.pantopus.android.ui.screens.moments.studio.StudioMention
+import app.pantopus.android.ui.screens.moments.studio.StudioMotion
 import app.pantopus.android.ui.screens.moments.studio.StudioPair
 import app.pantopus.android.ui.screens.moments.studio.holdsStudioChoices
 import app.pantopus.android.ui.screens.moments.studio.sentBackdrop
@@ -75,6 +77,7 @@ import app.pantopus.android.ui.screens.moments.studio.sentStamps
 import app.pantopus.android.ui.screens.moments.studio.sentWhole
 import app.pantopus.android.ui.screens.moments.studio.stampElevation
 import app.pantopus.android.ui.screens.moments.studio.studioPair
+import app.pantopus.android.ui.screens.moments.studio.studioTrimmedParts
 import app.pantopus.android.ui.screens.moments.studio.wholeMoved
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -261,6 +264,8 @@ data class MomentsComposeUiState(
     /** "Pulse, reinvented"'s Studio (PHASE-5 A, CONTRACT 10c): the photo posts whole, on these colours. Only the Studio sets it. */
     val whole: Boolean = false,
     val wholeBackdrop: MomentPlacementPainter.Backdrop? = null,
+    /** "Pulse, reinvented"'s Studio (PHASE-5 A): the part of the video that posts, in ms; null is all of it. Only the Studio sets it. */
+    val trim: LongRange? = null,
 ) {
     val kind: String
         get() =
@@ -647,17 +652,19 @@ class MomentsComposeViewModel
             // Text and Draw on the video go over every frame of every part, and so does where Resize placed it.
             val marks = _state.value.marks
             val placement = _state.value.placement
+            // "Pulse, reinvented"'s Studio: only the trimmed part posts (null everywhere else: all of it, as today).
+            val trim = _state.value.trim
             preparation =
                 viewModelScope.async {
                     val limits = limits()
-                    val parts = MomentMedia.parts(media.durationMs, limits)
+                    val parts = trim?.let { studioTrimmedParts(it, limits) } ?: MomentMedia.parts(media.durationMs, limits)
                     _state.update { if (it.media == media) it.copy(videoParts = parts.size) else it }
                     val made = mutableListOf<PreparedVideo>()
                     val ready =
                         try {
                             parts.forEachIndexed { at, part ->
                                 // A video posted as one Moment is exported whole (the camera's may go up as it is).
-                                val stretch = part.takeIf { parts.size > 1 }
+                                val stretch = part.takeIf { parts.size > 1 || trim != null }
                                 made +=
                                     MomentMedia.prepareVideo(context, media, stretch, limits.videoBytes, marks, placement) { done ->
                                         readyProgress = (at + done) / parts.size
@@ -760,6 +767,28 @@ class MomentsComposeViewModel
 
         /** The ones picked together that haven't had the sheet yet. */
         private var waiting: List<Uri> = emptyList()
+            set(value) {
+                field = value
+                // "Pulse, reinvented"'s Studio row (PHASE-5 A5) shows them.
+                waitingFlow.value = value
+            }
+
+        private val waitingFlow = MutableStateFlow<List<Uri>>(emptyList())
+
+        /** "Pulse, reinvented"'s Studio row (PHASE-5 A5): the ones picked together still waiting, in order. Only the Studio reads it. */
+        val waitingPicked: StateFlow<List<Uri>> = waitingFlow.asStateFlow()
+
+        /** "Pulse, reinvented"'s Studio row (PHASE-5 A5): [uri], still waiting, posts next; the one on screen stays as it is. */
+        fun pickNext(uri: Uri) {
+            if (uri in waiting) waiting = listOf(uri) + (waiting - uri)
+        }
+
+        /** "Pulse, reinvented"'s Studio row (PHASE-5 A5): [uri], still waiting, is left out and never posts. */
+        fun leaveOut(uri: Uri) {
+            if (uri !in waiting) return
+            waiting = waiting - uri
+            _state.update { it.copy(pickedTogether = it.pickedTogether - 1) }
+        }
 
         /**
          * A Moment was made for the one on the sheet: the next one picked with it takes the sheet (one that can't be
@@ -1053,9 +1082,21 @@ class MomentsComposeViewModel
         /** "Pulse, reinvented"'s Studio: its playable items as they are now (added, moved, turned, removed). */
         fun setItems(items: List<MomentPlayItemDto>) = _state.update { it.copy(items = items) }
 
+        /** "Pulse, reinvented"'s Studio (PHASE-5 A): only [range] of the video posts (null: all of it); it is exported again. */
+        fun setTrim(range: LongRange?) {
+            val current = _state.value
+            val media = current.media as? MomentMediaFile.Video ?: return
+            if (current.posting || current.marking != null || current.trim == range) return
+            _state.update { it.copy(trim = range) }
+            prepare(media)
+        }
+
         /** "Pulse, reinvented"'s Studio (PHASE-5 A): the photo shows and posts whole, on [backdrop]'s two colours. */
         fun setWhole(backdrop: MomentPlacementPainter.Backdrop) =
-            _state.update { if (it.media is MomentMediaFile.Photo) it.copy(whole = true, wholeBackdrop = backdrop) else it }
+            _state.update {
+                val shown = it.media is MomentMediaFile.Photo || it.media is MomentMediaFile.Video
+                if (shown) it.copy(whole = true, wholeBackdrop = backdrop) else it
+            }
 
         /**
          * "Pulse, reinvented"'s Studio's first screen (PHASE-5 A): the whole photo of [picture] px (as it came) moved, sized,
@@ -1066,7 +1107,7 @@ class MomentsComposeViewModel
             picture: IntSize,
         ) {
             val current = _state.value
-            val media = current.media as? MomentMediaFile.Photo ?: return
+            val media = current.media ?: return
             if (!current.whole || current.posting || current.marking != null) return
             if (current.placement == next) return
             // Between whole as taken and the canvas, what lies on the photo moves with it, so it stays where it was.
@@ -1074,6 +1115,8 @@ class MomentsComposeViewModel
             _state.update {
                 it.copy(marks = moved.marks, stamps = moved.stamps, dots = moved.dots, items = moved.items, placement = next)
             }
+            // A video is exported again where it is placed, as Resize's Done exports it (PHASE-5 A on a video).
+            if (media is MomentMediaFile.Video) return prepare(media)
             marksKeeper.draw(
                 moved.marks,
                 next,
@@ -1169,7 +1212,9 @@ class MomentsComposeViewModel
         /** Another picture takes the sheet: it starts with no marks, as taken, and nothing kept for the last one stays. */
         private fun forgetMarks() {
             marksKeeper.drop()
-            _state.update { it.copy(marks = MomentMarks(), placement = null, marking = null, whole = false, wholeBackdrop = null) }
+            _state.update {
+                it.copy(marks = MomentMarks(), placement = null, marking = null, whole = false, wholeBackdrop = null, trim = null)
+            }
         }
 
         /** Post right after the editor's Done waits for the marks to be drawn in, so what uploads carries them. */
@@ -1213,7 +1258,10 @@ class MomentsComposeViewModel
          * Today's Post screen takes the Moment from the Studio (the switch went off): the picture and the words stay; the
          * stamps, the made-up name and the mentions, which today's screens don't offer, go. Nothing changes when there were none.
          */
-        fun leaveStudio() =
+        fun leaveStudio() {
+            val before = _state.value
+            // A trimmed video (PHASE-5 A2) is all of it again on today's screen, so it is exported again as today.
+            val trimmed = (before.media as? MomentMediaFile.Video)?.takeIf { before.trim != null }
             _state.update {
                 if (!it.holdsStudioChoices) {
                     it
@@ -1228,9 +1276,39 @@ class MomentsComposeViewModel
                         items = emptyList(),
                         whole = false,
                         wholeBackdrop = null,
+                        trim = null,
                     )
                 }
             }
+            heldToTodaysLabelBox(before)
+            trimmed?.let(::prepare)
+        }
+
+        /**
+         * "Pulse, reinvented" (PHASE-6 I): words the Studio put beyond today's label box on its canvas come back into it once
+         * when today's Post screen takes the Moment, and are drawn in again as the editor's Done draws them.
+         */
+        private fun heldToTodaysLabelBox(before: MomentsComposeUiState) {
+            val placed = before.placement?.takeIf { before.whole } ?: return
+            val canvas = MomentPlacement.CANVAS
+            val labels =
+                before.marks.labels.map { if (it.text.isBlank()) it else MomentMarksPainter.keptIn(it, canvas.width, canvas.height) }
+            val held = before.marks.copy(labels = labels)
+            if (held == before.marks) return
+            _state.update { it.copy(marks = held) }
+            when (val media = before.media) {
+                is MomentMediaFile.Video -> prepare(media)
+                is MomentMediaFile.Photo ->
+                    marksKeeper.draw(
+                        held,
+                        placed,
+                        media.file,
+                        onDrawn = { file -> _state.update { it.copy(media = MomentMediaFile.Photo(file)) } },
+                        onFailed = { drawn, place -> _state.update { it.copy(marks = drawn, placement = place, notice = MARKS_FAILED) } },
+                    )
+                null -> Unit
+            }
+        }
 
         /** The Sky's rows (`MomentsComposeSky.kt`). */
         fun setPinAtPlace(on: Boolean) = _state.update { it.withPinAtPlace(on) }
@@ -1399,6 +1477,8 @@ class MomentsComposeViewModel
                         else -> {
                             val latitude = pinned?.let { moment.latitude ?: it.first }
                             posting.start(moment, media, latitude, pinned?.let { moment.longitude ?: it.second })
+                            // "Pulse, reinvented"'s Studio: a motion photo's kept clip follows its photo up (PHASE-5 C).
+                            StudioMotion.posted(moment.id)
                             // The photo that posts carries its marks: the one as it came isn't needed any more.
                             marksKeeper.drop()
                         }

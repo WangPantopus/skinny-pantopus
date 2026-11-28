@@ -65,6 +65,7 @@ import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
 import app.pantopus.android.ui.theme.Spacing
+import app.pantopus.android.ui.theme.SwatchPalette
 import java.time.Duration
 import java.time.Instant
 
@@ -84,6 +85,13 @@ internal val STUDIO_PLAY_KINDS =
         Triple(MomentPlayKinds.GUESS, "Guess and reveal", "Others take one guess, then see the answer and how everyone did."),
         Triple(MomentPlayKinds.BOARD, "Where do you stand", "A board with two axes; others put their face where they stand."),
         Triple(MomentPlayKinds.COUNTDOWN, "Countdown", "Count down to a time, up to 30 days ahead."),
+    )
+
+/** The kinds made here for a photo only (CONTRACT 7g): one of each on a post. */
+internal val STUDIO_PHOTO_PLAY_KINDS =
+    listOf(
+        Triple(MomentPlayKinds.FOG, "Fog-wipe", "Your photo opens frosted; others wipe it clear to see it."),
+        Triple(MomentPlayKinds.SWATCH, "Swatch slider", "Pick a part of the photo and colours others can try over it."),
     )
 
 /** A poll or a countdown may be added here: a photo or a video, inside the four items in all. */
@@ -147,10 +155,11 @@ private fun MomentPlayItemDto.sentCountdown(now: Instant): MomentPlayItemDto? {
 internal fun StudioPlaySection(
     onMovingWords: (() -> Unit)?,
     onPlayKind: ((String) -> Unit)?,
+    onPhoto: Boolean = false,
 ) {
     onMovingWords?.let { StudioMovingWordsRow(onMake = it) }
     onPlayKind?.let { make ->
-        STUDIO_PLAY_KINDS.forEach { (kind, name, line) ->
+        (STUDIO_PLAY_KINDS + STUDIO_PHOTO_PLAY_KINDS.takeIf { onPhoto }.orEmpty()).forEach { (kind, name, line) ->
             StudioPlayRow(name, line, "moments.studio.tray.$kind") { make(kind) }
         }
     }
@@ -240,6 +249,8 @@ internal fun StudioPlayPanel(
                     MomentPlayKinds.QUESTION -> QuestionForm(item, items, onItems, onDone)
                     MomentPlayKinds.GUESS -> GuessForm(item, items, onItems, onDone)
                     MomentPlayKinds.BOARD -> BoardForm(item, items, onItems, onDone)
+                    MomentPlayKinds.FOG -> FogForm(items, onItems, onDone)
+                    MomentPlayKinds.SWATCH -> SwatchForm(items, onItems, onDone)
                 }
             }
         }
@@ -438,6 +449,67 @@ private fun SaveRow(
         }
     }
     Text("Drag it where it goes; pinch and turn with two fingers.", color = PantopusColors.studioPillSecondary, fontSize = 13.sp)
+}
+
+/** Fog-wipe (CONTRACT 7g): on or off for this photo; nothing else to set. One on a post. */
+@Composable
+private fun FogForm(
+    items: List<MomentPlayItemDto>,
+    onItems: (List<MomentPlayItemDto>) -> Unit,
+    onDone: () -> Unit,
+) {
+    val fog = items.firstOrNull { it.kind == MomentPlayKinds.FOG }
+    Heading("Fog-wipe", "Others wipe it clear to see it")
+    Text(
+        "Your photo opens frosted for others; each wipes it clear with a finger on their own screen. You see it clear.",
+        color = PantopusColors.studioPillSecondary,
+        fontSize = 13.sp,
+    )
+    Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+        if (fog == null) {
+            Pill("Frost it", on = true, tag = "moments.studio.play.save") {
+                onItems(items + newPlayItem(MomentPlayKinds.FOG, items).copy(x = 0.5, y = 0.5))
+                onDone()
+            }
+        } else {
+            Pill("Done", on = true, tag = "moments.studio.play.save", onClick = onDone)
+            Pill("Remove", tag = "moments.studio.play.remove") {
+                onItems(items.filterNot { it.id == fog.id })
+                onDone()
+            }
+        }
+    }
+}
+
+/**
+ * The swatch slider (CONTRACT 7g): up to six paint colours others can try over one part of the photo. The part is the
+ * dashed box on the photo: drag it, pinch it to size. One on a post.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun SwatchForm(
+    items: List<MomentPlayItemDto>,
+    onItems: (List<MomentPlayItemDto>) -> Unit,
+    onDone: () -> Unit,
+) {
+    val swatch = items.firstOrNull { it.kind == MomentPlayKinds.SWATCH }
+    var picked by rememberSaveable(swatch?.id) { mutableStateOf(swatch?.colors.orEmpty()) }
+    Heading("Swatch slider", "Up to six colours to try")
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.s2), verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+        SwatchPalette.paints.forEachIndexed { at, (name, hex) ->
+            val on = hex in picked
+            Pill(name, on = on, tag = "moments.studio.play.paint$at") {
+                picked =
+                    when {
+                        on -> picked - hex
+                        picked.size < MOST_SWATCH_COLORS -> picked + hex
+                        else -> picked
+                    }
+            }
+        }
+    }
+    val made = (swatch ?: newPlayItem(MomentPlayKinds.SWATCH, items).copy(box = STARTING_SWATCH_BOX)).copy(colors = picked)
+    SaveRow(swatch, made.sentPhotoLayer() != null, items, made, onItems, onDone)
 }
 
 /** A new item of [kind] with an id not taken, a little lower on the picture for each item already there. */

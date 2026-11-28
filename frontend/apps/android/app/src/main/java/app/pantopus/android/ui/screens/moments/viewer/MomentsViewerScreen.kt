@@ -161,6 +161,7 @@ import app.pantopus.android.ui.screens.moments.components.MomentHaptics
 import app.pantopus.android.ui.screens.moments.components.MomentImages
 import app.pantopus.android.ui.screens.moments.components.MomentLayerHold
 import app.pantopus.android.ui.screens.moments.components.MomentMetaPills
+import app.pantopus.android.ui.screens.moments.components.MomentMotionLayer
 import app.pantopus.android.ui.screens.moments.components.MomentSignal
 import app.pantopus.android.ui.screens.moments.components.MomentSignalBadge
 import app.pantopus.android.ui.screens.moments.components.MomentStampsOverlay
@@ -672,6 +673,8 @@ fun MomentsViewerScreen(
                                     },
                                     onFailed = viewModel::next,
                                 )
+                                // Under what lies on the picture, so its dots and items keep their touches (PHASE-5 C).
+                                if (studio) MomentMotionLayer(load.moment)
                                 if (studio) MomentBeforeAfterLayer(load.moment)
                                 if (studio) MomentStampsOverlay(load.moment)
                                 if (studio) MomentDotsLayer(load.moment, mine)
