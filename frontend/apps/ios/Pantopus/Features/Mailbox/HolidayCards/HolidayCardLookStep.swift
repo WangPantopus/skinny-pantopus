@@ -61,7 +61,7 @@ struct HolidayCardLookStep: View {
         // Their name, or the address typed: never their own address.
         let shut = MailPieceModel(
             mail: preview.piece,
-            recipient: MailPieceRecipient(name: recipient.envelopeName, addressLine: nil),
+            recipient: MailPieceRecipient(name: viewModel.envelopeName(recipient), addressLine: nil),
             opened: false
         )
         // Their mail comes at 7 a.m. where they live: the line their Mailbox
@@ -473,7 +473,7 @@ private extension HolidayCardLookStep {
                 moodName: card?.mood ?? design.mood,
                 day: preview.piece.item.postmark?.date ?? preview.piece.item.createdAt,
                 fromName: from,
-                forName: recipient.envelopeName
+                forName: viewModel.envelopeName(recipient)
             )
             .padding(.top, -Spacing.s4)
             .accessibilityIdentifier("sendCardLookPhoto")
@@ -508,7 +508,7 @@ private extension HolidayCardLookStep {
             mailedOn: envelope.postmarkDate,
             note: note,
             fromName: from,
-            toName: recipient.envelopeName,
+            toName: viewModel.envelopeName(recipient),
             sealed: false,
             sealedUntil: nil,
             sealedInDays: "",
@@ -529,10 +529,17 @@ struct HolidayCardLookEnd: View {
     let viewModel: HolidayCardFlowViewModel
     let byEmail: Bool
 
+    /// A card to a person that comes right away (cards-next 3.3): it can't be taken back.
+    private var rightAway: Bool {
+        guard case .person = viewModel.recipient else { return false }
+        return viewModel.arrival == .now
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HolidayCardLookNote(
-                text: viewModel.recipient?.isLink == true ? HolidayCardWords.sealNoteByLink : HolidayCardWords.sealNote(byEmail: byEmail)
+                text: viewModel.recipient?.isLink == true ? HolidayCardWords.sealNoteByLink
+                    : rightAway ? HolidayCardWords.rightAwayNote : HolidayCardWords.sealNote(byEmail: byEmail)
             )
             if viewModel.cards?.postageEnabled == true, let design = viewModel.design {
                 StampPostageLine(store: viewModel.stamps, design: design.id, media: viewModel.mediaSpendsBoughtStamp)

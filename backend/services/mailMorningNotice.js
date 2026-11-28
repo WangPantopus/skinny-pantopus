@@ -77,7 +77,10 @@ function newMail(select, options, since, now) {
     .is('deleted_at', null)
     .or('drawer.is.null,drawer.neq.earn')
     // A bundle is a wrapper: its pieces are what came.
-    .or('mail_object_type.is.null,mail_object_type.neq.bundle');
+    .or('mail_object_type.is.null,mail_object_type.neq.bundle')
+    // A Christmas card that went right away had its own notice when it landed (services/cardNotice), and a card gets
+    // exactly one: it neither brings this one nor is counted in it.
+    .is('mail_extracted->card->>instant_day', null);
 }
 
 // Christmas cards whose seal lifted in the window and that nobody has opened yet (services/holidayCards).

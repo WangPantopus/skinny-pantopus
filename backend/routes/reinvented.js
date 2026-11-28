@@ -80,7 +80,9 @@ router.get('/list', async (req, res) => {
     if (sides && (south >= north || west >= east)) {
       return res.status(400).json({ error: 'Send a map area with south < north and west < east.', code: 'LIST_INVALID' });
     }
-    const filters = pulseFilters.parse(req.query, { code: 'LIST_INVALID' });
+    const parsed = pulseFilters.parse(req.query, { code: 'LIST_INVALID' });
+    // A chip sent beside other filters (CONTRACT 10a) narrows as that one kind would (`kinds=<chip>`), not dropped.
+    const filters = parsed && !parsed.kinds && asked.chip && asked.chip !== 'all' ? { ...parsed, kinds: [asked.chip] } : parsed;
     res.json(await list.listFor(req.user.id, {
       ...asked, ...(filters ? { filters } : {}), ...(sides ? { box: { south, west, north, east } } : {}), ...(noPlace ? { noPlace } : {}),
     }));

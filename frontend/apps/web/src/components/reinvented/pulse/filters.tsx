@@ -208,7 +208,7 @@ export function FilterSheet({
   }, [onClose]);
   const chip = (on: boolean, label: string, act: () => void, disabled = false) => (
     <button key={label} type="button" aria-pressed={on} disabled={disabled} onClick={act}>
-      {label}
+      <span>{label}</span>
     </button>
   );
   return (

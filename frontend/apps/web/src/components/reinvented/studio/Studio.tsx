@@ -51,7 +51,7 @@ import { useDialogFocusTrap } from '@/lib/useDialogFocusTrap';
 import { withFreshFix } from '@/lib/freshPostFix';
 import MomentCamera, { type CameraCapture } from '@/components/moments/MomentCamera';
 import { blankArt, edited, inks, type Artwork, type Stroke } from '@/components/moments/momentArtwork';
-import { stageFrame } from './frame';
+import { offPicture, stageFrame } from './frame';
 import { BlurLayer, blurInto, type BlurBox } from './BlurTool';
 import { cutToShape, sideBySide } from './beforeAfter';
 import { beforeAfterOf } from '../play/BeforeAfter';
@@ -77,7 +77,7 @@ import type { PlayItem, PlayKind } from '../play/playTypes';
 import { SoundPanel } from '../sound/SoundPanel';
 import { timedWords, uploadSound, type Recording } from '../sound/record';
 import { DotEditLayer, DotEditPanel, dotsWire, MAX_DOTS, newDot, usePantopusAiOn, type DotDraft } from '../dots/DotEdit';
-import { safeBox, STAMP_KINDS, stampLabel, type PlacedStamp, type StampKind, type StampValues } from '../stamps/stampTypes';
+import { STAMP_KINDS, stampLabel, type PlacedStamp, type StampKind, type StampValues } from '../stamps/stampTypes';
 import { isSwitchedOff } from '../switchOff';
 import StudioPicture, { type StudioBrush, type StudioTool } from './StudioPicture';
 import {
@@ -122,7 +122,6 @@ const PlacePreview = dynamic(() => import('@/components/moments/MomentPlacePrevi
 const fallback = { max_seconds: 30, max_parts: 1, max_bytes: 50 * 1024 * 1024 };
 const inkNames = ['White', 'Black', 'Yellow', 'Red', 'Blue', 'Green'];
 const pens = [0.006, 0.012, 0.024];
-const STAMP_SAFE = safeBox();
 // At home the place line reads "Area · <town>"; the first time only, one line under it says why (design §4).
 const HOME_NOTE_KEY = 'pantopus.studio.homeAreaNoteSeen';
 // The step deck's note to its author, said once (CONTRACT 7g): "Readers can save your steps' words."
@@ -153,6 +152,58 @@ function useWide() {
     return () => q.removeEventListener('change', read);
   }, []);
   return wide;
+}
+
+/**
+ * A drag that means one thing (PHASE-6 F3): the Studio's details are a real sheet, opened by dragging the summary line up
+ * and closed by dragging its header down. A tap stays the control's own; only a clear vertical drag does `act`.
+ */
+function useDragTo(direction: 'up' | 'down', act: () => void) {
+  const skipClick = useRef(false);
+  const stop = useRef<(() => void) | null>(null);
+  const latest = useRef(act);
+  latest.current = act;
+  useEffect(() => () => stop.current?.(), []);
+  return {
+    // The press is followed on the window from the moment it lands, so a long mouse drag that leaves the summary line or
+    // the header still counts (LEAD-7's look, 05:26); a tap stays the control's own click.
+    onPointerDown: (e: React.PointerEvent) => {
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      stop.current?.();
+      const id = e.pointerId,
+        x0 = e.clientX,
+        y0 = e.clientY;
+      const move = (ev: PointerEvent) => {
+        if (ev.pointerId !== id) return;
+        const dy = ev.clientY - y0,
+          dx = Math.abs(ev.clientX - x0);
+        if ((direction === 'up' ? -dy : dy) > 28 && Math.abs(dy) > dx * 1.5) {
+          end();
+          skipClick.current = true;
+          window.setTimeout(() => (skipClick.current = false), 300);
+          latest.current();
+        }
+      };
+      const up = (ev: PointerEvent) => ev.pointerId === id && end();
+      const end = () => {
+        window.removeEventListener('pointermove', move);
+        window.removeEventListener('pointerup', up);
+        window.removeEventListener('pointercancel', up);
+        stop.current = null;
+      };
+      window.addEventListener('pointermove', move);
+      window.addEventListener('pointerup', up);
+      window.addEventListener('pointercancel', up);
+      stop.current = end;
+    },
+    // The click that ends a drag is not a tap.
+    onClickCapture: (e: React.MouseEvent) => {
+      if (!skipClick.current) return;
+      skipClick.current = false;
+      e.stopPropagation();
+      e.preventDefault();
+    },
+  };
 }
 
 function Chip({ on, children, ...rest }: { on: boolean; children: ReactNode } & React.ButtonHTMLAttributes<HTMLButtonElement>) {
@@ -326,6 +377,52 @@ export default function Studio({
   // One id per post being made, so trying again after a failed photo upload never posts twice (today's composer).
   const postRequest = useRef<string | null>(null);
   const drawer = drawerOpen || wide;
+  // PHASE-6 K1: the canvas is fitted, whole, in the room above the bottom bar, so the bar never covers it (studio.css reads
+  // the bar's height from the frame).
+  const footFrame = useRef<HTMLElement | null>(null);
+  const footWatch = useRef<ResizeObserver | null>(null);
+  const footRef = useCallback((el: HTMLDivElement | null) => {
+    footWatch.current?.disconnect();
+    footWatch.current = null;
+    if (!el) {
+      footFrame.current?.style.removeProperty('--st-foot-h');
+      return;
+    }
+    const frame = el.closest<HTMLElement>('.st-frame');
+    footFrame.current = frame;
+    if (!frame) return;
+    const read = () => frame.style.setProperty('--st-foot-h', `${el.offsetHeight}px`);
+    read();
+    footWatch.current = new ResizeObserver(read);
+    footWatch.current.observe(el);
+  }, []);
+  useEffect(() => () => footWatch.current?.disconnect(), []);
+  // PHASE-6 K3: while an item (a stamp, a playable item, a dot, the words) is dragged, the Studio's controls fade to 30% and
+  // take no touches; they come back when it is let go.
+  const onItemPress = (e: React.PointerEvent<HTMLDivElement>) => {
+    const t = e.target as HTMLElement;
+    const item = t.closest('.sp-layer[data-edit] .sp-stamp, .pl-item[data-edit], .dt-dot, .st-frame[data-tool="text"] .st-picture canvas');
+    if (!item || t.closest('button:not(.dt-dot), input, textarea, select, .pl-edit-bar')) return;
+    const root = e.currentTarget;
+    const id = e.pointerId,
+      x0 = e.clientX,
+      y0 = e.clientY;
+    const move = (ev: PointerEvent) => {
+      if (ev.pointerId === id && Math.hypot(ev.clientX - x0, ev.clientY - y0) > 4) root.dataset.dragging = '';
+    };
+    const end = (ev: PointerEvent) => {
+      if (ev.pointerId !== id) return;
+      delete root.dataset.dragging;
+      window.removeEventListener('pointermove', move, true);
+      window.removeEventListener('pointerup', end, true);
+      window.removeEventListener('pointercancel', end, true);
+    };
+    window.addEventListener('pointermove', move, true);
+    window.addEventListener('pointerup', end, true);
+    window.addEventListener('pointercancel', end, true);
+  };
+  const dragOpen = useDragTo('up', () => setDrawerOpen(true));
+  const dragClose = useDragTo('down', () => setDrawerOpen(false));
   // The eyedropper waits for one tap only while Text or Draw stays open.
   useEffect(() => setPicking(false), [tool]);
   // Undo: the lines as they were before the last line or rub; else today's step, the last line off.
@@ -825,7 +922,12 @@ export default function Studio({
   /** The items that go out: a before and after only with its after photo. */
   const playOut = pair ? play : play.filter((p) => p.kind !== 'before_after');
   // Stamps, Play and dots are placed on the 9:16 stage; a picture posted at its own shape gets them where the stage drew it.
-  const frame = stageFrame(shape, mode !== 'media' || !file || edited(art));
+  // Stamps, playable items and dots go anywhere on the canvas (PHASE-6 F2). One placed off the picture's own box makes the
+  // Moment go up in its canvas form, so readers see it where it was put.
+  const itemsOff =
+    mode === 'media' && !!file && !edited(art) &&
+    offPicture(shape, [...stamps, ...play, ...dots].map((it) => ({ x: it.x as number, y: it.y as number })));
+  const frame = stageFrame(shape, mode !== 'media' || !file || edited(art) || itemsOff);
   const words = mode === 'text' ? text : caption;
   // Illuminate's suggestion (CONTRACT 7i, the table all three apps use): one chip at most, worked out here from what the
   // Studio holds; nothing is sent. Only while Pantopus AI is on for the person, never once the post carries a playable
@@ -895,7 +997,7 @@ export default function Studio({
       setPicked(null);
       return;
     }
-    // A free spot inside the part every viewer shows (safeBox), clear of the tool rail (top right) and of the stamps
+    // A free spot near the middle, clear of the tool rail (top right) and of the stamps
     // already down; the postmark low on the left, as on board B2.
     const slots =
       kind === 'postmark'
@@ -1084,7 +1186,7 @@ export default function Studio({
   async function composed(source: File, signal: AbortSignal): Promise<{ prepared: Awaited<ReturnType<typeof prepareMedia>>; placement: WholePlacement | null }> {
     const videoLimits = limits.data?.video || fallback;
     if (!(source.type.startsWith('video/') || /\.(mp4|mov|webm|m4v)$/i.test(source.name))) {
-      if (!edited(art)) return { prepared: await prepareMedia(source, art, videoLimits, signal, () => {}), placement: null };
+      if (!edited(art) && !itemsOff) return { prepared: await prepareMedia(source, art, videoLimits, signal, () => {}), placement: null };
       return { prepared: [{ file: await bakePhoto(source, art, backdrop) }], placement: null };
     }
     const drawn = !!(art.strokes.length || art.text.trim());
@@ -1101,7 +1203,7 @@ export default function Studio({
     const prepared = await prepareMedia(video, blankArt(), videoLimits, signal, (f) =>
       setBusy('Preparing video · ' + Math.round(f * 100) + '%'),
     );
-    return { prepared, placement: !drawn && !unmoved(art) && shape ? placementOf(shape.w, shape.h, art) : null };
+    return { prepared, placement: !drawn && (!unmoved(art) || itemsOff) && shape ? placementOf(shape.w, shape.h, art) : null };
   }
   async function submit(retry?: Job) {
     if (submitting.current) return;
@@ -1591,7 +1693,8 @@ export default function Studio({
       aria-label="Post settings"
       data-wide={wide || undefined}
     >
-      <header>
+      <header className={wide ? undefined : 'st-drawer-head'} {...(wide ? {} : dragClose)}>
+        {!wide && <span className="st-grabber" aria-hidden="true" />}
         <h2>Post settings</h2>
         {!wide && (
           <button type="button" className="st-done" onClick={() => setDrawerOpen(false)}>
@@ -2018,6 +2121,7 @@ export default function Studio({
       aria-label="Create Moment"
       data-wide={wide || undefined}
       data-drawer={(drawer && composing) || undefined}
+      onPointerDownCapture={onItemPress}
     >
       <div className="st-stage">
         <div
@@ -2109,7 +2213,6 @@ export default function Studio({
                 selected={picked}
                 onSelect={setPicked}
                 onChange={tool || busy ? undefined : setStamps}
-                safe={STAMP_SAFE}
               />
             )}
             {composing && playOn && <PlayEditLayer items={play} onChange={setPlay} disabled={!!tool || !!busy} />}
@@ -2245,7 +2348,7 @@ export default function Studio({
                   aria-pressed={tool === 'resize'}
                   onClick={() => setTool(tool === 'resize' ? null : 'resize')}
                 >
-                  <Crop size={21} aria-hidden="true" />
+                  <Crop size={20} aria-hidden="true" />
                 </button>
               </div>
               {canLoop && (
@@ -2265,7 +2368,7 @@ export default function Studio({
                       setLoopOpen(!loopOpen);
                     }}
                   >
-                    <Repeat size={21} aria-hidden="true" />
+                    <Repeat size={20} aria-hidden="true" />
                   </button>
                 </div>
               )}
@@ -2304,7 +2407,7 @@ export default function Studio({
                       setSoundOpen(!soundOpen);
                     }}
                   >
-                    <Mic size={21} aria-hidden="true" />
+                    <Mic size={20} aria-hidden="true" />
                   </button>
                 </div>
               )}
@@ -2323,7 +2426,7 @@ export default function Studio({
                       setBlurOn(!blurOn);
                     }}
                   >
-                    <EyeOff size={21} aria-hidden="true" />
+                    <EyeOff size={20} aria-hidden="true" />
                   </button>
                 </div>
               )}
@@ -2806,7 +2909,7 @@ export default function Studio({
           )}
 
           {!gate && !camera && (
-            <div className="st-foot">
+            <div className="st-foot" ref={footRef}>
               {(busy || error || (askedPost && blocker)) && (
                 <p className="st-status" role={busy ? 'status' : 'alert'}>
                   {busy || error || blocker}
@@ -3000,8 +3103,10 @@ export default function Studio({
                   )}
                   <div className="st-bar">
                     {/* The details as one line (PHASE-5 A4): where, how long and who sees it; a tap opens the drawer
-                        (who sees it is chosen at its top). Nothing of them covers the picture until asked. */}
-                    <div className="st-row">
+                        (who sees it is chosen at its top). Nothing of them covers the picture until asked. The line is
+                        also the sheet's handle: a drag up opens the details (PHASE-6 F3). */}
+                    {!wide && <span className="st-grabber" aria-hidden="true" {...dragOpen} />}
+                    <div className="st-row" {...(wide ? {} : dragOpen)}>
                       <button
                         type="button"
                         className="st-when st-summary"

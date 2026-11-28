@@ -14,6 +14,7 @@
 const crypto = require('crypto');
 const { DateTime } = require('luxon');
 const supabaseAdmin = require('../config/supabaseAdmin');
+const { cardImprovementsOn } = require('../utils/featureFlags');
 
 const CARD_TAG = 'holiday_card';
 const MESSAGE_LIMIT = 300;
@@ -261,6 +262,47 @@ const DESIGNS = [
 });
 const DESIGN_BY_ID = new Map(DESIGNS.map((design) => [design.id, design]));
 
+// The photo card (the card round of November 28, Wave 4; docs/product/card-improvements-2026-11-28): the sender's own
+// photo is the card's front, in one of three frames, with a line of their own under it. It is a design of its own and
+// is NOT in DESIGNS: it is never on Pick a card's shelves, a public page, a share picture or a video, and it never
+// travels. The website serves one stock picture at its address, which lists, the mantel and apps from before it draw;
+// its caption is what they print under it. The photo is the card's own photo (services/holidayCardMedia) and the
+// frame and caption live in the card's private stored copy (frontOf), never in the Mail row.
+// `height` is the stock picture's at 960 px wide, as every design's is (christmas-2026-photo.jpg is 960 × 1056).
+const PHOTO_CARD = Object.freeze({
+  id: 'christmas-2026-photo', number: null, caption: 'Merry Christmas', paper: '#f7f0e2', collection: null, height: 1056,
+  slug: null, table: '#1c2233', mood: 'nostalgia',
+});
+const PHOTO_CARD_FRAMES = ['heirloom', 'midnight', 'arch'];
+const PHOTO_CARD_CAPTION_LIMIT = 42;
+// The shapes a photo card's photo is cropped to on the device (width to height); the server checks the stored
+// photo is one of them, within PHOTO_CARD_SHAPE_SLACK.
+const PHOTO_CARD_SHAPES = [{ id: 'portrait', w: 4, h: 5 }, { id: 'square', w: 1, h: 1 }, { id: 'landscape', w: 4, h: 3 }];
+const PHOTO_CARD_SHAPE_SLACK = 0.02;
+const isPhotoCardDesign = (id) => String(id || '') === PHOTO_CARD.id;
+/** What GET /cards tells the apps of the photo card (`photo_card`). */
+const photoCardControls = () => ({ design: PHOTO_CARD.id, frames: PHOTO_CARD_FRAMES, default_frame: PHOTO_CARD_FRAMES[0],
+  caption_limit: PHOTO_CARD_CAPTION_LIMIT, shapes: PHOTO_CARD_SHAPES });
+/** Whether a photo this wide and high is one of the photo card's shapes. */
+function photoCardShape(width, height) {
+  const ratio = Number(width) / Number(height);
+  if (!Number.isFinite(ratio) || ratio <= 0) return null;
+  return PHOTO_CARD_SHAPES.find((shape) => Math.abs(ratio / (shape.w / shape.h) - 1) <= PHOTO_CARD_SHAPE_SLACK) || null;
+}
+/**
+ * A photo card's front as a send gives it ({ frame, caption }): the frame one of the three, the caption optional, on
+ * one line, spaces folded and trimmed, at most PHOTO_CARD_CAPTION_LIMIT letters. { front: { frame, caption } }
+ * (caption '' for none) or { refusal: 'CARD_FRONT_FRAME_UNKNOWN' | 'CARD_FRONT_CAPTION_TOO_LONG' }.
+ */
+function cleanFront(raw) {
+  const frame = typeof raw?.frame === 'string' ? raw.frame : '';
+  if (!PHOTO_CARD_FRAMES.includes(frame)) return { refusal: 'CARD_FRONT_FRAME_UNKNOWN' };
+  // eslint-disable-next-line no-control-regex
+  const caption = typeof raw.caption === 'string' ? raw.caption.replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim() : '';
+  if ([...caption].length > PHOTO_CARD_CAPTION_LIMIT) return { refusal: 'CARD_FRONT_CAPTION_TOO_LONG' };
+  return { front: { frame, caption } };
+}
+
 // "Pick a card" prints a verse card's whole verse under the card, and the Android app makes every card of a collection
 // small enough to leave room for the longest verse in it. So the list "Pick a card" reads (GET /api/mailbox/cards)
 // carries that text only for a verse no longer than Matthew 2:11, the longest of 59–67: no card shows smaller there than
@@ -286,6 +328,14 @@ const EMAIL_ARRIVALS_ALL = ['next_morning', 'sealed_christmas', 'christmas_morni
 
 function designById(id) {
   return DESIGN_BY_ID.get(String(id || '')) || null;
+}
+/**
+ * The design a stored card is drawn from: one of the season's pictures, or the photo card. Reading a card uses this
+ * one, whatever the round's switch says, so a photo card already sent stays readable; designById stays the catalog
+ * alone, for everything a photo card never has (a public page, a share picture, a video, an email picture, a journey).
+ */
+function designOf(id) {
+  return isPhotoCardDesign(id) ? PHOTO_CARD : designById(id);
 }
 
 function isCard(mail) {
@@ -392,11 +442,13 @@ function isByLink(mail) {
 }
 
 /** What a send asked for, as one digest: the same request ID with other content asks for another card. */
-function requestDigest({ design, message, arrival, toUserId, toEmail, signature = null, media = null, travel = false, toName = null }) {
+function requestDigest({ design, message, arrival, toUserId, toEmail, signature = null, media = null, travel = false, toName = null, front = null }) {
   // A signed card's strokes count too, and a card's own photo and voice (their ids and the photo's description),
   // whether it travels (card_travel), and the name on a link's envelope; a card without them has the digest it always had.
   const parts = [design, message, arrival, toUserId || null, toEmail || null, ...(signature ? [signature] : []),
-    ...(media ? [{ media }] : []), ...(travel ? [{ travel: true }] : []), ...(toName ? [{ to_name: toName }] : [])];
+    ...(media ? [{ media }] : []), ...(travel ? [{ travel: true }] : []), ...(toName ? [{ to_name: toName }] : []),
+    // A photo card's frame and line; a card without them has the digest it always had.
+    ...(front ? [{ front }] : [])];
   return crypto.createHash('sha256').update(JSON.stringify(parts)).digest('hex');
 }
 
@@ -449,7 +501,33 @@ function signatureOf(payload) {
  */
 function mediaOf(payload) {
   const media = payload?.body?.payload?.media;
-  return media && (media.photo || media.voice) ? media : null;
+  if (!media || !(media.photo || media.voice)) return null;
+  // A photo card's frame and caption ride with its photo to mediaView, which every reader of a card's photo calls.
+  const front = frontOf(payload);
+  return front ? { ...media, front } : media;
+}
+
+// How long after joining an account counts as new for the cards that brought it (GET /cards/waiting, `welcome`).
+const JOINED_FOR_MS = 14 * 24 * 60 * 60 * 1000;
+/**
+ * Whether this reader joined for this card (piece.card.joined_for; the card round, Wave 4.1): they are who it went to,
+ * it reached them from an email or a link, and their account is under 14 days old. While such a card is on screen the
+ * apps hold the notices that explain the rest of Pantopus. False when it can't be read: the notices then show as ever.
+ */
+async function joinedFor(mail, readerId, now = new Date()) {
+  if (!cardImprovementsOn() || !isCard(mail) || mail.escrow_status !== 'claimed') return false;
+  if (!readerId || String(mail.recipient_user_id) !== String(readerId)) return false;
+  const { data, error } = await supabaseAdmin.from('User').select('created_at').eq('id', readerId).maybeSingle();
+  if (error) return false;
+  const joined = Date.parse(data?.created_at);
+  return Number.isFinite(joined) && now.getTime() - joined < JOINED_FOR_MS;
+}
+
+/** A photo card's front as its private stored copy keeps it ({ frame, caption }), beside the note; else null. */
+function frontOf(payload) {
+  const front = payload?.body?.payload?.front;
+  return front && PHOTO_CARD_FRAMES.includes(front.frame)
+    ? { frame: front.frame, caption: typeof front.caption === 'string' ? front.caption : '' } : null;
 }
 
 /** A sealed card as the letter readers return it: the short note instead of its own, and no stored copy. */
@@ -545,7 +623,7 @@ function emailSendAt(mail) {
 function cardView(mail, now = new Date()) {
   if (!isCard(mail)) return null;
   const card = mail.mail_extracted.card;
-  const design = designById(card.design);
+  const design = designOf(card.design);
   const sealed = isSealed(mail, now);
   return {
     design: card.design,
@@ -569,7 +647,12 @@ function cardView(mail, now = new Date()) {
     // The sender's signature (8.2), when the reader read the card's stored copy: v2's object_payload, or the
     // card_signature GET /api/mailbox/:id sets. Like the note, not before a seal lifts; null: set the typed name.
     signature: (!sealed && (mail.card_signature || signatureOf(mail.object_payload))) || null,
+    // A photo card (PHOTO_CARD): its frame and the sender's line, where the stored copy was read and its seal has
+    // lifted (mediaView); null otherwise, and the apps draw the stock picture. A catalog card has no `front`.
+    ...(isPhotoCardDesign(card.design) ? { front: null } : {}),
     ...mediaView(mail, sealed),
+    // The reader joined for this card (joinedFor; the routes that read one piece set card_joined_for). Absent otherwise.
+    ...(mail.card_joined_for ? { joined_for: true } : {}),
     // A card that travels (card_travel), as its reader may see it: the route reads it (services/cardTravel readerView).
     ...(mail.card_travel ? { travel: mail.card_travel } : {}),
   };
@@ -584,7 +667,7 @@ function cardView(mail, now = new Date()) {
 function replyView(mail) {
   if (!isReply(mail)) return null;
   const reply = mail.mail_extracted.card_reply;
-  const design = designById(reply.design);
+  const design = designOf(reply.design);
   return {
     card_id: reply.card_id,
     design: reply.design || null,
@@ -618,6 +701,8 @@ function mediaView(mail, sealed) {
       covered: mail.card_photo_covered !== false,
       live: live ? { file_id: live.file_id, mime_type: live.mime_type || null, duration_ms: live.duration_ms ?? null } : null } : null,
     voice: voice ? { file_id: voice.file_id, duration_ms: voice.duration_ms ?? null } : null,
+    // A photo card's front: the photo above is drawn in this frame, with this line under it.
+    ...(photo && media.front ? { front: { frame: media.front.frame, caption: media.front.caption || null } } : {}),
   };
 }
 
@@ -852,6 +937,7 @@ module.exports = {
   REPLY_TAG, REPLY_SUBJECT, isReply, replyRowId, replyDigest, replyView, uuidOf,
   CARD_TAG, MESSAGE_LIMIT, SUBJECT, SEALED_NOTE, SEASON, COLLECTIONS, OPENING, DESIGNS, pickACardDesign, PERSON_ARRIVALS, EMAIL_ARRIVALS,
   EMAIL_ARRIVALS_ALL, PERSON_ARRIVALS_ALL, TO_NAME_LIMIT, cleanToName,
+  PHOTO_CARD, isPhotoCardDesign, photoCardControls, photoCardShape, cleanFront, frontOf, designOf, joinedFor,
   SIGNATURE_BOX, SIGNATURE_MAX_BYTES, cleanSignature, signatureOf, mediaOf, mediaView,
   designById, isCard, isByLink, cardLinkToken, cardEmailToken, EMAIL_TRIES, emailTrouble, emailPicture, emailWent, emailSendAt, requestRowId, requestDigest, isSealed, sealedView, christmasMorning, seasonOpen, dayStart,
   daysBetween, arrivalsFor,

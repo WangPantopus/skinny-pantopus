@@ -87,7 +87,9 @@ function present(mail, { timeZone = FALLBACK_TIME_ZONE } = {}) {
   // card_signature, card_media and card_photo_covered only carry a card's signature, photo and voice to cardView (GET
   // /api/mailbox/:id); apps read them under card. Which reports share a card is the server's and the admins' alone.
   // card_travel carries a travelling card's view to cardView the same way (services/cardTravel readerView).
-  const { card_signature: _signature, card_media: _media, card_photo_covered: _covered, card_travel: _travel, ...rest } = mail;
+  // card_joined_for says the reader joined for this card (holidayCards.joinedFor), the same way.
+  const { card_signature: _signature, card_media: _media, card_photo_covered: _covered, card_travel: _travel,
+    card_joined_for: _joinedFor, ...rest } = mail;
   if (rest.mail_extracted?.reports) {
     const { reports: _reports, ...extracted } = rest.mail_extracted;
     rest.mail_extracted = extracted;

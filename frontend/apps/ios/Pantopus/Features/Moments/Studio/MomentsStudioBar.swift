@@ -63,6 +63,13 @@ struct MomentsStudioRail: View {
                     Icon(.repeat2, size: 19, strokeWidth: 2.2, color: .white)
                 } action: { openLoop() }
             }
+            if model.studioMotionClip != nil {
+                // A Live Photo (phase 5 C): the moving-photo mark; on, its motion goes up with it.
+                tool(model.studioKeepsMotion ? "Motion on" : "Motion off", id: "moments.studio.rail.motion") {
+                    Icon(.circleDot, size: 19, strokeWidth: 2.2, color: .white)
+                        .opacity(model.studioKeepsMotion ? 1 : 0.5)
+                } action: { model.toggleStudioMotion() }
+            }
             if let openBlur, model.offersBlur {
                 tool("Blur", id: "moments.studio.rail.blur") {
                     Icon(.eyeOff, size: 19, strokeWidth: 2.2, color: .white)

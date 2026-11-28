@@ -694,6 +694,8 @@ router.get('/item/:id', verifyToken, async (req, res) => {
     if (holidayCards.isCard(mail) && holidayCards.mediaOf(objectPayload)?.photo) {
       mail.card_photo_covered = await cardMedia.photoCovered(userId, mail.sender_user_id);
     }
+    // Whether they joined for this card (the card round, Wave 4.1): the apps then hold their other notices.
+    if (holidayCards.isCard(mail) && await holidayCards.joinedFor(mail, userId)) mail.card_joined_for = true;
     if (!mail.opened_at && !mail.removed && !holidayCards.isSealed(mail)) {
       const now = new Date().toISOString();
       const opened = { opened_at: now, viewed: true, viewed_at: mail.viewed_at || now,

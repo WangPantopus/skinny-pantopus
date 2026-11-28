@@ -86,6 +86,8 @@ extension MomentsComposerModel {
         })
         // The Studio's sound (CONTRACT 7e) goes up once its Moment is made; nothing without one.
         uploadStudioSounds(to: made.first)
+        // A Live Photo's motion (CONTRACT 10b) goes up once its photo is up; nothing without one.
+        uploadStudioMotion(to: made.first)
         made = []
         return true
     }

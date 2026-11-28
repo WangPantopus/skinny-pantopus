@@ -42,6 +42,9 @@ struct CardTableSendingSetup {
     let count: Int
     /// The gold "Do not open until Christmas" lands last.
     let sealedForChristmas: Bool
+    /// "Quick seal" shows under the main button (cards-next 3.5): the flow is `improved` and this device has sealed a
+    /// card the whole way by hand before.
+    var offersQuickSeal = false
     /// Sends the card at the seal, with the draft's request ID.
     let seal: @MainActor () async -> CardTableSealAnswer
     /// Done (✕ too, once it's sent).
@@ -109,6 +112,24 @@ extension CardTableModel {
         wake()
     }
 
+    /// "Quick seal", quiet under the main button while the card lies on its envelope (cards-next 3.5).
+    var quickSealButton: CardTableMenuItem? {
+        guard sendingSetup?.offersQuickSeal == true else { return nil }
+        return CardTableMenuItem(title: "Quick seal", identifier: "cardTableQuickSeal") { [weak self] in
+            self?.quickSeal()
+        }
+    }
+
+    /// One short beat: the card is in and the flap shut at once, the seal pressed home, and once it's sent the
+    /// envelope is addressed, stamped and postmarked together, into the same send the ritual ends in. With Reduce
+    /// Motion nothing moves (as "Seal and send" does there).
+    func quickSeal() {
+        guard sending == .ready else { return }
+        lastTouch = CACurrentMediaTime()
+        quickSealing = true
+        sealAllAtOnce()
+    }
+
     /// Reduce Motion: "Seal and send" does all of it; the steps swap without moving.
     private func sealAllAtOnce() {
         springs.spread.jump(to: 0)
@@ -134,7 +155,7 @@ extension CardTableModel {
         Task { @MainActor [weak self] in
             let answer = await setup.seal()
             // The seal stays in sight at least 0.8 s, however fast the server answers (web's timing).
-            if case .sent = answer, self?.reduceMotion == false {
+            if case .sent = answer, self?.reduceMotion == false, self?.quickSealing == false {
                 let left = 0.8 - (CACurrentMediaTime() - sealedAt)
                 if left > 0 { try? await Task.sleep(nanoseconds: UInt64(left * 1_000_000_000)) }
             }
@@ -150,7 +171,20 @@ extension CardTableModel {
             goneButtons = buttons
             step = .front
             addressedAt = 0
-            if reduceMotion {
+            // Sealed the whole way by hand: from now on this device offers "Quick seal" (cards-next 3.5).
+            if !quickSealing { CardTableQuickSeal.sealedOnce = true }
+            let quick = quickSealing
+            quickSealing = false
+            if quick, !reduceMotion {
+                // The address side all at once, its stamp and postmark landing together with one thump; the table's
+                // clock slides it off 0.9 s later, as at the end of the ritual.
+                springs.envelope.jump(to: 360)
+                let sealedForChristmas = sendingSetup?.sealedForChristmas == true
+                addressedAt = sealedForChristmas ? CardTableAddress.gold.1 : CardTableAddress.postmark.1
+                addressing = 1
+                sending = .addressing
+                haptics.tap(.firm)
+            } else if reduceMotion {
                 // Addressed all at once, and it stays on the table; step 5 comes after 1.2 s.
                 springs.envelope.jump(to: 360)
                 addressing = 1
@@ -166,6 +200,7 @@ extension CardTableModel {
                 sending = .addressing
             }
         case let .refused(message):
+            quickSealing = false
             // The seal doesn't take: it lifts off, the flap stays shut, and the server's words take the place of
             // "Press and hold to seal it." until the next press.
             sealShown = false
@@ -342,6 +377,16 @@ extension CardTableModel {
         springs.pull.x = pull
         springs.pull.t = pull
         springs.pull.v = 0
+    }
+}
+
+/// "Quick seal" (cards-next 3.5): offered once this device has sealed a card the whole way by hand.
+enum CardTableQuickSeal {
+    private static let key = "pantopus.cards.sealedOnce"
+
+    static var sealedOnce: Bool {
+        get { UserDefaults.standard.bool(forKey: key) }
+        set { UserDefaults.standard.set(newValue, forKey: key) }
     }
 }
 
