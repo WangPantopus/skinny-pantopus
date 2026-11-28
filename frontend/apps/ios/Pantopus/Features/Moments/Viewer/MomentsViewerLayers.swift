@@ -34,6 +34,20 @@ struct MomentPhotoSurface: View {
                 .accessibilityLabel("\(moment.author.shortName)'s before and after")
                 .accessibilityIdentifier("moments.viewer.photo")
                 .overlay { MomentLayersOverlay(moment: moment, picture: MomentBeforeAfterHalves.size(of: image.size)) }
+        } else if flags.isOn, let motion = moment.layers.motion, motion.url != nil {
+            // A Live Photo's motion (phase 5 C, CONTRACT 10b): once, silently, as it opens; again with its sound while held.
+            Color.clear
+                .overlay {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                        .accessibilityLabel("\(moment.author.shortName)'s photo")
+                        .accessibilityIdentifier("moments.viewer.photo")
+                        .overlay { MomentMotionLayer(motion: motion, fills: true) }
+                }
+                .clipped()
+                .overlay { MomentLayersOverlay(moment: moment, picture: image.size) }
+                .overlay(alignment: .bottomLeading) { MomentMotionMark().padding(.leading, 16).padding(.bottom, 120) }
         } else if flags.isOn, MomentDepth.shows(reduceMotion: reduceMotion) {
             // Depth windows (phase 4): tilt to look around; flat with Reduce Motion, in Low Power Mode, or when slow.
             MomentDepthWindow(moment: moment, image: image)

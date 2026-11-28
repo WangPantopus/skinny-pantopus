@@ -107,12 +107,22 @@ public struct HolidayCardMediaSpec: Decodable, Sendable, Hashable {
         }
     }
 
+    /// The free photo or voice cards a person has (cards-next Wave 2, only while `improved`): the first `limit` cards
+    /// with a photo or greeting need no bought stamp, and `bought_stamp` is left out while `remaining` is above 0. Nil
+    /// with the switch off and from older servers.
+    public struct FreeAllowance: Decodable, Sendable, Hashable {
+        public let limit: Int
+        public let remaining: Int
+    }
+
     public let photo: Photo?
     public let voice: Voice?
+    public let freeAllowance: FreeAllowance?
     public let boughtStamp: BoughtStamp?
 
     private enum CodingKeys: String, CodingKey {
         case photo, voice
+        case freeAllowance = "free_allowance"
         case boughtStamp = "bought_stamp"
     }
 
@@ -120,6 +130,7 @@ public struct HolidayCardMediaSpec: Decodable, Sendable, Hashable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         photo = try? c.decodeIfPresent(Photo.self, forKey: .photo)
         voice = try? c.decodeIfPresent(Voice.self, forKey: .voice)
+        freeAllowance = try? c.decodeIfPresent(FreeAllowance.self, forKey: .freeAllowance)
         boughtStamp = try? c.decodeIfPresent(BoughtStamp.self, forKey: .boughtStamp)
     }
 }

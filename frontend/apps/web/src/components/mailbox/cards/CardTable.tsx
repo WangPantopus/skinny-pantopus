@@ -100,6 +100,8 @@ export type SendMoment = {
   /** Step 5, once the envelope has gone: the words at the top, and the line and buttons under the table. */
   goneWords: string;
   gone: ReactNode;
+  /** Quick seal (Wave 3.5, `improved`, after the first full sealing on this device): a quiet link under the button. */
+  quickSeal?: boolean;
 };
 
 /** A failed picture tries again rather than showing broken: a weak connection is no reason to lose the envelope. */
@@ -184,7 +186,13 @@ export default function CardTable({
   overlay,
   letter = null,
   mediaFrom = null,
+  improved = false,
 }: {
+  /**
+   * The card improvements of November 28 (the read the page drew from said `improved`): a sealed card's "Not yet" line
+   * lies just under the words above it, on dark glass, and the words stay (Wave 3.6).
+   */
+  improved?: boolean;
   card: TableCard;
   /** The note. A sealed card's never reaches this far. */
   note: string;
@@ -295,11 +303,19 @@ export default function CardTable({
   letterRef.current = letter;
   const days = daysWords(card.sealed_until);
 
+  // Wave 3.6: where the line goes, just under the words (null: its usual place).
+  const [toastTop, setToastTop] = useState<number | null>(null);
   const say = useCallback((text: string) => {
+    if (improved) {
+      const stage = stageRef.current;
+      const words = stage?.querySelector<HTMLElement>('[data-el="words"]');
+      const box = words?.textContent?.trim() ? words.getBoundingClientRect() : null;
+      setToastTop(stage && box ? Math.round(box.bottom - stage.getBoundingClientRect().top + 12) : null);
+    }
     setToast(text);
     window.clearTimeout(toastTimer.current);
     toastTimer.current = window.setTimeout(() => setToast(null), 2600);
-  }, []);
+  }, [improved]);
 
   useEffect(() => { setMounted(true); }, []);
   useDarkPage(mounted, tableEdge(card.table));
@@ -893,11 +909,17 @@ export default function CardTable({
               ))}
             </div>
           ) : null}
-          <div className={`${styles.words} ${words && !toast ? '' : styles.hidden}`} data-el="words" aria-live="polite">
+          <div className={`${styles.words} ${words && (!toast || improved) ? '' : styles.hidden}`} data-el="words" aria-live="polite">
             {words}
             {wordsSub && words ? <small className={travelStyles.wordsSub} data-el="wordsSub" data-testid="cardTableTravelLine">{wordsSub}</small> : null}
           </div>
-          <div className={`${styles.toast} ${toast ? styles.toastOn : ''}`} role="status">{toast}</div>
+          <div
+            className={`${styles.toast} ${improved ? styles.toastClear : ''} ${toast ? styles.toastOn : ''}`}
+            style={improved && toastTop !== null ? { top: toastTop } : undefined}
+            role="status"
+          >
+            {toast}
+          </div>
           {verseOpen && card.verse ? (
             <div className={styles.bookmarkShade} data-ui onClick={() => setVerseOpen(false)}>
               <section
@@ -982,6 +1004,13 @@ export default function CardTable({
                       Read it in print
                     </button>
                   ) : <div className={styles.hint}>{readPrint ? '' : hint}</div>}
+                </div>
+              ) : sendMoment?.quickSeal && sendButton ? (
+                // Quick seal (Wave 3.5): one quiet link in the hint's slot, in the style of "Read it in print".
+                <div className={styles.hintSlot}>
+                  <button type="button" className={styles.verseLink} data-ui data-testid="cardTableQuickSeal" onClick={() => { setRefusal(null); engineRef.current?.quickSeal(); }}>
+                    Quick seal
+                  </button>
                 </div>
               ) : <div className={styles.hint}>{hint}</div>}
               {/* One row of quiet buttons, at most two (Fix 1). Its room is kept while any can be offered, so the card never

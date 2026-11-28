@@ -247,6 +247,7 @@ private fun CardTable(
                 density,
                 quietRow = sending.hasQuietRow(sendBack),
                 sending = calls != null,
+                quickSeal = calls?.quickSeal == true,
                 passOnLabel = sending.passOn?.label.takeIf { calls == null },
                 passedLine = sending.passOn?.passedLine.takeIf { calls == null },
             )
@@ -411,6 +412,8 @@ private fun rememberTableGeometry(
     quietRow: Boolean,
     /** The sender's moment: its words stay over the open envelope, so the table starts below them. */
     sending: Boolean = false,
+    /** "Quick seal" in the hint's place while sending (Wave 3.5): the slot keeps a link's 44 dp. */
+    quickSeal: Boolean = false,
     /** A travelling card's "Pass it on" beside "Turn it back" (Part 4): a second row of buttons when they don't fit. */
     passOnLabel: String? = null,
     /** "You passed it on to Ivy and Cass." in the quiet row, two lines at the largest text sizes. */
@@ -434,6 +437,7 @@ private fun rememberTableGeometry(
         card.sealed,
         quietRow,
         sending,
+        quickSeal,
         readsVerse,
         readsInPrint,
         media,
@@ -446,7 +450,7 @@ private fun rememberTableGeometry(
             val hintHeight =
                 HINTS.maxOf { hint -> measurer.measure(hint, tableHintStyle, constraints = hintWidth).size.height }.let { hints ->
                     // The hint slot also holds "Read the verse" (plan 6.2) or "Read it in print" (Part 2), 44 dp to touch.
-                    if (readsVerse || readsInPrint) {
+                    if (readsVerse || readsInPrint || quickSeal) {
                         val link =
                             listOf(READ_THE_VERSE, READ_IT_IN_PRINT).maxOf {
                                 measurer.measure(it, tableVerseLinkStyle, constraints = hintWidth).size.height

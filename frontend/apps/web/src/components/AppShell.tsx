@@ -308,6 +308,11 @@ function AppShellInner({ children, publicPage = false }: { children: React.React
   useEffect(() => {
     persistSidebarCollapsed(collapsed);
   }, [collapsed]);
+  const wasPulse = useRef(false);
+  useEffect(() => {
+    if (wasPulse.current && !reinventedPulse) sidebarDispatch({ type: 'SET_HOVER_EXPANDED', value: Boolean(document.querySelector('aside:hover')) && (isTablet || (isDesktop && collapsed)) });
+    wasPulse.current = reinventedPulse;
+  }, [reinventedPulse, isTablet, isDesktop, collapsed]);
 
   // ── Close mobile drawer on route change ───────────────────
   useEffect(() => {
@@ -370,7 +375,7 @@ function AppShellInner({ children, publicPage = false }: { children: React.React
   const avatarUrl = profile?.avatar_url ?? profile?.profilePicture ?? profile?.profile_picture_url ?? null;
 
   // Sidebar is "narrow" on tablet OR desktop-collapsed
-  const showCollapsed = isTablet || (isDesktop && collapsed);
+  const showCollapsed = isTablet || (isDesktop && (collapsed || reinventedPulse));
   // Sidebar structural width (affects content margin)
   const sidebarWidth = isMobile ? 0 : showCollapsed ? SIDEBAR_COLLAPSED : SIDEBAR_EXPANDED;
   // Visual width (may be wider on hover-expand overlay)
@@ -574,6 +579,8 @@ function AppShellInner({ children, publicPage = false }: { children: React.React
             if (showCollapsed) sidebarDispatch({ type: 'SET_HOVER_EXPANDED', value: true });
           }}
           onMouseLeave={() => sidebarDispatch({ type: 'SET_HOVER_EXPANDED', value: false })}
+          onFocus={() => { if (reinventedPulse && showCollapsed) sidebarDispatch({ type: 'SET_HOVER_EXPANDED', value: true }); }}
+          onBlur={(e) => { if (hoverExpanded && !e.currentTarget.contains(e.relatedTarget as Node | null) && !e.currentTarget.matches(':hover')) sidebarDispatch({ type: 'SET_HOVER_EXPANDED', value: false }); }}
         >
           {/* ── Brand ── */}
           <div className="h-14 flex items-center gap-3 flex-shrink-0 border-b border-app overflow-hidden" style={sidebarHeaderPadStyle}>
@@ -624,7 +631,7 @@ function AppShellInner({ children, publicPage = false }: { children: React.React
             </button>
 
             {/* Collapse toggle (desktop only, not during hover-expand) */}
-            {isDesktop && !hoverExpanded && (
+            {isDesktop && !hoverExpanded && !reinventedPulse && (
               <button onClick={() => sidebarDispatch({ type: 'TOGGLE_COLLAPSED' })} className={`w-full flex items-center text-app-muted hover-bg-app transition text-xs border-t border-app ${showLabels ? 'gap-2 px-4 py-2.5' : 'justify-center py-2.5'}`} title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}>
                 {collapsed ? (
                   <ChevronsRight className="w-4 h-4" />

@@ -30,6 +30,11 @@ enum HolidayCardStep: Int, CaseIterable {
     /// The five steps the dots count.
     static let counted: [HolidayCardStep] = [.to, .pick, .write, .seal, .look]
 
+    /// The five steps in order: with `improved`, Pick a card comes first (cards-next 3.1).
+    static func order(improved: Bool) -> [HolidayCardStep] {
+        improved ? [.pick, .to, .write, .seal, .look] : counted
+    }
+
     var title: String {
         switch self {
         case .to: "Who it’s for"
@@ -257,6 +262,9 @@ final class HolidayCardFlowViewModel {
     var stampShort: StampShort?
     /// The stamp books opened for the card's photo or greeting, which go only with a bought stamp.
     var stampsForMedia = false
+    /// A list's "needs N bought stamps" sentence from the server (`improved`), shown under the choices until stamps are
+    /// bought.
+    @ObservationIgnored private var listMediaRefusal: String?
 
     // A list (digital stamps on): who's on it, a request ID for each (kept
     // for the whole card, so every look and retry of the list finds the
@@ -278,6 +286,10 @@ final class HolidayCardFlowViewModel {
 
     private(set) var search: HolidayCardSearch = .idle
     var byEmail = false
+    /// The "Name on the envelope" form for a card by link is up (`improved`, cards-next 3.2).
+    var byLink = false
+    /// The name typed for a link's envelope ("Mom"); kept with the draft.
+    var linkName = ""
     /// The link to send, just after sending a card by link.
     private(set) var sentLink: String?
     var email = ""
@@ -327,6 +339,48 @@ final class HolidayCardFlowViewModel {
         return nil
     }
 
+    /// The cards' read says the next round of improvements is on (cards-next contract section 1): only then does the
+    /// flow draw the new experience. Read afresh with each load, never kept.
+    var improved: Bool {
+        cards?.improved == true
+    }
+
+    /// The steps in the order this flow takes them.
+    var steps: [HolidayCardStep] {
+        HolidayCardStep.order(improved: improved)
+    }
+
+    /// Where a new card starts: Who it's for, or with `improved` Pick a card (Who it's for when a card's page or "Send
+    /// this card again" chose the picture).
+    var firstStep: HolidayCardStep {
+        steps[0]
+    }
+
+    /// The name on a link's envelope (`improved`): trimmed, runs of whitespace folded, at most 40 letters; nil when
+    /// none was typed.
+    var linkEnvelopeName: String? {
+        guard improved, recipient?.isLink == true else { return nil }
+        let folded = linkName.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        return folded.isEmpty ? nil : String(folded.prefix(Self.linkNameLimit))
+    }
+
+    static let linkNameLimit = 40
+
+    /// The name the envelope carries: a link's typed name with `improved`, else as before ("Their name").
+    func envelopeName(_ recipient: HolidayCardRecipient) -> String {
+        recipient.isLink ? linkEnvelopeName ?? recipient.envelopeName : recipient.envelopeName
+    }
+
+    /// The button under Pick a card: with `improved` and no one chosen yet, on to Who it's for.
+    var pickButtonTitle: String {
+        improved && recipient == nil ? "Choose who it’s for" : "Write on this card"
+    }
+
+    /// Where "Let this card travel" starts: off when the server says so (`improved`, `travel.default_on`), else on.
+    var travelStartsOn: Bool {
+        improved ? cards?.travel?.defaultOn ?? true : true
+    }
+
     /// The card sent today, while it still counts.
     var today: SentHolidayCard? {
         sent ?? HolidayCardWords.today(cards)
@@ -343,6 +397,14 @@ final class HolidayCardFlowViewModel {
         guard let cards, let recipient else { return [] }
         if recipient.isLink { return cards.emailArrivals }
         if recipient.isEmail { return cards.emailAllArrivals ?? cards.emailArrivals }
+        // One person on Pantopus can have it right away (`improved`, cards-next 3.3); a list keeps its morning mail.
+        if improved, case .person = recipient {
+            if let theirs {
+                if let all = theirs.arrivalsAll { return all }
+            } else if let all = cards.personAllArrivals {
+                return all
+            }
+        }
         return theirs?.arrivals ?? cards.personArrivals
     }
 
@@ -380,7 +442,13 @@ final class HolidayCardFlowViewModel {
         if let chosen = chosenAtStart, let cards, cards.open, HolidayCardWords.today(cards) == nil {
             chosenAtStart = nil
             choose(chosen)
+            // With `improved`, someone chosen at the start (Write back, chat, a profile) still picks the card first.
+            if improved { step = .pick }
+        } else if improved, step == .to, recipient == nil {
+            // Pick a card first; a picture already chosen goes on to Who it's for (cards-next 3.1).
+            step = design != nil ? .to : .pick
         }
+        travels = travelStartsOn
         restoreDraftOnce()
         await readOwnName()
     }
@@ -397,6 +465,8 @@ final class HolidayCardFlowViewModel {
     func retry() async {
         state = .loading
         await fetch()
+        if improved, step == .to, recipient == nil, !draftRead { step = design != nil ? .to : .pick }
+        travels = travelStartsOn
         restoreDraftOnce()
     }
 
@@ -425,8 +495,8 @@ final class HolidayCardFlowViewModel {
             shelfPage = nil
             return true
         }
-        guard step != .to, step != .sent, let previous = HolidayCardStep(rawValue: step.rawValue - 1) else { return false }
-        step = previous
+        guard step != .sent, let index = steps.firstIndex(of: step), index > 0 else { return false }
+        step = steps[index - 1]
         sendError = nil
         previewError = nil
         return true
@@ -438,7 +508,23 @@ final class HolidayCardFlowViewModel {
         readTheirs()
         // The arrival choices depend on who it's for: the first that's open.
         if arrival.map({ !arrivals.contains($0) }) ?? true { arrival = arrivals.first }
-        step = keepsPicture && design != nil ? .write : .pick
+        if improved {
+            // The card is picked first (cards-next 3.1): on to Write on the back.
+            step = design != nil ? .write : .pick
+        } else {
+            step = keepsPicture && design != nil ? .write : .pick
+        }
+    }
+
+    /// "Change" beside the card on Who it's for (`improved`): back to Pick a card, the person kept.
+    func changeCard() {
+        step = .pick
+    }
+
+    /// "Send it by link" with `improved`: the name on its envelope is asked first (cards-next 3.2).
+    func chooseLink() {
+        byLink = false
+        choose(.link)
     }
 
     func chooseEmail() {
@@ -446,9 +532,10 @@ final class HolidayCardFlowViewModel {
         choose(.email(email.trimmingCharacters(in: .whitespacesAndNewlines)))
     }
 
+    /// Pick a card's button: Write on the back, or with `improved` and no one chosen yet, Who it's for.
     func toWrite() {
         guard design != nil else { return }
-        step = .write
+        step = improved && recipient == nil ? .to : .write
     }
 
     func toSeal() {
@@ -511,12 +598,25 @@ final class HolidayCardFlowViewModel {
     @discardableResult
     private func needsBoughtStamp(_ error: any Error) async -> Bool {
         guard Self.refusalCode(error) == "CARD_MEDIA_NEEDS_STAMP" else { return false }
-        // Seal it for the day says it in the app's words, whatever an older server says, and clears it once bought.
-        if previewError != nil { previewError = HolidayCardMediaRow.needsStampLine }
+        // Seal it for the day says it in the app's words, whatever an older server says, and clears it once bought. A
+        // list (`improved`) keeps the server's sentence: it says how many bought stamps the list needs.
+        if improved, recipient?.entries != nil {
+            listMediaRefusal = previewError ?? sendError
+        } else if previewError != nil {
+            previewError = HolidayCardMediaRow.needsStampLine
+        }
         openStampsForMedia()
         await stamps.refresh()
         await rereadCards()
         return true
+    }
+
+    /// Bought stamps came (or went): a list's "needs N bought stamps" sentence no longer holds.
+    func boughtStampsChanged() {
+        guard let said = listMediaRefusal else { return }
+        listMediaRefusal = nil
+        if previewError == said { previewError = nil }
+        if sendError == said { sendError = nil }
     }
 
     /// The season's answer again, keeping what's shown when it can't be read: after stamps were bought, a photo and
@@ -580,7 +680,7 @@ final class HolidayCardFlowViewModel {
         switch recipient {
         case let .person(userId, _): to = .person(userId: userId)
         case let .email(address): to = .email(address)
-        case .link: to = .link
+        case .link: to = linkEnvelopeName.map { .namedLink($0) } ?? .link
         case .list: return nil
         }
         var body = SendHolidayCardBody(
@@ -597,9 +697,10 @@ final class HolidayCardFlowViewModel {
         return body
     }
 
-    /// The photo the card carries: one person's card only (a list goes without), and only while the server takes one.
+    /// The photo the card carries, only while the server takes one: one person's card only (a list goes without), or a
+    /// list too with `improved` (cards-next Wave 2).
     var mediaPick: HolidayCardMediaPick {
-        guard recipient?.entries == nil, cards?.takesMemories == true else { return .none }
+        guard improved || recipient?.entries == nil, cards?.takesMemories == true else { return .none }
         return attachments.pick
     }
 
@@ -634,6 +735,8 @@ final class HolidayCardFlowViewModel {
             HolidayCardDraftStore.clear()
             // The guidance card "It's on its way" follows in Mail, after the first letter or card.
             GuidanceCenter.shared.pend(.doneFirstLetter)
+            // The free photo cards left (`improved`), for the next card.
+            if improved, body.photo != nil || body.voice != nil { await rereadCards() }
         } catch {
             if await wentEarlier(error) { return }
             // The stamps ran out meanwhile (another device sent a card): the stamp books open; the card stays as it is.
@@ -697,6 +800,8 @@ final class HolidayCardFlowViewModel {
         startOver()
         designId = picture
         keepsPicture = picture != nil
+        // With `improved`, the picture is kept, so the card starts at Who it's for.
+        if improved, picture != nil { step = .to }
     }
 
     /// Another card can go now: a stamp left, or without stamps, today's card not used (experience plan Part 6).
@@ -731,9 +836,11 @@ final class HolidayCardFlowViewModel {
         query = ""
         email = ""
         byEmail = false
-        travels = true
+        byLink = false
+        linkName = ""
+        travels = travelStartsOn
         sentTravels = false
-        step = .to
+        step = firstStep
     }
 
     // MARK: - Saved signature
@@ -882,6 +989,7 @@ extension HolidayCardFlowViewModel {
             arrival: arrival,
             recipients: recipients,
             signature: cards?.signature == nil ? nil : signature,
+            media: mediaPick,
             // Each address keeps the list's choice, worded with all four (else the older mapping).
             emailsKeepArrival: cards?.emailAllArrivals == nil ? nil : true
         )
@@ -911,6 +1019,7 @@ extension HolidayCardFlowViewModel {
         } catch {
             if needsTown(error, retry: { [weak self] in Task { await self?.lookItOver(opens: opens) } }) { return false }
             previewError = Self.refusal(error, fallback: "Couldn’t show your cards just now. Try again in a moment.")
+            if improved { await needsBoughtStamp(error) }
             return false
         }
     }
@@ -933,8 +1042,16 @@ extension HolidayCardFlowViewModel {
             sentTravels = body.travel == true
             step = .sent
             HolidayCardDraftStore.clear()
+            if improved, body.photo != nil || body.voice != nil { await rereadCards() }
         } catch {
             if needsTown(error, retry: { [weak self] in self?.sealOrSend() }) { return }
+            // Its photo or greeting needs more bought stamps than are left (`improved`): the server's sentence says
+            // how many, and the stamp books open.
+            if improved, Self.refusalCode(error) == "CARD_MEDIA_NEEDS_STAMP" {
+                sendError = Self.refusal(error, fallback: HolidayCardMediaRow.needsStampLine)
+                await needsBoughtStamp(error)
+                return
+            }
             guard Self.refusalCode(error) == "STAMPS_REQUIRED" else {
                 sendError = Self.refusal(error, fallback: "Couldn’t send your cards just now. Try again in a moment.")
                 return
@@ -964,6 +1081,8 @@ extension HolidayCardFlowViewModel {
             let _: TakeBackHolidayCardResponse = try await answer(HolidayCardEndpoints.takeBack(cardId: card.id))
             listTakenBack.insert(card.id)
             await stamps.refresh()
+            // A card taken back hands its free photo card back (`improved`).
+            if improved { await rereadCards() }
         } catch {
             listTakeBackError = (card.id, Self.refusal(error, fallback: "Couldn’t take your card back just now. Try again in a moment."))
         }
@@ -999,7 +1118,8 @@ extension HolidayCardFlowViewModel {
             voice: voice?.status == .ready ? voice?.stored : nil,
             arrival: arrival?.rawValue,
             requestId: requestId,
-            listIds: listIds
+            listIds: listIds,
+            linkName: linkEnvelopeName
         )
     }
 
@@ -1030,8 +1150,10 @@ extension HolidayCardFlowViewModel {
         arrival = kept.arrival.flatMap(HolidayCardArrival.init(rawValue:))
         requestId = kept.requestId
         listIds = kept.listIds
+        linkName = kept.linkName ?? ""
         if recipient == nil {
-            step = .to
+            // With `improved` a new card starts at Pick a card; a picture already picked goes on to Who it's for.
+            step = improved && !designHere ? .pick : .to
         } else if !designHere {
             step = .pick
         } else {

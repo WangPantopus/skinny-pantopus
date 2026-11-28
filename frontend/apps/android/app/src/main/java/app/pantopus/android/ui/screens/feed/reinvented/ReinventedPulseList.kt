@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.sp
 import app.pantopus.android.data.api.models.moments.MomentDto
 import app.pantopus.android.data.api.models.reinvented.PulseTravelDto
 import app.pantopus.android.data.api.models.reinvented.shownConvergence
+import app.pantopus.android.data.api.models.reinvented.shownPinboard
 import app.pantopus.android.data.api.models.reinvented.shownRetake
 import app.pantopus.android.data.pulse.ReinventedPoint
 import app.pantopus.android.ui.components.EmptyState
@@ -53,6 +54,7 @@ import app.pantopus.android.ui.screens.feed.pulse.PulsePostCardContent
 import app.pantopus.android.ui.screens.feed.reinvented.after.EyesOnNearSection
 import app.pantopus.android.ui.screens.feed.reinvented.after.PulsePassItOn
 import app.pantopus.android.ui.screens.feed.reinvented.after.PulseTravelLine
+import app.pantopus.android.ui.screens.feed.reinvented.after.RelicsNearSection
 import app.pantopus.android.ui.screens.moments.components.MomentCardBackground
 import app.pantopus.android.ui.screens.moments.components.MomentImages
 import app.pantopus.android.ui.screens.moments.components.momentCardGradient
@@ -149,6 +151,8 @@ private fun LoadedRows(
         item(key = "top") { top?.invoke() }
         // Eyes on near you (CONTRACT 8f): only once the Ask chip is picked, never beside what opens the tab.
         if (state.chip == ASK_CHIP) item(key = "eyesOn") { EyesOnNearSection(actions.viewer) }
+        // Relics near you (8g): only once the Spots chip is picked.
+        if (state.chip == SPOTS_CHIP) item(key = "relics") { RelicsNearSection() }
         // Places you follow (phase 4, `feed/living/LivingPlaces.kt`), at the top of Explore only.
         if (state.reach == ReinventedPulseViewModel.EXPLORE) {
             item(key = "followed") { LivingFollowedPlaces(state.followed, actions.onRefresh, actions.onOpenMoment) }
@@ -370,7 +374,7 @@ private fun KeptCard(
     ) {
         Text(
             // A Retake's row (CONTRACT 8e) says so; it opens the whole Retake.
-            text = moment.shownRetake?.tag ?: moment.shownConvergence?.tag ?: "Kept · stays",
+            text = moment.shownRetake?.tag ?: moment.shownConvergence?.tag ?: moment.shownPinboard?.tag ?: "Kept · stays",
             fontSize = 12.5.sp,
             fontWeight = FontWeight.Bold,
             color = PantopusColors.primary600,
@@ -502,3 +506,4 @@ private const val ROWS_BEFORE_END = 4
 
 /** The chip whose list draws "Eyes on near you" over it. */
 private const val ASK_CHIP = "ask"
+private const val SPOTS_CHIP = "spots"

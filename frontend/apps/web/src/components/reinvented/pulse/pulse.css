@@ -139,81 +139,492 @@
   }
 }
 
-/* ── The list, at three heights ── */
+/* ── PHASE-6 A, D and E: the map is the screen; one top line, the rail, the sheet (a panel at 700 px wide or more) ── */
+.rp-board {
+  --rp-glass: color-mix(in srgb, var(--rp-paper) 84%, transparent);
+  --rp-glass-line: color-mix(in srgb, var(--rp-ink) 10%, transparent);
+  --rp-float: 0 4px 16px #0e293524, 0 1px 3px #0e29351f;
+  font-size: 14px;
+}
+/* The top line: one row, 44 px high: the scope pill, Map | Atlas and the search lens. A pull down on it drops the Filters
+   sheet, so the browser keeps its own touch gestures off it. */
+.rp-top {
+  position: absolute;
+  z-index: 600;
+  top: 8px;
+  left: 8px;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 44px;
+  padding: 0 4px;
+  border: 1px solid var(--rp-glass-line);
+  border-radius: 22px;
+  background: var(--rp-glass);
+  -webkit-backdrop-filter: blur(14px) saturate(1.4);
+  backdrop-filter: blur(14px) saturate(1.4);
+  box-shadow: var(--rp-float);
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+/* The cards that open from the line keep their own text and touches. */
+.rp-top :is(.rp-dial, .rp-lens-card) {
+  user-select: text;
+  -webkit-user-select: text;
+}
+.rp-top .rp-scope-wrap {
+  flex: 0 1 auto;
+  min-width: 0;
+  margin-right: auto;
+}
+.rp-top .rp-scope {
+  min-width: 0;
+}
+.rp-top .rp-scope strong {
+  min-width: 0;
+}
+.rp-switch {
+  display: inline-grid;
+  flex: none;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--rp-ink) 7%, transparent);
+}
+.rp-switch button {
+  position: relative;
+  min-height: 30px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 14px;
+  background: none;
+  color: var(--rp-muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+/* Every touch target is at least 44 by 44 (the drawing is smaller). */
+.rp-switch button::before,
+.rp-lens::before,
+.rp-rail-button::before,
+.rp-create::before {
+  content: '';
+  position: absolute;
+  inset: -7px -2px;
+}
+.rp-lens::before,
+.rp-rail-button::before {
+  inset: -4px;
+  border-radius: 50%;
+}
+.rp-create::before {
+  inset: -2px;
+}
+.rp-switch button[data-lit] {
+  background: var(--rp-paper);
+  color: var(--rp-ink);
+  box-shadow: 0 1px 3px #0002;
+}
+.rp-lens {
+  position: relative;
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--rp-ink);
+}
+.rp-lens[data-on] {
+  background: color-mix(in srgb, var(--rp-brand) 14%, transparent);
+  color: var(--rp-brand);
+}
+.rp-lens-card {
+  position: absolute;
+  z-index: 2;
+  top: calc(100% + 6px);
+  right: 0;
+  width: min(420px, calc(100vw - 32px));
+  padding: 8px;
+  border: 1px solid var(--rp-glass-line);
+  border-radius: 18px;
+  background: var(--rp-paper);
+  box-shadow: 0 10px 34px #0003;
+  touch-action: auto;
+}
+.rp-lens-card .am-ask {
+  margin: 0;
+}
+/* One small pill under the top line says which filters are on; nothing shows when none is. */
+.rp-filter-pill {
+  position: absolute;
+  z-index: 590;
+  top: 58px;
+  left: 12px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  max-width: calc(100% - 76px);
+  height: 28px;
+  margin: 0;
+  padding: 0 2px 0 12px;
+  border: 1px solid var(--rp-glass-line);
+  border-radius: 14px;
+  background: var(--rp-glass);
+  -webkit-backdrop-filter: blur(14px) saturate(1.4);
+  backdrop-filter: blur(14px) saturate(1.4);
+  box-shadow: var(--rp-float);
+  font-size: 12px;
+  font-weight: 600;
+}
+.rp-filter-pill span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rp-filter-pill button {
+  position: relative;
+  display: grid;
+  flex: none;
+  place-items: center;
+  /* A 44 px box to the finger, reaching past the 28 px pill (LEAD-7's look, 04:50). */
+  width: 44px;
+  height: 44px;
+  margin: -8px -8px -8px -10px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--rp-muted);
+}
+
+/* The flat map's zoom buttons (the map without a globe) sit left of the rail, under the top line. */
+.rp-board .leaflet-top.leaflet-right {
+  top: 56px;
+  right: 48px;
+}
+
+/* The rail: 36 px circles of frosted glass, 8 px apart, 12 px under the top line; it fades while the map moves. */
+.rp-rail {
+  position: absolute;
+  z-index: 580;
+  top: 64px;
+  right: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: opacity 0.2s ease;
+}
+.rp-board[data-moving] .rp-rail {
+  opacity: 0.4;
+}
+.rp-rail-item {
+  position: relative;
+}
+.rp-rail-button {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid var(--rp-glass-line);
+  border-radius: 50%;
+  background: var(--rp-glass);
+  -webkit-backdrop-filter: blur(14px) saturate(1.4);
+  backdrop-filter: blur(14px) saturate(1.4);
+  box-shadow: var(--rp-float);
+  color: var(--rp-ink);
+  font-size: 12px;
+  font-weight: 700;
+}
+.rp-rail-button[data-on] {
+  border-color: color-mix(in srgb, var(--rp-brand) 45%, transparent);
+  color: var(--rp-brand);
+}
+.rp-rail-button[aria-busy] {
+  opacity: 0.6;
+}
+.rp-rail-dot {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--rp-brand);
+  color: #fff;
+  font-size: 10px;
+  line-height: 16px;
+  text-align: center;
+}
+.rp-rail-card {
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  right: calc(100% + 8px);
+  border: 1px solid var(--rp-glass-line);
+  border-radius: 18px;
+  background: var(--rp-paper);
+  box-shadow: 0 10px 34px #0003;
+}
+.rp-rail-card-when {
+  width: min(400px, calc(100vw - 72px));
+  padding: 2px;
+}
+.rp-rail-card-when .rp-time {
+  margin: 0;
+  background: none;
+}
+.rp-rail-note {
+  width: min(230px, calc(100vw - 72px));
+  margin: 0;
+  padding: 8px 10px;
+  color: var(--rp-ink);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+/* The sheet (a phone's width): its top is under the top line (set by PulseSheet), its rest a transform set by PulseSheet
+   (peek, half, full), sprung on release and following the finger with no transition while its header is dragged. */
 .rp-sheet {
   position: absolute;
   z-index: 500;
   left: 0;
   right: 0;
   bottom: 0;
-  top: var(--rp-sheet-top);
   display: flex;
   flex-direction: column;
   min-height: 0;
-  border-radius: 22px 22px 0 0;
+  border-radius: 18px 18px 0 0;
   background: var(--rp-paper);
   box-shadow: var(--rp-shadow);
-  transition: top 0.25s ease;
+  transform: translate3d(0, 100%, 0);
+  transition: transform 0.28s cubic-bezier(0.2, 0.9, 0.25, 1);
+  will-change: transform;
 }
-.rp-board[data-height='list'] {
-  --rp-sheet-top: 0px;
+.rp-sheet[data-dragging] {
+  transition: none;
 }
-.rp-board[data-height='list'] .rp-sheet {
-  border-radius: 0;
+@media (prefers-reduced-motion: reduce) {
+  .rp-sheet {
+    transition-duration: 0.01s;
+  }
 }
-/* The Map height: the controls float over the top of the map, and the sheet is only the time row and the peek deck.
- * The list stays mounted out of sight, so going back finds it where it was. */
-.rp-board[data-height='map'] .rp-sheet {
-  top: auto;
-}
-.rp-board[data-height='map'] .rp-list {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 100%;
-  height: 70vh;
+/* The header is the handle: at least 44 px high (64 with its grabber); the browser leaves its touches to the sheet. */
+.rp-sheet-head {
+  position: relative;
   flex: none;
+  min-height: 64px;
+  padding: 0 12px 4px 16px;
+  touch-action: none;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.rp-sheet[data-dragging] .rp-sheet-head {
+  cursor: grabbing;
+}
+.rp-grabber {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+.rp-grabber span {
+  width: 36px;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--rp-line);
+}
+.rp-sheet-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+}
+.rp-sheet-line p {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  font-size: 15px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rp-sheet-tools {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+.rp-sheet[data-rest='full'] .rp-sheet-head {
+  padding-right: 64px;
+}
+
+/* PHASE-6 H: the count dimmed while a read is out; "Couldn't refresh · Try again" in the header when one fails or is slow. */
+.rp-count {
+  transition: opacity 0.15s ease;
+}
+.rp-count[data-dim] {
+  opacity: 0.5;
+}
+/* "Couldn't refresh · Try again" and "No place" (CONTRACT 11b) in the sheet's header: 44 px tall boxes to the finger, the
+   28 px pill drawn inside (LEAD-7's look of 05:26 measured No place at 74 by 42). */
+.rp-retry,
+.rp-noplace {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.rp-retry > span,
+.rp-noplace > span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 14px;
+}
+.rp-retry > span {
+  background: color-mix(in srgb, #b45309 14%, transparent);
+  color: #92400e;
+}
+.rp-noplace > span {
+  border: 1px solid var(--rp-line);
+  background: var(--rp-paper);
+  color: var(--rp-muted);
+}
+.rp-noplace[aria-checked='true'] > span {
+  border-color: var(--rp-ink);
+  background: var(--rp-ink);
+  color: var(--rp-paper);
+}
+/* While the list follows the map (PHASE-6 B): the old area's rows stay, dimmed, until the new area's are there; the row
+   chosen from the map (or that flew the map) is lit with its pin. */
+.rp-items {
+  transition: opacity 0.15s ease;
+}
+.rp-items[data-stale] {
+  opacity: 0.6;
+}
+.rp-items > li[data-selected] {
+  border-radius: 18px;
+  box-shadow: 0 0 0 2px var(--rp-brand);
+}
+
+/* The one camera's +: 12 px above the sheet's top edge and 16 px from the right, riding up with it; in its header at full. */
+.rp-create {
+  position: absolute;
+  z-index: 2;
+  top: -68px;
+  right: 16px;
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border: 0;
+  border-radius: 28px;
+  background: #0369a1;
+  color: #fff;
+  box-shadow: 0 8px 24px rgba(3, 105, 161, 0.35), 0 2px 6px rgba(15, 23, 42, 0.25);
+  cursor: pointer;
+}
+.rp-create:hover {
+  background: #075985;
+}
+.rp-create:focus-visible {
+  outline: 3px solid #7dd3fc;
+  outline-offset: 2px;
+}
+.rp-sheet[data-rest='full'] .rp-create {
+  top: 22px;
+  right: 12px;
+  width: 40px;
+  height: 40px;
+  border-radius: 20px;
+  box-shadow: none;
+}
+
+/* A wide board (700 px or more): the list is a floating panel at the left of the map, 380 px wide, 12 px from the edges,
+   frosted, with a tab on its right edge that folds it to a 28 px peek. The map fills the board behind it. */
+.rp-sheet[data-wide] {
+  top: 64px;
+  left: 12px;
+  right: auto;
+  bottom: 12px;
+  width: 380px;
+  max-width: calc(100% - 80px);
+  border: 1px solid var(--rp-glass-line);
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--rp-paper) 92%, transparent);
+  -webkit-backdrop-filter: blur(16px) saturate(1.4);
+  backdrop-filter: blur(16px) saturate(1.4);
+  box-shadow: 0 8px 30px #0e293529;
+  transform: none;
+}
+.rp-sheet[data-wide][data-folded] {
+  transform: translate3d(calc(-100% - 12px + 28px), 0, 0);
+}
+.rp-sheet[data-folded] > :not(.rp-fold) {
   visibility: hidden;
 }
-.rp-map-top {
-  position: absolute;
-  z-index: 600;
-  top: 10px;
-  left: 10px;
-  right: 10px;
-  padding-top: 10px;
-  border-radius: 18px;
-  background: var(--rp-paper);
-  box-shadow: 0 6px 24px #0003;
+.rp-sheet[data-wide] .rp-sheet-head {
+  min-height: 48px;
+  padding: 8px 12px 6px 16px;
+  border-bottom: 1px solid var(--rp-glass-line);
+  cursor: default;
+  touch-action: auto;
 }
-.rp-map-bottom {
+.rp-fold {
+  position: absolute;
+  top: 50%;
+  right: -14px;
   display: grid;
-  gap: 10px;
-  padding: 0 0 12px;
+  place-items: center;
+  width: 28px;
+  height: 56px;
+  padding: 0;
+  border: 1px solid var(--rp-glass-line);
+  border-radius: 14px;
+  background: var(--rp-paper);
+  box-shadow: var(--rp-float);
+  color: var(--rp-muted);
+  transform: translateY(-50%);
 }
-.rp-map-time {
+.rp-fold::before {
+  content: '';
   position: absolute;
-  z-index: 600;
-  bottom: 16px;
-  left: calc(min(560px, 44%) + 16px);
+  inset: 0 -8px;
+}
+.rp-board[data-wide] .rp-filter-pill {
+  top: 64px;
+  left: auto;
+  right: 56px;
+  max-width: calc(100% - 480px);
+}
+.rp-board[data-wide] > .rp-create {
+  z-index: 800;
+  top: auto;
   right: 16px;
-  display: flex;
-  justify-content: center;
-  pointer-events: none;
-}
-.rp-map-time .rp-time {
-  pointer-events: auto;
-  box-shadow: 0 6px 24px #0003;
-}
-/* The page's + button sits at the bottom right on a phone: there the time row goes under the deck, beside the button. */
-@media (max-width: 1023px) {
-  .rp-board[data-height='map'] .rp-map-bottom {
-    padding-bottom: 18px;
-  }
-  .rp-board[data-height='map'] .rp-time {
-    order: 2;
-    margin-right: 80px;
-  }
+  bottom: 20px;
 }
 
 /* ── The time row ── */
@@ -235,13 +646,13 @@
   flex: none;
   align-items: center;
   gap: 6px;
-  min-height: 34px;
-  padding: 0 12px;
+  min-height: 32px;
+  padding: 0 11px;
   border: 0;
   border-radius: 999px;
   background: none;
   color: var(--rp-ink);
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
 }
 .rp-time button[aria-pressed='true'] {
@@ -409,56 +820,31 @@
 .rp-ticket.rp-pin-selected {
   scale: 1.08;
 }
-@media (prefers-reduced-motion: reduce) {
-  .rp-sheet {
-    transition: none;
-  }
-}
-.rp-handle {
-  display: grid;
-  place-items: center;
-  flex: none;
-  height: 22px;
-  touch-action: none;
-}
-.rp-handle span {
-  width: 40px;
-  height: 5px;
-  border-radius: 3px;
-  background: var(--rp-line);
-}
-.rp-head {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  flex: none;
-  padding: 0 16px 10px;
-}
 .rp-scope-wrap {
   position: relative;
 }
 .rp-scope {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   max-width: 100%;
-  min-height: 40px;
-  padding: 6px 14px;
-  border: 1px solid var(--rp-line);
-  border-radius: 999px;
-  background: var(--rp-paper);
+  min-height: 36px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 18px;
+  background: none;
   color: var(--rp-ink);
 }
 .rp-scope strong {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 16px;
+  font-size: 15px;
 }
 .rp-scope-reach {
   flex: none;
   color: var(--rp-muted);
-  font-size: 14px;
+  font-size: 12px;
 }
 .rp-scope-dot {
   flex: none;
@@ -497,7 +883,7 @@
 }
 .rp-dial-title {
   margin: 0;
-  font-size: 18px;
+  font-size: 15px;
   font-weight: 700;
 }
 .rp-dial-choices {
@@ -536,7 +922,7 @@
   gap: 2px;
 }
 .rp-dial-words strong {
-  font-size: 16px;
+  font-size: 14px;
 }
 .rp-dial-words span {
   color: var(--rp-muted);
@@ -576,28 +962,6 @@
   color: var(--rp-brand);
   font-weight: 700;
 }
-.rp-switch {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  gap: 4px;
-  padding: 4px;
-  border-radius: 14px;
-  background: color-mix(in srgb, var(--rp-ink) 7%, var(--rp-paper));
-}
-.rp-switch button {
-  min-height: 38px;
-  border: 0;
-  border-radius: 10px;
-  background: none;
-  color: var(--rp-muted);
-  font-size: 16px;
-  font-weight: 600;
-}
-.rp-switch button[data-lit] {
-  background: color-mix(in srgb, var(--rp-ink) 16%, var(--rp-paper));
-  color: var(--rp-ink);
-  box-shadow: 0 1px 3px #0002;
-}
 .rp-chips {
   display: flex;
   gap: 8px;
@@ -630,12 +994,15 @@
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 4px 16px 96px;
+  /* A touch on the list scrolls the list, never the sheet (PHASE-6 D). The end keeps room for the part of the sheet below
+     the board's edge at half and peek (PulseSheet sets it), so the last rows can always be reached. */
+  touch-action: pan-y;
+  padding: 4px 12px calc(var(--rp-sheet-below, 0px) + 24px);
 }
 .rp-items {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 16px;
+  gap: 12px;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -646,7 +1013,7 @@
   gap: 10px;
   margin: 4px 0 12px;
   color: var(--rp-muted);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
 }
 .rp-band::before,
@@ -663,11 +1030,11 @@
   margin: 28px 0 8px;
   color: var(--rp-muted);
   text-align: center;
-  font-size: 14px;
+  font-size: 12px;
 }
 .rp-muted {
   color: var(--rp-muted);
-  font-size: 14px;
+  font-size: 13px;
 }
 .rp-center {
   text-align: center;
@@ -696,8 +1063,9 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  min-height: 40px;
-  padding: 0 16px;
+  position: relative;
+  min-height: 32px;
+  padding: 0 14px;
   border: 0;
   border-radius: 999px;
   background: var(--rp-brand);
@@ -725,35 +1093,6 @@
     opacity: 0.55;
   }
 }
-/* The one camera's + (phase 1 piece 11): over the list and the map, bottom right; above the peek deck at the Map
-   height. */
-.rp-create {
-  position: absolute;
-  z-index: 800;
-  right: 16px;
-  bottom: max(20px, env(safe-area-inset-bottom));
-  width: 56px;
-  height: 56px;
-  border: 0;
-  border-radius: 28px;
-  background: #0369a1;
-  color: #fff;
-  box-shadow: 0 8px 24px rgba(3, 105, 161, 0.35), 0 2px 6px rgba(15, 23, 42, 0.25);
-  display: grid;
-  place-items: center;
-  cursor: pointer;
-}
-.rp-create:hover {
-  background: #075985;
-}
-.rp-create:focus-visible {
-  outline: 3px solid #7dd3fc;
-  outline-offset: 2px;
-}
-.rp-board[data-height='map'] .rp-create {
-  bottom: 196px;
-}
-
 .rp-toast {
   position: absolute;
   z-index: 900;
@@ -765,7 +1104,7 @@
   border-radius: 12px;
   background: #1d2733;
   color: #fff;
-  font-size: 14px;
+  font-size: 13px;
 }
 
 /* ── A Moment that fades: borderless, full width, its time left ── */
@@ -826,8 +1165,8 @@
 .rp-moment-who .mo-face {
   --mo-paper: #0f1a24;
   flex: none;
-  width: 34px;
-  height: 34px;
+  width: 28px;
+  height: 28px;
 }
 .rp-moment-who-words {
   display: grid;
@@ -840,7 +1179,7 @@
   white-space: nowrap;
 }
 .rp-moment-who-words strong {
-  font-size: 14px;
+  font-size: 13px;
 }
 .rp-moment-who-words span {
   color: #ffffffcc;
@@ -853,11 +1192,11 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 5px 12px;
+  padding: 4px 10px;
   border-radius: 999px;
   background: #ffffffeb;
   color: #17212b;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
 }
 .rp-live-dot {
@@ -869,11 +1208,11 @@
 .rp-moment-foot {
   display: grid;
   gap: 10px;
-  padding: 12px 14px 14px;
+  padding: 10px 12px 12px;
 }
 .rp-moment-caption {
   margin: 0;
-  font-size: 15px;
+  font-size: 14px;
   line-height: 1.35;
   overflow-wrap: anywhere;
 }
@@ -887,10 +1226,11 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 12px;
+  position: relative;
+  padding: 4px 10px;
   border: 1px solid #ffffff38;
   border-radius: 999px;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
 }
 .rp-signal-mine {
@@ -902,13 +1242,22 @@
   align-items: center;
   gap: 4px;
   margin-left: auto;
-  padding: 6px 10px;
+  position: relative;
+  padding: 4px 8px;
   border: 0;
   border-radius: 999px;
   background: none;
   color: #7dd3fc;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
+}
+
+/* Small controls inside the rows keep a 44 px touch target (PHASE-6 C): the drawing is smaller than the hit area. */
+.rp-button::before,
+.rp-place-button::before {
+  content: '';
+  position: absolute;
+  inset: -8px -2px;
 }
 
 /* ── A post that stays: today's card under its status line ── */
@@ -920,11 +1269,11 @@
   margin: 0 4px 8px;
 }
 .rp-status {
-  padding: 4px 10px;
+  padding: 3px 8px;
   border-radius: 8px;
   background: #e0f2fe;
   color: #075985;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
 }
 .rp-status[data-tone='done'] {
@@ -951,67 +1300,21 @@
 .rp-post .rp-place-button {
   color: var(--rp-brand);
 }
+/* PHASE-6 C: today's post card (PostCard, a file of today's) drawn one step smaller inside the new Pulse only, as Android draws
+   its rows at a font scale of 0.9; nothing in the card's own file changes. */
+.rp-post-card {
+  zoom: 0.92;
+}
 
 /* ── Desktop width: the list and the map side by side ── */
-@media (min-width: 1024px) {
-  .rp-sheet {
-    top: 0;
-    right: auto;
-    width: min(560px, 44%);
-    border-radius: 0;
-    border-right: 1px solid var(--rp-line);
-    box-shadow: none;
-    transition: none;
-  }
-  .rp-handle {
-    display: none;
-  }
-  .rp-head {
-    padding-top: 14px;
-  }
-  .rp-board[data-height='middle'] .rp-map-layer {
-    left: min(560px, 44%);
-  }
-  .rp-board[data-height='list'] .rp-sheet {
-    width: 100%;
-    border-right: 0;
-  }
-  .rp-board[data-height='list'] :is(.rp-head, .rp-items, .rp-end, .rp-empty, .rp-skeleton) {
-    width: min(720px, 100%);
-    margin-left: auto;
-    margin-right: auto;
-  }
-  .rp-map-top {
-    top: 16px;
-    left: 16px;
-    right: auto;
-    width: 440px;
-  }
-  .rp-board[data-height='map'] .rp-sheet {
-    top: auto;
-    left: 16px;
-    right: 16px;
-    bottom: 16px;
-    width: auto;
-    padding-top: 12px;
-    border: 1px solid var(--rp-line);
-    border-radius: 18px;
-    box-shadow: 0 8px 30px #0003;
-  }
-  .rp-board[data-height='map'] .rp-time {
-    align-self: center;
-    justify-self: center;
-  }
-}
-
 /* ── Alive right now: tall previews over the list ── */
 .rp-alive {
-  margin: 0 -16px 16px;
+  margin: 0 -12px 16px;
 }
 .rp-alive-title {
-  margin: 4px 16px 8px;
+  margin: 4px 12px 8px;
   color: var(--rp-muted);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.02em;
 }
@@ -1019,7 +1322,7 @@
   display: flex;
   align-items: flex-start;
   gap: 10px;
-  padding: 0 16px 2px;
+  padding: 0 12px 2px;
   overflow-x: auto;
   scrollbar-width: none;
 }
@@ -1031,8 +1334,8 @@
   display: flex;
   flex: none;
   flex-direction: column;
-  width: 128px;
-  height: 168px;
+  width: 112px;
+  height: 148px;
   overflow: hidden;
   padding: 10px;
   border: 0;
@@ -1063,7 +1366,7 @@
   display: grid;
   place-items: center;
   padding: 14px;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 700;
   text-align: center;
   overflow-wrap: anywhere;
@@ -1093,7 +1396,7 @@
   white-space: nowrap;
 }
 .rp-alive-foot strong {
-  font-size: 14px;
+  font-size: 13px;
 }
 .rp-alive-foot span {
   color: #ffffffd9;
@@ -1286,7 +1589,7 @@
 }
 .rp-explore-head h2 {
   margin: 0;
-  font-size: 18px;
+  font-size: 15px;
   font-weight: 800;
 }
 .rp-explore-head p {
@@ -1486,9 +1789,11 @@
   position: fixed;
   z-index: 1101;
   left: 50%;
-  bottom: 0;
+  /* Above the app's own bottom tab bar at a phone's width (the shell's --fab-lift, 64 px there, 0 elsewhere): its footer's
+     buttons were under the bar (LEAD-7's look, 05:26). */
+  bottom: var(--fab-lift, 0px);
   width: min(100%, 560px);
-  max-height: min(86vh, 720px);
+  max-height: min(calc(86vh - var(--fab-lift, 0px)), 720px);
   overflow-y: auto;
   transform: translateX(-50%);
   display: grid;
@@ -1511,7 +1816,7 @@
 }
 .rp-filter-sheet h2 {
   margin: 0;
-  font-size: 18px;
+  font-size: 15px;
 }
 .rp-filter-sheet h3 {
   margin: 0 0 8px;
@@ -1527,28 +1832,43 @@
 .rp-filter-close {
   display: grid;
   place-items: center;
-  width: 36px;
-  height: 36px;
-  border: 1px solid var(--rp-line);
+  /* A 44 px box; the circle is drawn 32 px inside it (LEAD-7's look, 05:26). */
+  width: 44px;
+  height: 44px;
+  margin: -6px -6px -6px 0;
+  padding: 0;
+  border: 0;
   border-radius: 50%;
-  background: var(--rp-paper);
+  background: radial-gradient(circle, var(--rp-paper) 15px, var(--rp-line) 15.5px, var(--rp-line) 16px, transparent 16.5px);
   color: var(--rp-ink);
 }
 .rp-filter-chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 0 8px;
 }
+/* Each chip is a 44 px tall box to the finger; the 28 px pill with its 13 px words is drawn inside it (PHASE-6 C; LEAD-7's
+   look of 05:26 measured the drawn chips at 40 to 42). */
 .rp-filter-chips button {
-  min-height: 36px;
-  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--rp-ink);
+  font-size: 13px;
+}
+.rp-filter-chips button > span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 12px;
   border: 1px solid var(--rp-line);
   border-radius: 999px;
   background: var(--rp-paper);
-  color: var(--rp-ink);
-  font-size: 14px;
 }
-.rp-filter-chips button[aria-pressed='true'] {
+.rp-filter-chips button[aria-pressed='true'] > span {
   border-color: var(--rp-ink);
   background: var(--rp-ink);
   color: var(--rp-paper);

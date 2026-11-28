@@ -2,6 +2,7 @@ package app.pantopus.android.data.api.services
 
 import app.pantopus.android.data.api.models.moments.MomentEnvelope
 import app.pantopus.android.data.api.models.reinvented.ConvergenceEnvelope
+import app.pantopus.android.data.api.models.reinvented.CrowdEnvelope
 import app.pantopus.android.data.api.models.reinvented.EyesOnNearBody
 import app.pantopus.android.data.api.models.reinvented.EyesOnNearResponse
 import app.pantopus.android.data.api.models.reinvented.MomentPinEnvelope
@@ -12,7 +13,10 @@ import app.pantopus.android.data.api.models.reinvented.MomentRepliesShownBody
 import app.pantopus.android.data.api.models.reinvented.MomentReplyBody
 import app.pantopus.android.data.api.models.reinvented.MomentReplyEnvelope
 import app.pantopus.android.data.api.models.reinvented.MomentReplyReportBody
+import app.pantopus.android.data.api.models.reinvented.PinboardEnvelope
+import app.pantopus.android.data.api.models.reinvented.RelicsNearResponse
 import app.pantopus.android.data.api.models.reinvented.RetakeEnvelope
+import app.pantopus.android.data.api.models.reinvented.SealPlaceBody
 import app.pantopus.android.data.api.models.reinvented.SkyStripResponse
 import retrofit2.http.Body
 import retrofit2.http.DELETE
@@ -96,6 +100,31 @@ interface TogetherApi {
         @Query("cell") cell: String,
         @Query("days") days: Int,
     ): SkyStripResponse
+
+    /** CONTRACT 8i: a pinboard, by its start's id or any piece's (`404 PINBOARD_NOT_FOUND` where the reader may not see it). */
+    @GET("api/reinvented/pinboards/{id}")
+    suspend fun pinboard(
+        @Path("id") id: String,
+    ): PinboardEnvelope
+
+    /** CONTRACT 8i: the scene a photo or video Moment was taken in, from every phone (`{ "crowd": null }` under three). */
+    @GET("api/reinvented/crowd/{id}")
+    suspend fun crowd(
+        @Path("id") id: String,
+    ): CrowdEnvelope
+
+    /** CONTRACT 8g: place relics within 300 m of the reader, whose place goes in the body only (never kept). */
+    @POST("api/reinvented/seals/near")
+    suspend fun sealsNear(
+        @Body body: SealPlaceBody,
+    ): RelicsNearResponse
+
+    /** CONTRACT 8g: opens a place relic for a reader standing within 100 m (`422 SEAL_NOT_HERE` otherwise). */
+    @POST("api/reinvented/seals/{id}/open")
+    suspend fun openSeal(
+        @Path("id") id: String,
+        @Body body: SealPlaceBody,
+    ): MomentEnvelope
 
     /**
      * `POST /api/moments` (`backend/routes/moments.js`, create) with phase 3's keys beside today's body (CONTRACT 8):

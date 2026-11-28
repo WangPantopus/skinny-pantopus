@@ -233,6 +233,11 @@
   opacity: 0; transition: opacity 0.28s ease; pointer-events: none; text-align: center;
 }
 .toastOn { opacity: 1; }
+/* The card improvements (Wave 3.6): crisp cream on dark glass, laid just under the words above it (CardTable sets top). */
+.toastClear {
+  background: rgba(24, 18, 16, 0.72); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); color: #f6ecd9;
+  box-shadow: inset 0 0 0 0.5px var(--glass-line), 0 6px 18px rgba(0, 0, 0, 0.35); font-size: 0.9375rem; font-weight: 500;
+}
 .menu {
   position: absolute; z-index: 50; right: max(12px, env(safe-area-inset-right, 0px)); top: calc(env(safe-area-inset-top, 0px) + 58px); min-width: 220px;
   max-width: calc(100% - 24px); max-height: calc(100% - 80px); overflow-y: auto; padding: 6px; border-radius: 14px; background: rgba(28, 22, 20, 0.94);
@@ -272,6 +277,11 @@
 .stage[data-addressed] .stampImg { animation: stampDrop 0.3s cubic-bezier(0.3, 0, 0.6, 1) 1.3s forwards; }
 .stage[data-addressed] .pmBox { animation: thump 0.24s ease-out 1.74s forwards; }
 .stage[data-addressed] .sealedMark { animation: thumpMark 0.28s ease-out 2.12s forwards; }
+/* Quick seal (Wave 3.5): the same name, stamp and postmark, in one short beat (cardTableEngine QUICK_* times). */
+.stage[data-addressed][data-quick] .toName { animation-duration: 0.25s; animation-delay: 0.1s; }
+.stage[data-addressed][data-quick] .stampImg { animation-duration: 0.2s; animation-delay: 0.3s; }
+.stage[data-addressed][data-quick] .pmBox { animation-duration: 0.18s; animation-delay: 0.48s; }
+.stage[data-addressed][data-quick] .sealedMark { animation-duration: 0.2s; animation-delay: 0.62s; }
 @keyframes writeName { to { clip-path: inset(-20% -5% -20% 0); } }
 @keyframes stampDrop { from { opacity: 0; transform: translateY(-30%) scale(1.5) rotate(-8deg); } to { opacity: 1; transform: none; } }
 @keyframes thump { from { opacity: 0; transform: scale(1.3); } 60% { opacity: 1; transform: scale(0.97); } to { opacity: 1; transform: none; } }

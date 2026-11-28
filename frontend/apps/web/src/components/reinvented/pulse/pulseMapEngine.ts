@@ -40,6 +40,13 @@ export interface BeamLines {
   target: Point;
 }
 
+export interface Pad {
+  top: number;
+  bottom: number;
+  side: number;
+  left?: number;
+}
+
 export interface MapEngine {
   readonly kind: 'globe' | 'flat';
   center(): Point;
@@ -47,15 +54,23 @@ export interface MapEngine {
   zoom(): number;
   /** The box in view as the server takes it: inside ±90 and ±180, west before east. */
   box(): Box;
+  /**
+   * The box of the part of the map left open by what covers it (pixels from each edge), as the server takes it: what the
+   * list follows (PHASE-6 B). The whole box when that part is too small or the globe is seen whole.
+   */
+  openBox(cover: { top: number; bottom: number; left: number; right: number }): Box;
   /** A point's pixel in the map, or null when it's on the far side of the globe. */
   spot(p: Point): Spot | null;
-  fit(points: Point[], pad: { top: number; bottom: number; side: number }, maxZoom: number): void;
+  /** `left`: more room on the left (the floating list panel on a wide screen), beside `side` on both sides. */
+  fit(points: Point[], pad: Pad, maxZoom: number): void;
   show(p: Point, zoom: number): void;
   panBy(dx: number, dy: number): void;
-  /** To the point, `dy` pixels above the middle; `glide` keeps the zoom. */
-  flyTo(p: Point, zoom: number, dy: number, glide: boolean): void;
+  /** To the point, `dy` pixels above the middle and `dx` right of it; `glide` keeps the zoom. */
+  flyTo(p: Point, zoom: number, dy: number, glide: boolean, dx?: number): void;
   /** Each move's end; `settle()` runs these at once (after a move made without animation). */
   onSettled(fn: () => void): void;
+  /** Each move's start (a drag, a pinch, a wheel, a flight): the rail fades while the map moves (PHASE-6 A2). */
+  onMoveStart(fn: () => void): void;
   settle(): void;
   onPointer(move: (s: Spot) => void, leave: () => void, click: (s: Spot) => void): () => void;
   /** Replaces what's drawn in that group. */
@@ -104,23 +119,34 @@ export function openFlat(el: HTMLElement, tiles: (missing: boolean) => void): Ma
       const b = map.getBounds();
       return serverBox(b.getSouth(), b.getWest(), b.getNorth(), b.getEast());
     },
+    openBox: (c) => {
+      const size = map.getSize();
+      if (size.x - c.left - c.right < 40 || size.y - c.top - c.bottom < 40) {
+        const b = map.getBounds();
+        return serverBox(b.getSouth(), b.getWest(), b.getNorth(), b.getEast());
+      }
+      const a = map.containerPointToLatLng([c.left, c.top]),
+        z = map.containerPointToLatLng([size.x - c.right, size.y - c.bottom]);
+      return serverBox(Math.min(a.lat, z.lat), Math.min(a.lng, z.lng), Math.max(a.lat, z.lat), Math.max(a.lng, z.lng));
+    },
     spot: (p) => map.latLngToContainerPoint([p.latitude, p.longitude]),
     fit: (points, pad, maxZoom) =>
       map.fitBounds(L.latLngBounds(points.map((p) => [p.latitude, p.longitude] as L.LatLngTuple)), {
         maxZoom,
-        paddingTopLeft: [pad.side, pad.top],
+        paddingTopLeft: [pad.side + (pad.left ?? 0), pad.top],
         paddingBottomRight: [pad.side, pad.bottom],
         animate: false,
       }),
     show: (p, zoom) => map.setView([p.latitude, p.longitude], zoom, { animate: false }),
     panBy: (dx, dy) => map.panBy([dx, dy], { animate: false }),
-    flyTo: (p, zoom, dy, glide) => {
+    flyTo: (p, zoom, dy, glide, dx = 0) => {
       const z = glide ? map.getZoom() : zoom;
-      const at = map.unproject(map.project([p.latitude, p.longitude], z).add([0, dy]), z);
+      const at = map.unproject(map.project([p.latitude, p.longitude], z).add([-dx, dy]), z);
       if (glide) map.panTo(at, { duration: 0.45 });
       else map.flyTo(at, z, { duration: 0.6 });
     },
     onSettled: (fn) => map.on('moveend', fn),
+    onMoveStart: (fn) => map.on('movestart', fn),
     settle: () => map.fire('moveend'),
     onPointer: (move, leave, click) => {
       const m = (e: L.LeafletMouseEvent) => move(e.containerPoint);
@@ -268,14 +294,15 @@ export async function openGlobe(el: HTMLElement, failed: () => void, firstLight:
   map.on('moveend', () => settled.forEach((fn) => fn()));
 
   const lngLat = (p: Point): [number, number] => [p.longitude, p.latitude];
-  const room = (pad: { top: number; bottom: number; side: number }) => {
+  const room = (pad: Pad) => {
     // Mapbox refuses a fit whose padding leaves no room; the board's covers can be most of a phone's height.
     const c = map.getContainer();
     const h = Math.max(0, c.clientHeight - 40),
       w = Math.max(0, c.clientWidth - 40);
     const k = pad.top + pad.bottom > h && pad.top + pad.bottom > 0 ? h / (pad.top + pad.bottom) : 1;
-    const side = Math.min(pad.side, w / 2);
-    return { top: pad.top * k, bottom: pad.bottom * k, left: side, right: side };
+    const want = pad.side * 2 + (pad.left ?? 0);
+    const j = want > w && want > 0 ? w / want : 1;
+    return { top: pad.top * k, bottom: pad.bottom * k, left: (pad.side + (pad.left ?? 0)) * j, right: pad.side * j };
   };
   return {
     kind: 'globe',
@@ -287,6 +314,18 @@ export async function openGlobe(el: HTMLElement, failed: () => void, firstLight:
     box: () => {
       const b = map.getBounds();
       return b ? serverBox(b.getSouth(), b.getWest(), b.getNorth(), b.getEast()) : serverBox(-90, -180, 90, 180);
+    },
+    openBox: (c) => {
+      const el = map.getContainer();
+      const w = el.clientWidth,
+        h = el.clientHeight;
+      const b = map.getBounds();
+      const whole = b ? serverBox(b.getSouth(), b.getWest(), b.getNorth(), b.getEast()) : serverBox(-90, -180, 90, 180);
+      // Zoomed out to the globe, the corners can fall off the world: the whole view then.
+      if (map.getZoom() < 3 || w - c.left - c.right < 40 || h - c.top - c.bottom < 40) return whole;
+      const a = map.unproject([c.left, c.top]),
+        z = map.unproject([w - c.right, h - c.bottom]);
+      return serverBox(Math.min(a.lat, z.lat), Math.min(a.lng, z.lng), Math.max(a.lat, z.lat), Math.max(a.lng, z.lng));
     },
     spot: (p) => {
       const at = new gl.LngLat(p.longitude, p.latitude);
@@ -316,11 +355,12 @@ export async function openGlobe(el: HTMLElement, failed: () => void, firstLight:
     },
     show: (p, zoom) => map.jumpTo({ center: lngLat(p), zoom: zoom - 1 }),
     panBy: (dx, dy) => map.panBy([dx, dy], { duration: 0 }),
-    flyTo: (p, zoom, dy, glide) => {
-      if (glide) map.easeTo({ center: lngLat(p), offset: [0, -dy], duration: 450 });
-      else map.flyTo({ center: lngLat(p), zoom: zoom - 1, offset: [0, -dy], duration: 600 });
+    flyTo: (p, zoom, dy, glide, dx = 0) => {
+      if (glide) map.easeTo({ center: lngLat(p), offset: [dx, -dy], duration: 450 });
+      else map.flyTo({ center: lngLat(p), zoom: zoom - 1, offset: [dx, -dy], duration: 600 });
     },
     onSettled: (fn) => void settled.push(fn),
+    onMoveStart: (fn) => void map.on('movestart', fn),
     settle: () => settled.forEach((fn) => fn()),
     onPointer: (move, leave, click) => {
       const m = (e: { point: Spot }) => move(e.point);

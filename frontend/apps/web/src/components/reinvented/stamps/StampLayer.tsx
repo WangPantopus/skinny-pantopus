@@ -3,6 +3,7 @@
 import { useRef, useState, type ReactNode } from 'react';
 import Postmark from './Postmark';
 import { clampScale, clampTurn, stampLabel, type PlacedStamp, type SafeBox, type StampKind, type StampValues } from './stampTypes';
+import { keepOn } from '../studio/frame';
 import './stamps.css';
 
 // The icons of board B5's tray, in one ink.
@@ -167,7 +168,10 @@ export default function StampLayer({
               const move = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }[e.key];
               if (move) {
                 e.preventDefault();
-                put({ ...s, x: Math.min(1, Math.max(0, s.x + move[0])), y: Math.min(1, Math.max(0, s.y + move[1])) });
+                // At least 24 px of the stamp stays on the canvas (PHASE-6 K2).
+                const r = e.currentTarget.getBoundingClientRect(),
+                  b = box.current?.getBoundingClientRect();
+                put({ ...s, x: keepOn(s.x + move[0], r.width, b?.width ?? 0), y: keepOn(s.y + move[1], r.height, b?.height ?? 0) });
               } else if (e.key === 'Delete' || e.key === 'Backspace') {
                 e.preventDefault();
                 onChange?.(stamps.filter((t) => t.kind !== s.kind));
@@ -186,12 +190,16 @@ export default function StampLayer({
               const d = drag.current;
               if (!d || d.kind !== s.kind) return;
               const p = frac(e);
-              if (d.mode === 'move')
+              if (d.mode === 'move') {
+                // At least 24 px of the stamp's own box stays on the canvas, on both axes (PHASE-6 K2).
+                const r = e.currentTarget.getBoundingClientRect(),
+                  b = box.current!.getBoundingClientRect();
                 put({
                   ...d.start,
-                  x: Math.min(1, Math.max(0, d.start.x + p.x - d.from.x)),
-                  y: Math.min(1, Math.max(0, d.start.y + p.y - d.from.y)),
+                  x: keepOn(d.start.x + p.x - d.from.x, r.width, b.width),
+                  y: keepOn(d.start.y + p.y - d.from.y, r.height, b.height),
                 });
+              }
               else {
                 const b = box.current!.getBoundingClientRect();
                 const dx = e.clientX - d.center.x,

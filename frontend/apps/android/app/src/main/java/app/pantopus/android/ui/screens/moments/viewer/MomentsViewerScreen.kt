@@ -167,6 +167,7 @@ import app.pantopus.android.ui.screens.moments.components.MomentSignalBadge
 import app.pantopus.android.ui.screens.moments.components.MomentStampsOverlay
 import app.pantopus.android.ui.screens.moments.components.MomentVerifiedCheck
 import app.pantopus.android.ui.screens.moments.components.MomentViewerSignals
+import app.pantopus.android.ui.screens.moments.components.MomentWholeFrame
 import app.pantopus.android.ui.screens.moments.components.StageKeyboardResize
 import app.pantopus.android.ui.screens.moments.components.momentCardGradient
 import app.pantopus.android.ui.screens.moments.components.rememberMomentImage
@@ -658,24 +659,27 @@ fun MomentsViewerScreen(
                                     transformOrigin = zoomOrigin
                                 },
                         ) {
-                            MomentStage(
-                                moment = load.moment,
-                                player = player,
-                                videoStarted = videoStarted,
-                                // A card's words give way to the quick reactions and the reply, as the caption does.
-                                wordsHidden = typing || reacting,
-                                onReady = {
-                                    ready = true
-                                    if (load.moment.kind != "video") viewModel.shown(load.moment)
-                                },
-                                onFailed = viewModel::next,
-                            )
-                            // Under what lies on the picture, so its dots and items keep their touches (PHASE-5 C).
-                            if (studio) MomentMotionLayer(load.moment)
-                            if (studio) MomentBeforeAfterLayer(load.moment)
-                            if (studio) MomentStampsOverlay(load.moment)
-                            if (studio) MomentDotsLayer(load.moment, mine)
-                            if (studio) MomentPinsOverlay(load.moment)
+                            // "Pulse, reinvented": a whole Moment fits on its backdrop, never cut (PHASE-5 A).
+                            MomentWholeFrame(load.moment, on = studio) {
+                                MomentStage(
+                                    moment = load.moment,
+                                    player = player,
+                                    videoStarted = videoStarted,
+                                    // A card's words give way to the quick reactions and the reply, as the caption does.
+                                    wordsHidden = typing || reacting,
+                                    onReady = {
+                                        ready = true
+                                        if (load.moment.kind != "video") viewModel.shown(load.moment)
+                                    },
+                                    onFailed = viewModel::next,
+                                )
+                                // Under what lies on the picture, so its dots and items keep their touches (PHASE-5 C).
+                                if (studio) MomentMotionLayer(load.moment)
+                                if (studio) MomentBeforeAfterLayer(load.moment)
+                                if (studio) MomentStampsOverlay(load.moment)
+                                if (studio) MomentDotsLayer(load.moment, mine)
+                                if (studio) MomentPinsOverlay(load.moment)
+                            }
                         }
                     ViewerLoad.Loading -> Unit
                     ViewerLoad.Ended ->

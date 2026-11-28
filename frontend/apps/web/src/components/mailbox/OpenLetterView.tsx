@@ -35,11 +35,22 @@ import { firstNameOf } from './cards/cardArt';
 import { travelCameLine } from './cards/TravelPostmarks';
 
 type Letter = EscrowedMailView['mail'];
+
+/**
+ * Off (the read has no `improved`): the letter as the page drew it before the improvements, so nothing opens before
+ * signing in, whatever else the answer carries.
+ */
+function beforeImprovements(letter: Letter): Letter {
+  if (!letter.card?.guest_open) return letter;
+  const { guest_open: _guestOpen, ...card } = letter.card;
+  return { ...letter, card };
+}
 type ClosedCode = Extract<EscrowClaimErrorCode, 'MAIL_LINK_INVALID' | 'MAIL_CLAIMED' | 'MAIL_EXPIRED' | 'MAIL_WITHDRAWN'> | 'UNAVAILABLE';
 type ViewState =
   | { phase: 'loading' }
   | { phase: 'closed'; code: ClosedCode; card?: boolean; said?: string }
-  | { phase: 'ready'; letter: Letter };
+  /** `improved`: the read said the card improvements of November 28 are on (absent: the page from before them). */
+  | { phase: 'ready'; letter: Letter; improved: boolean };
 
 // A Christmas card (holiday_cards) closes in card words: the server marks its answer `card: true`.
 const closedForCard = (err: unknown): boolean => Boolean((err as { data?: { card?: unknown } } | null)?.data?.card);
@@ -783,8 +794,10 @@ export default function OpenLetterView({ mailId, token, isCard = false }: {
   // A claimed letter is the person's own: it is in their Personal drawer.
   const letterHref = `/app/mailbox/personal/${mailId}`;
 
+  // Only while the read says the improvements are on; before them the page left `?code=` alone.
+  const improvedRead = state.phase === 'ready' && state.improved;
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (typeof window === 'undefined' || !improvedRead) return;
     const url = new URL(window.location.href);
     const rawCode = (url.searchParams.get('code') || '').replace(/\D/g, '').slice(0, 10);
     if (rawCode.length >= 6) {
@@ -792,7 +805,7 @@ export default function OpenLetterView({ mailId, token, isCard = false }: {
       url.searchParams.delete('code');
       window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
     }
-  }, []);
+  }, [improvedRead]);
 
   useEffect(() => {
     let cancelled = false;
@@ -802,7 +815,7 @@ export default function OpenLetterView({ mailId, token, isCard = false }: {
     }
     setState({ phase: 'loading' });
     api.mailCompose.getEscrowedMailPublic(mailId, token)
-      .then((res) => { if (!cancelled) setState({ phase: 'ready', letter: res.mail }); })
+      .then((res) => { if (!cancelled) setState({ phase: 'ready', letter: res.improved ? res.mail : beforeImprovements(res.mail), improved: Boolean(res.improved) }); })
       .catch((err: unknown) => {
         if (cancelled) return;
         setState({ phase: 'closed', code: closedCode(err), card: closedForCard(err) || (isCard && closedCode(err) === 'UNAVAILABLE'), said: closedCode(err) === 'UNAVAILABLE' ? undefined : serverWords(err) });
@@ -872,7 +885,7 @@ export default function OpenLetterView({ mailId, token, isCard = false }: {
     setClaiming(true);
     setProblem(null);
     if (hasName === null && !(await readName())) { setClaiming(false); return; }
-    const intent = explicitIntent ?? keepIntent ?? readStoredIntent();
+    const intent = state.phase === 'ready' && state.improved ? explicitIntent ?? keepIntent ?? readStoredIntent() : null;
     const targetHref = intent && intent !== 'save' ? `${letterHref}?intent=${encodeURIComponent(intent)}` : letterHref;
     try {
       await api.mailCompose.claimEscrowedMail(mailId, token);
@@ -1009,7 +1022,7 @@ export default function OpenLetterView({ mailId, token, isCard = false }: {
     );
   }
 
-  const { letter } = state;
+  const { letter, improved } = state;
   // A Christmas card shows its front (unless it's sealed until Christmas), never its note, until it's in their mailbox.
   const card = letter.card ?? null;
   const noun = card ? 'card' : 'letter';
@@ -1033,6 +1046,7 @@ export default function OpenLetterView({ mailId, token, isCard = false }: {
       return (
         <CardTable
           card={guestCard.card}
+          improved={improved}
           note={guestCard.note}
           fromName={guestCard.senderName}
           toName={guestCard.toName || 'You'}
@@ -1075,7 +1089,7 @@ export default function OpenLetterView({ mailId, token, isCard = false }: {
     }
 
     return (
-      <CardLinkScene front={linkPageFront(letter)} postmarks={letter.card?.travel?.postmarks ?? null}>
+      <CardLinkScene front={linkPageFront(letter)} postmarks={letter.card?.travel?.postmarks ?? null} improved={improved}>
         <CardLinkWords letter={letter} />
 
         {signedIn === false && (
@@ -1099,7 +1113,7 @@ export default function OpenLetterView({ mailId, token, isCard = false }: {
             <div role="alert" className={table.alert}>
               This card was sent to {letter.sentTo}
               {account ? <>, and you’re signed in as <b>{account}</b></> : null}.
-              {' '}Sign in or create an account with that {byNumber ? 'number' : 'address'} to save it.
+              {' '}Sign in or create an account with that {byNumber ? 'number' : 'address'} to {improved ? 'save' : 'open'} it.
             </div>
             {card.guest_open ? (
               <button type="button" onClick={() => void openGuest()} disabled={openingGuest} className={table.primary} data-testid="cardLinkGuestOpen">
@@ -1145,7 +1159,7 @@ export default function OpenLetterView({ mailId, token, isCard = false }: {
           {letter.expiresAt ? `It waits until ${fmtDate(letter.expiresAt)}. ` : ''}
           {byLink
             ? (card.guest_open ? 'The first person to save it to a mailbox keeps it. ' : 'The first person to open it keeps it. ')
-            : `Only the account with that ${byNumber ? 'number' : 'address'} can save it to a mailbox. `}
+            : `Only the account with that ${byNumber ? 'number' : 'address'} can ${improved ? 'save it to' : 'add it to'} a mailbox. `}
           <Link href="/start">What is Pantopus?</Link>
         </p>
       </CardLinkScene>

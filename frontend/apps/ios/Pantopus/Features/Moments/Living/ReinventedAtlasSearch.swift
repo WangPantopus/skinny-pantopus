@@ -156,6 +156,12 @@ final class ReinventedAtlasSearchModel {
 }
 
 /// At the top of My Atlas: the search field, and while a search shows, its results.
+/// Words typed in the new Pulse's lens (PHASE-6 A1) for the Atlas to search when it opens.
+@MainActor
+enum ReinventedAtlasSearchPending {
+    static var words: String?
+}
+
 struct ReinventedAtlasSearch: View {
     @State private var model = ReinventedAtlasSearchModel()
     @State private var text = ""
@@ -181,6 +187,12 @@ struct ReinventedAtlasSearch: View {
         .sheet(isPresented: $guide) {
             MomentsFieldGuide { guide = false }
                 .presentationDetents([.large])
+        }
+        .onAppear {
+            guard let words = ReinventedAtlasSearchPending.words else { return }
+            ReinventedAtlasSearchPending.words = nil
+            text = words
+            model.search(words)
         }
     }
 

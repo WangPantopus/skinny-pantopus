@@ -127,22 +127,26 @@ struct MomentsStudioStage: View {
                 Color.clear.overlay { MomentsStudioPicture(model: model) }
                     .overlay { legibility }
                     .clipped()
-                TogetherStudioGhost(model: model) // Phase 3 (CONTRACT 8): a Retake's first picture to line up with.
-                // Cutouts (step 4): a long press lifts one; under the stamps.
-                MomentsStudioCutoutLayer(model: model)
-                // The stamps sit on the picture, under the X, the tools, the caption and the bar.
-                MomentsStudioStampLayer(model: model, stamps: stamps, picture: stampPicture)
-                // Playable items (phase 2), over the stamps.
-                MomentsStudioPlayLayer(model: model, picture: stampPicture)
-                // Illuminate's dots (phase 2), over the stamps.
-                MomentsStudioDotLayer(model: model, picture: stampPicture, open: openIlluminate)
-                // Blur before posting (phase 2): the spots found, and boxes drawn by hand.
-                if showsBlur || blurByHand {
-                    MomentsStudioBlurLayer(model: model, picture: stampPicture, byHand: blurByHand) {
-                        blurByHand = false
-                        showsBlur = true
+                ZStack {
+                    TogetherStudioGhost(model: model) // Phase 3 (CONTRACT 8): a Retake's first picture to line up with.
+                    // Cutouts (step 4): a long press lifts one; under the stamps.
+                    MomentsStudioCutoutLayer(model: model)
+                    // The stamps sit on the picture, under the X, the tools, the caption and the bar.
+                    MomentsStudioStampLayer(model: model, stamps: stamps, picture: stampPicture)
+                    // Playable items (phase 2), over the stamps.
+                    MomentsStudioPlayLayer(model: model, picture: stampPicture)
+                    // Illuminate's dots (phase 2), over the stamps.
+                    MomentsStudioDotLayer(model: model, picture: stampPicture, open: openIlluminate)
+                    // Blur before posting (phase 2): the spots found, and boxes drawn by hand.
+                    if showsBlur || blurByHand {
+                        MomentsStudioBlurLayer(model: model, picture: stampPicture, byHand: blurByHand) {
+                            blurByHand = false
+                            showsBlur = true
+                        }
                     }
                 }
+                // See the picture first (phase 5 A): over a whole photo, in the frame it's drawn in.
+                .modifier(MomentsStudioWholeFrame(model: model))
             }
             .ignoresSafeArea()
         }
@@ -241,15 +245,8 @@ struct MomentsStudioStage: View {
         showsTray = true
     }
 
-    /// The picture the stamps are placed on: the photo or the video as it is; once placed on a canvas (Resize), or for a
-    /// text card, the screen-filling canvas itself.
     private var stampPicture: CGSize? {
-        guard model.marking.placement == nil else { return nil }
-        switch model.draft {
-        case let .photo(image): return model.studioPair == nil ? image.size : MomentBeforeAfterHalves.size(of: image.size)
-        case .video: return model.marking.video?.size
-        case .text, nil: return nil
-        }
+        model.studioStampPicture
     }
 
     private func openDrawer() {
@@ -415,6 +412,8 @@ struct MomentsStudioPicture: View {
                 after: model.studioPair?.afterLabel ?? ""
             )
             .accessibilityIdentifier("moments.studio.beforeAfter.picture")
+        case .photo where model.studioWholeOffered:
+            MomentsStudioWholeCanvas(model: model) // See the picture first (phase 5 A): whole, on its own colours.
         case let .photo(image):
             MomentsMarkedPhoto(
                 image: image,
@@ -423,6 +422,8 @@ struct MomentsStudioPicture: View {
                 backdrop: model.marking.backdrop
             )
             .accessibilityLabel("The photo you're posting")
+        case .video where model.studioWholeOffered:
+            MomentsStudioWholeCanvas(model: model) // See the picture first (phase 5 A): a video whole too.
         case let .video(url):
             video(url: url)
                 .accessibilityLabel("The video you're posting")
@@ -461,7 +462,7 @@ struct MomentsStudioPicture: View {
 }
 
 /// The video, muted, looping, for as long as it shows.
-private struct MomentsStudioLoop: View {
+struct MomentsStudioLoop: View {
     let url: URL
     @State private var player: AVPlayer?
 

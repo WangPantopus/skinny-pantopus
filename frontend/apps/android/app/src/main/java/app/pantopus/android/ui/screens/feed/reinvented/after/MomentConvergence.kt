@@ -27,6 +27,8 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -171,6 +173,8 @@ private fun MomentConvergenceSheet(
     val ui by viewModel.ui.collectAsStateWithLifecycle()
     LaunchedEffect(id) { viewModel.read(id) }
     val piece = ui.piece.takeIf { ui.id == id }
+    // A photo tapped: the scene from every phone that caught it (the crowd freeze, 8i).
+    var scene by remember(id) { mutableStateOf<String?>(null) }
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
@@ -192,12 +196,13 @@ private fun MomentConvergenceSheet(
             } else {
                 SkyHeader(piece)
                 if (piece.bands.isNotEmpty()) Bands(piece.bands, height = 28.dp, Modifier.testTag("together.sky.bands"))
-                Photos(piece.moments)
+                Photos(piece.moments) { scene = it.id }
                 SkyNote("Never made up: it opens only when several people take Live photos of the real sky here.")
                 if (piece.sunset && ui.strip.isNotEmpty()) SkyStrip(ui.strip)
             }
         }
     }
+    scene?.let { MomentCrowdSheet(it) { scene = null } }
 }
 
 @Composable
@@ -245,19 +250,32 @@ private fun Bands(
     }
 }
 
-/** The piece's photos, two to a row, each clipped to its cell, with whose it is. */
+/** The piece's photos, two to a row, each clipped to its cell, with whose it is; a tap opens its scene ([onOpen]). */
 @Composable
-private fun Photos(moments: List<MomentDto>) {
+private fun Photos(
+    moments: List<MomentDto>,
+    onOpen: (MomentDto) -> Unit,
+) {
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2), modifier = Modifier.testTag("together.sky.photos")) {
         moments.chunked(2).forEach { pair ->
             Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2), modifier = Modifier.fillMaxWidth()) {
                 pair.forEach { moment ->
-                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    val whose = moment.author.firstName ?: moment.author.name ?: "Someone"
+                    Column(
+                        modifier =
+                            Modifier
+                                .weight(1f)
+                                .clickable(role = Role.Button) { onOpen(moment) }
+                                .semantics(mergeDescendants = true) {
+                                    contentDescription = "${moment.caption ?: "$whose’s photo"}. See the scene from every phone"
+                                },
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
                         Box(Modifier.fillMaxWidth().aspectRatio(PHOTO_RATIO).clip(RoundedCornerShape(Radii.md))) {
                             MomentPicture(moment, Modifier.fillMaxSize())
                         }
                         Text(
-                            moment.author.firstName ?: moment.author.name ?: "Someone",
+                            whose,
                             fontSize = 12.5.sp,
                             color = PantopusColors.appTextSecondary,
                         )

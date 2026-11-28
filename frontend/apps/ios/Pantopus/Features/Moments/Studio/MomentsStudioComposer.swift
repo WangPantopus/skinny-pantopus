@@ -94,7 +94,8 @@ struct MomentsStudioComposer: View {
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
-            if model.marking.isOpen, let media = model.markedMedia {
+            // Fingers moving the picture on the first screen (`MomentsStudioWhole`) keep the first screen.
+            if model.marking.isOpen, model.marking.studio?.adjusting != true, let media = model.markedMedia {
                 // Text and Draw: today's editor, in this stack (not a cover), so a fold keeps it.
                 MomentsMarksEditor(model: model, media: media, studio: true)
                     .environment(\.colorScheme, .dark)
@@ -175,6 +176,13 @@ struct MomentsStudioComposer: View {
         // Retake: what was made on that picture goes with it (`dropPictureTools`). Here, not on the stage, which leaves
         // the screen while the camera shows.
         .onChange(of: model.draft == nil) { _, gone in if gone { model.dropPictureTools() } }
+        // A picture in the Studio has the Studio's tools from the start (a video too: nothing else makes them for it), so its
+        // first screen shows it whole (phase 5 A). Going back sets them to nil without a new picture, and they stay so.
+        .onChange(of: model.draft == nil, initial: true) { _, gone in
+            if !gone, model.marking.studio == nil { model.marking.studio = MomentsStudioTools() }
+        }
+        // A Live Photo keeps its motion (phase 5 C): the picked photo's clip, found again whenever the picture changes.
+        .task(id: model.studioMotionKey) { model.studioFindMotion() }
         .readsMomentsDuoScreen(Binding(get: { duo }, set: { screen in
             var transaction = Transaction()
             transaction.disablesAnimations = true

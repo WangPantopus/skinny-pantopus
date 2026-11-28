@@ -27,14 +27,22 @@ internal class SendCardTown(
     val askTown: StateFlow<TownThen?> = asked.asStateFlow()
 
     /** "Let it travel" is offered (the server's switch `card_travel`) and left on for this card. */
-    fun travels(form: SendCardForm): Boolean = cards.value?.travel?.on == true && !form.travelOff
+    fun travels(form: SendCardForm): Boolean = cards.value?.travel?.on == true && isOn(form)
+
+    /**
+     * The switch as it shows: on to begin with (D5), unless the card improvements are on and `travel.default_on` says
+     * off (Wave 3.4), when it's on only once turned on.
+     */
+    fun isOn(form: SendCardForm): Boolean = if (startsOff()) form.travelOn else !form.travelOff
+
+    private fun startsOff(): Boolean = cards.value?.let { it.improved && it.travel?.defaultOn == false } == true
 
     /** The card would travel but its sender has no town yet. */
     private fun needsTown(form: SendCardForm): Boolean = travels(form) && cards.value?.travel?.town.isNullOrBlank()
 
     /** "Let it travel" turned on or off; on with no town yet asks for it. */
     fun set(on: Boolean) {
-        form.update { it.copy(travelOff = !on, sealError = null) }
+        form.update { it.copy(travelOff = !on, travelOn = on, sealError = null) }
         if (on && needsTown(form.value)) asked.value = TownThen.Nothing
     }
 
@@ -48,7 +56,7 @@ internal class SendCardTown(
     /** "Where does it start?" closed without a town: the card can't travel, so "Let it travel" goes off. */
     fun dismissed() {
         asked.value = null
-        form.update { it.copy(travelOff = true) }
+        form.update { it.copy(travelOff = true, travelOn = false) }
     }
 
     /** True, with the town asked for, when this card would travel from no town; [then] goes on once it's kept. */

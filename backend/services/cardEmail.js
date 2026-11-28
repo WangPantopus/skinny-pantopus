@@ -341,51 +341,37 @@ async function dueToRemindThreeDaysOn(now, { offset, limit }) {
 /**
  * The cards by email due their reminder (jobs/cardEmailSend), oldest email first, still waiting and not yet past their
  * 90 days, whatever the hour (remind waits for the sender's daytime): `fresh`, those whose email went out 3 to 10 days
- * ago (or sealed cards whose seal has lifted in the last 10 days) with no reminder yet, `limit` of them from `offset`
- * on, so a run can page past the ones waiting for their sender's morning; and on the first page `again`, those whose
- * reminder didn't go (remindable picks the ones whose last try was 10 minutes ago or more, under REMIND_TRIES). Nothing
- * while CARD_EMAIL_REMINDERS is off.
+ * ago (while the card round is on, a card sealed until Christmas instead once its seal has lifted, for about 10 days)
+ * with no reminder yet, `limit` of them from `offset` on, so a run can page past the ones waiting for their sender's
+ * morning; and on the first page `again`, those whose reminder didn't go (remindable picks the ones whose last try was
+ * 10 minutes ago or more, under REMIND_TRIES). Nothing while CARD_EMAIL_REMINDERS is off.
  */
 async function dueToRemind(now = new Date(), { offset = 0, limit = 200 } = {}) {
   if (!cardEmailRemindersEnabled()) return { fresh: [], again: [] };
   if (!cardImprovementsOn()) return dueToRemindThreeDaysOn(now, { offset, limit });
-  const base = () => supabaseAdmin.from('Mail').select(ROW)
+  // Both kinds in one list, in one order, so the job's one offset pages them truly: with a list for each, a page of
+  // cards waiting for their sender's morning pushed the offset past sealed cards that were due and never read.
+  const iso = (ms) => `"${new Date(ms).toISOString()}"`;
+  const sentAt = 'mail_extracted->card->email->>sent_at';
+  const sealedUntil = 'mail_extracted->card->>sealed_until';
+  const due = [
+    `and(mail_extracted->card->>arrival.neq.sealed_christmas,${sentAt}.lte.${iso(now.getTime() - REMIND_AFTER_MS)},${sentAt}.gt.${iso(now.getTime() - REMIND_UNTIL_MS)})`,
+    `and(mail_extracted->card->>arrival.eq.sealed_christmas,${sealedUntil}.lte.${iso(now.getTime())},${sealedUntil}.gt.${iso(now.getTime() - REMIND_UNTIL_MS)})`,
+  ].join(',');
+  const window = () => supabaseAdmin.from('Mail').select(ROW)
     .eq('escrow_status', 'pending')
     .contains('tags', [holidayCards.CARD_TAG])
     .gt('escrow_expires_at', now.toISOString())
-    .eq('mail_extracted->card->email->>state', 'sent');
-  const unsealedWindow = () => base()
-    .neq('mail_extracted->card->>arrival', 'sealed_christmas')
-    .lte('mail_extracted->card->email->>sent_at', new Date(now.getTime() - REMIND_AFTER_MS).toISOString())
-    .gt('mail_extracted->card->email->>sent_at', new Date(now.getTime() - REMIND_UNTIL_MS).toISOString())
-    .order('mail_extracted->card->email->>sent_at', { ascending: true }).order('id', { ascending: true });
-  const unlockedSealedWindow = () => base()
-    .eq('mail_extracted->card->>arrival', 'sealed_christmas')
-    .lte('mail_extracted->card->>sealed_until', now.toISOString())
-    .gt('mail_extracted->card->>sealed_until', new Date(now.getTime() - REMIND_UNTIL_MS).toISOString())
-    .order('mail_extracted->card->>sealed_until', { ascending: true }).order('id', { ascending: true });
-  const [freshUnsealed, freshSealed, againUnsealed, againSealed] = await Promise.all([
-    unsealedWindow().is('mail_extracted->card->email->reminder', null).range(offset, offset + limit - 1),
-    unlockedSealedWindow().is('mail_extracted->card->email->reminder', null).range(offset, offset + limit - 1),
+    .eq('mail_extracted->card->email->>state', 'sent')
+    .or(due)
+    .order(sentAt, { ascending: true }).order('id', { ascending: true });
+  const [fresh, again] = await Promise.all([
+    window().is('mail_extracted->card->email->reminder', null).range(offset, offset + limit - 1),
     offset ? Promise.resolve({ data: [] })
-      : unsealedWindow().eq('mail_extracted->card->email->reminder->>state', 'failed').limit(limit),
-    offset ? Promise.resolve({ data: [] })
-      : unlockedSealedWindow().eq('mail_extracted->card->email->reminder->>state', 'failed').limit(limit),
+      : window().eq('mail_extracted->card->email->reminder->>state', 'failed').limit(limit),
   ]);
-  const err = freshUnsealed.error || freshSealed.error || againUnsealed.error || againSealed.error;
-  if (err) throw new Error(err.message);
-  const dedup = (rows) => {
-    const seen = new Set();
-    return rows.filter((row) => {
-      if (seen.has(row.id)) return false;
-      seen.add(row.id);
-      return true;
-    });
-  };
-  return {
-    fresh: dedup([...(freshSealed.data || []), ...(freshUnsealed.data || [])]),
-    again: dedup([...(againSealed.data || []), ...(againUnsealed.data || [])]).filter((mail) => remindable(mail, now)),
-  };
+  if (fresh.error || again.error) throw new Error((fresh.error || again.error).message);
+  return { fresh: fresh.data || [], again: (again.data || []).filter((mail) => remindable(mail, now)) };
 }
 
 module.exports = { deliver, cardRow, dueToSend, tellSender, escrowClaimLink, remind, dueToRemind, AT_ONCE, RETRY_EVERY_MS };

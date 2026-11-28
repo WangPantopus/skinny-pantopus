@@ -348,7 +348,7 @@ struct HolidayCardRack: View {
     }
 
     private var writeButton: some View {
-        HolidayCardWaxButton(title: "Write on this card", action: write)
+        HolidayCardWaxButton(title: viewModel.pickButtonTitle, action: write)
             .frame(maxWidth: 560)
             .frame(maxWidth: .infinity)
             .accessibilityIdentifier("sendCardLargeWrite")

@@ -59,6 +59,9 @@ public struct HolidayCardsResponse: Decodable, Sendable, Hashable {
     /// has, its email going at the sender's 7 a.m. or on Christmas morning, and right away (`arrivals.email_all`).
     /// Nil from older servers: `emailArrivals` as before. A card by link keeps `emailArrivals`.
     public let emailAllArrivals: [HolidayCardArrival]?
+    /// Every arrival open now for one person on Pantopus, right away (`now`) included (`arrivals.person_all`,
+    /// cards-next 3.3, sent with `improved`). Nil from older servers and with the switch off: `personArrivals`.
+    public let personAllArrivals: [HolidayCardArrival]?
     /// The next 7 a.m. round where the sender lives: the carrier's pickup.
     public let nextRoundAt: String?
     /// 7 a.m. on Christmas morning where the sender lives.
@@ -87,9 +90,14 @@ public struct HolidayCardsResponse: Decodable, Sendable, Hashable {
     /// The collections' ids in the order "One from each collection" draws them (card shelves E2); nil from older
     /// servers: the collections' own order.
     public let opening: [String]?
+    /// The next round of card improvements is on (server switch `CARD_IMPROVEMENTS`, cards-next contract section 1):
+    /// the flow draws the new experience only while this read says so; false (left out) keeps every card screen as it
+    /// was. Never kept beyond this read.
+    public let improved: Bool
 
     private enum CodingKeys: String, CodingKey {
         case open, holiday, year, designs, collections, arrivals, today, stamps, signature, media, travel, shelves, opening
+        case improved
         case noteHelp = "note_help"
         case maxRecipients = "max_recipients"
         case postageEnabled = "postage_enabled"
@@ -104,10 +112,12 @@ public struct HolidayCardsResponse: Decodable, Sendable, Hashable {
         let person: [String]?
         let email: [String]?
         let emailAll: [String]?
+        let personAll: [String]?
 
         private enum CodingKeys: String, CodingKey {
             case person, email
             case emailAll = "email_all"
+            case personAll = "person_all"
         }
     }
 
@@ -127,6 +137,8 @@ public struct HolidayCardsResponse: Decodable, Sendable, Hashable {
         emailArrivals = (arrivals?.email ?? []).compactMap(HolidayCardArrival.init(rawValue:))
         let emailAll = (arrivals?.emailAll ?? []).compactMap(HolidayCardArrival.init(rawValue:))
         emailAllArrivals = emailAll.isEmpty ? nil : emailAll
+        let personAll = (arrivals?.personAll ?? []).compactMap(HolidayCardArrival.init(rawValue:))
+        personAllArrivals = personAll.isEmpty ? nil : personAll
         nextRoundAt = try? c.decodeIfPresent(String.self, forKey: .nextRoundAt)
         christmasMorningAt = try? c.decodeIfPresent(String.self, forKey: .christmasMorningAt)
         timeZone = try? c.decodeIfPresent(String.self, forKey: .timeZone)
@@ -138,6 +150,7 @@ public struct HolidayCardsResponse: Decodable, Sendable, Hashable {
         travel = try? c.decodeIfPresent(HolidayCardsTravel.self, forKey: .travel)
         shelves = (try? c.decodeIfPresent(Bool.self, forKey: .shelves)) ?? false
         opening = try? c.decodeIfPresent([String].self, forKey: .opening)
+        improved = (try? c.decodeIfPresent(Bool.self, forKey: .improved)) == true
     }
 
     /// "Add a photo" shows (the server takes one now, and this build carries the memories), unless no bought stamp
@@ -260,11 +273,15 @@ public struct HolidayCardWaitingResponse: Decodable, Sendable, Hashable {
 public struct HolidayCardArrivalsFor: Decodable, Sendable, Hashable {
     /// The arrivals open to them now.
     public let arrivals: [HolidayCardArrival]
+    /// The same with right away (`now`) among them (`arrivals_all`, cards-next 3.3); nil from older servers and with
+    /// the switch off.
+    public let arrivalsAll: [HolidayCardArrival]?
     /// The day of their next 7 a.m. mail where they live (`YYYY-MM-DD`).
     public let nextRoundOn: String?
 
     private enum CodingKeys: String, CodingKey {
         case arrivals
+        case arrivalsAll = "arrivals_all"
         case nextRoundOn = "next_round_on"
     }
 
@@ -272,6 +289,9 @@ public struct HolidayCardArrivalsFor: Decodable, Sendable, Hashable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         arrivals = ((try? c.decodeIfPresent([String].self, forKey: .arrivals)) ?? [])
             .compactMap(HolidayCardArrival.init(rawValue:))
+        let all = ((try? c.decodeIfPresent([String].self, forKey: .arrivalsAll)) ?? [])
+            .compactMap(HolidayCardArrival.init(rawValue:))
+        arrivalsAll = all.isEmpty ? nil : all
         nextRoundOn = try? c.decodeIfPresent(String.self, forKey: .nextRoundOn)
     }
 }
@@ -465,11 +485,14 @@ public struct SendHolidayCardBody: Encodable, Sendable {
         case email(String)
         /// One link, one person: the first to open it keeps the card (`card_table`).
         case link
+        /// By link with a name on its envelope ("Mom"; cards-next 3.2, only while `improved`).
+        case namedLink(String)
 
         private enum CodingKeys: String, CodingKey {
             case userId = "user_id"
             case email
             case link
+            case name
         }
 
         public func encode(to encoder: any Encoder) throws {
@@ -478,6 +501,9 @@ public struct SendHolidayCardBody: Encodable, Sendable {
             case let .person(userId): try c.encode(userId, forKey: .userId)
             case let .email(address): try c.encode(address, forKey: .email)
             case .link: try c.encode(true, forKey: .link)
+            case let .namedLink(name):
+                try c.encode(true, forKey: .link)
+                try c.encode(name, forKey: .name)
             }
         }
     }
@@ -519,6 +545,12 @@ public struct SendHolidayCardListBody: Encodable, Sendable {
     public let recipients: [Recipient]
     /// One signature for the whole list, as one note (plan 8.2).
     public let signature: CardSignature?
+    /// The photo, its description, its Live Photo clip and the voice greeting every card on the list carries (cards-next
+    /// Wave 2, only while `improved`); nil (left out) otherwise.
+    public let photo: String?
+    public let photoAlt: String?
+    public let voice: String?
+    public let photoLive: String?
     /// True when the app words every choice by email (`arrivals.email_all`): each address keeps the list's choice,
     /// its email going at the sender's 7 a.m. or on Christmas morning. Nil (left out) keeps the older mapping.
     public let emailsKeepArrival: Bool?
@@ -536,8 +568,10 @@ public struct SendHolidayCardListBody: Encodable, Sendable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case design, message, arrival, recipients, signature, travel
+        case design, message, arrival, recipients, signature, photo, voice, travel
         case useStamp = "use_stamp"
+        case photoAlt = "photo_alt"
+        case photoLive = "photo_live"
         case emailsKeepArrival = "emails_keep_arrival"
     }
 
@@ -547,6 +581,7 @@ public struct SendHolidayCardListBody: Encodable, Sendable {
         arrival: HolidayCardArrival,
         recipients: [Recipient],
         signature: CardSignature? = nil,
+        media: HolidayCardMediaPick = .none,
         emailsKeepArrival: Bool? = nil
     ) {
         self.design = design
@@ -554,6 +589,10 @@ public struct SendHolidayCardListBody: Encodable, Sendable {
         self.arrival = arrival.rawValue
         self.recipients = recipients
         self.signature = signature
+        photo = media.photo
+        photoAlt = media.photo == nil ? nil : media.photoAlt
+        voice = media.voice
+        photoLive = media.photo == nil ? nil : media.photoLive
         self.emailsKeepArrival = emailsKeepArrival
     }
 }
@@ -735,9 +774,12 @@ public struct HolidayCardPreview: Decodable, Sendable, Hashable {
         public let sealed: Bool
         public let sentTo: String
         public let sentOn: String?
+        /// They can open and read it before joining (`guest_open`, sent only while the card round's switch is on).
+        public let guestOpen: Bool
 
         private enum CodingKeys: String, CodingKey {
             case sealed
+            case guestOpen = "guest_open"
             case senderName = "sender_name"
             case senderVerified = "sender_verified"
             case sentTo = "sent_to"
@@ -751,6 +793,7 @@ public struct HolidayCardPreview: Decodable, Sendable, Hashable {
             sealed = (try? c.decodeIfPresent(Bool.self, forKey: .sealed)) ?? false
             sentTo = try c.decode(String.self, forKey: .sentTo)
             sentOn = try? c.decodeIfPresent(String.self, forKey: .sentOn)
+            guestOpen = (try? c.decodeIfPresent(Bool.self, forKey: .guestOpen)) == true
         }
     }
 
