@@ -5,21 +5,17 @@ package app.pantopus.android.ui.screens.feed.reinvented
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -45,17 +41,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.pantopus.android.ui.components.MessagesButton
 import app.pantopus.android.ui.components.NavigationMenuButton
-import app.pantopus.android.ui.screens.feed.living.LivingAskBar
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
 import app.pantopus.android.ui.theme.Spacing
 
 /**
- * Over the map: the top row (the side menu, the scope pill, the chat button), the Map | Atlas switch (on a wide window
- * still List | Map | Atlas), and the chips the place has. Drawn on the page's background at the List height; over the map
- * each control floats on its own. Side by side on a wide window ([sideBySide]) it sits over the list's column, and both
- * List and Map read as lit while both are shown.
+ * Over the map (PHASE-6 A1): the one top line, 44 dp high: the side menu, the scope pill, Map | Atlas, the search lens and
+ * the chat button, each floating on its own over the map, or in line on the page's background over a phone's full sheet
+ * ([overList]). A pull down on it drops the Filters sheet ([onPullDown]). The scope pill opens the reach dial.
  */
 @Composable
 @Suppress("LongParameterList") // What it shows and the five choices it offers.
@@ -64,13 +58,10 @@ internal fun ReinventedPulseHeader(
     state: ReinventedPulseState,
     onOpenMenu: () -> Unit,
     onHeight: (ReinventedHeight) -> Unit,
-    onPickChip: (String) -> Unit,
     onPickReach: (String, Int) -> Unit,
-    time: String,
-    onPickTime: (String) -> Unit,
     atlas: Boolean = false,
     onAtlas: (Boolean) -> Unit = {},
-    sideBySide: Boolean = false,
+    overList: Boolean = false,
     onPickCircle: (String, String) -> Unit = { _, _ -> },
     lens: ReinventedLens = ReinventedLens(),
     lensActions: ReinventedLensActions = ReinventedLensActions({}, {}),
@@ -79,8 +70,8 @@ internal fun ReinventedPulseHeader(
 ) {
     var showsDial by rememberSaveable { mutableStateOf(false) }
     val pullDown by rememberUpdatedState(onPullDown)
-    // Over the list (its own background, buttons in line) rather than floating over the map.
-    val onList = height == ReinventedHeight.List || (sideBySide && height == ReinventedHeight.Middle)
+    // Over the full sheet on a phone (its own background, buttons in line) rather than floating over the map.
+    val onList = overList
     Column(
         modifier =
             modifier
@@ -91,37 +82,15 @@ internal fun ReinventedPulseHeader(
                 .padding(bottom = Spacing.s2),
         verticalArrangement = Arrangement.spacedBy(Spacing.s2),
     ) {
-        if (!sideBySide) {
-            // PHASE-6 A1: one row, 44 dp: the side menu, the scope pill, Map | Atlas, the lens, the chat button. The time
-            // row, Ask the map and Listen live in the rail at the right edge now.
-            TopLine(
-                TopLineParts(height, state, atlas, onList, lens, lensActions),
-                onOpenMenu = onOpenMenu,
-                onDial = { showsDial = true },
-                onHeight = onHeight,
-                onAtlas = onAtlas,
-            )
-            // The chips are the Filters sheet's kinds now (PHASE-6 A2: the rail replaces the chips row).
-            return@Column
-        }
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.s2),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(Spacing.s1),
-        ) {
-            Floating(!onList) { NavigationMenuButton(onClick = onOpenMenu, testTag = "reinventedPulse.menu") }
-            ScopePill(state, onClick = { showsDial = true }, modifier = Modifier.weight(1f))
-            Floating(!onList) { MessagesButton(testTag = "reinventedPulse.chat") }
-        }
-        SideBySideSwitch(height, atlas, onHeight, onAtlas)
-        // My Atlas has no chips and no time row.
-        if (atlas) return@Column
-        if (height == ReinventedHeight.Map) {
-            ReinventedTimeRow(time, onPickTime)
-            LivingAskBar()
-        } else if (state.chips.size > 1 && state.reach != ReinventedPulseViewModel.EXPLORE) {
-            ChipsRow(state, onPickChip)
-        }
+        // PHASE-6 A1: one row, 44 dp: the side menu, the scope pill, Map | Atlas, the lens, the chat button. The time row,
+        // Ask the map and Listen live in the rail at the right edge, and the chips are the Filters sheet's kinds.
+        TopLine(
+            TopLineParts(height, state, atlas, onList, lens, lensActions),
+            onOpenMenu = onOpenMenu,
+            onDial = { showsDial = true },
+            onHeight = onHeight,
+            onAtlas = onAtlas,
+        )
     }
     if (showsDial) {
         ReinventedReachDial(
@@ -325,101 +294,3 @@ internal fun scopeTitle(state: ReinventedPulseState): String =
         ReinventedPulseViewModel.EXPLORE -> "Explore"
         else -> state.placeLabel?.let { "$it · ${state.miles} mi" } ?: "Around me"
     }
-
-/**
- * The switch side by side: List and Map are both lit while both are shown; a tap on one shows it alone, and a tap on the
- * lit one again goes back to both.
- */
-@Composable
-private fun SideBySideSwitch(
-    height: ReinventedHeight,
-    atlas: Boolean,
-    onHeight: (ReinventedHeight) -> Unit,
-    onAtlas: (Boolean) -> Unit,
-) {
-    val shape = RoundedCornerShape(percent = 50)
-    val listOn = !atlas && height != ReinventedHeight.Map
-    val mapOn = !atlas && height != ReinventedHeight.List
-    Row(
-        modifier =
-            Modifier
-                .padding(horizontal = Spacing.s4)
-                .fillMaxWidth()
-                .clip(shape)
-                .background(PantopusColors.appSurface)
-                .border(1.dp, PantopusColors.appBorder, shape)
-                .padding(4.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        // Out of My Atlas, either goes back to both.
-        SwitchButton("List", PantopusIcon.List, on = listOn) {
-            onAtlas(false)
-            onHeight(if (atlas || height == ReinventedHeight.List) ReinventedHeight.Middle else ReinventedHeight.List)
-        }
-        SwitchButton("Map", PantopusIcon.Map, on = mapOn) {
-            onAtlas(false)
-            onHeight(if (atlas || height == ReinventedHeight.Map) ReinventedHeight.Middle else ReinventedHeight.Map)
-        }
-        // My Atlas: the person's own kept Moments in the list's column, beside the map of them.
-        SwitchButton("Atlas", PantopusIcon.Layers, on = atlas) {
-            onAtlas(true)
-            onHeight(ReinventedHeight.Middle)
-        }
-    }
-}
-
-@Composable
-private fun RowScope.SwitchButton(
-    title: String,
-    icon: PantopusIcon,
-    on: Boolean,
-    onClick: () -> Unit,
-) {
-    val color = if (on) Color.White else PantopusColors.appText
-    Row(
-        modifier =
-            Modifier
-                .weight(1f)
-                .heightIn(min = 40.dp)
-                .clip(CircleShape)
-                .background(if (on) PantopusColors.primary600 else Color.Transparent)
-                .selectable(selected = on, role = Role.Tab, onClick = onClick)
-                .testTag("reinventedPulse.view.${title.lowercase()}"),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
-    ) {
-        PantopusIconImage(icon = icon, contentDescription = null, size = 16.dp, strokeWidth = 2.2f, tint = color)
-        Text(title, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = color)
-    }
-}
-
-/** The chips the place has something for; an empty chip is not drawn. */
-@Composable
-private fun ChipsRow(
-    state: ReinventedPulseState,
-    onPick: (String) -> Unit,
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = Spacing.s4),
-        horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
-    ) {
-        state.chips.forEach { chip ->
-            val on = state.chip == chip
-            val shape = RoundedCornerShape(percent = 50)
-            Text(
-                text = reinventedChipTitle(chip),
-                fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = if (on) Color.White else PantopusColors.appText,
-                modifier =
-                    Modifier
-                        .clip(shape)
-                        .background(if (on) PantopusColors.primary600 else PantopusColors.appSurface)
-                        .border(1.dp, if (on) Color.Transparent else PantopusColors.appBorder, shape)
-                        .selectable(selected = on, role = Role.Tab) { onPick(chip) }
-                        .padding(horizontal = Spacing.s3, vertical = 7.dp)
-                        .testTag("reinventedPulse.chip.$chip"),
-            )
-        }
-    }
-}

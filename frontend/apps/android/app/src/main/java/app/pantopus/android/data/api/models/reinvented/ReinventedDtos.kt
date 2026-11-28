@@ -72,6 +72,10 @@ data class ReinventedListResponse(
     val end: String? = null,
     /** Around me with no place at all: ask for one, as today's Pulse does. */
     @Json(name = "needs_place") val needsPlace: Boolean = false,
+    /** CONTRACT 11a, with the map's box, first page: how many things the box holds in all ("23 here"). */
+    val count: Int? = null,
+    /** CONTRACT 11a: the map's cap was reached (more posts are there than the map draws). */
+    @Json(name = "count_more") val countMore: Boolean = false,
     /** CONTRACT 10a: the filters the server applied, whenever any was sent; the plain line is written from it. */
     val filters: ReinventedAppliedFiltersDto? = null,
 )
