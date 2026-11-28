@@ -1238,6 +1238,8 @@ class MomentsComposeViewModel
          */
         fun leaveStudio() {
             val before = _state.value
+            // A trimmed video (PHASE-5 A2) is all of it again on today's screen, so it is exported again as today.
+            val trimmed = (before.media as? MomentMediaFile.Video)?.takeIf { before.trim != null }
             _state.update {
                 if (!it.holdsStudioChoices) {
                     it
@@ -1252,10 +1254,12 @@ class MomentsComposeViewModel
                         items = emptyList(),
                         whole = false,
                         wholeBackdrop = null,
+                        trim = null,
                     )
                 }
             }
             heldToTodaysLabelBox(before)
+            trimmed?.let(::prepare)
         }
 
         /**
