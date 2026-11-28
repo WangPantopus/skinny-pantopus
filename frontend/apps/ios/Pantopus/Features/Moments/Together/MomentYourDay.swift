@@ -25,9 +25,10 @@ struct YourDayPhoto: Identifiable {
     let coordinate: CLLocationCoordinate2D
     var thumbnail: UIImage?
     var chosen = true
-    /// Taken at the person's home (today's place preview): it goes out as its area, never its spot, and the card says
-    /// so ("Your day" skips today's Post sheet and its home notice).
-    var atHome = false
+    /// Taken at the person's home, or not known yet (today's place preview failed or has not answered): it goes out as
+    /// its area, never its spot, and the card says so ("Your day" skips today's Post sheet and its home notice). Only an
+    /// answer that says away clears it: a home never goes out by mistake.
+    var atHome = true
 
     var id: String {
         asset.localIdentifier
@@ -132,8 +133,8 @@ final class YourDayModel {
         await markHomes()
     }
 
-    /// Asks today's place preview where each photo was taken, once, so a photo at home is marked on the card before
-    /// anything is shared.
+    /// Asks today's place preview where each photo was taken, once, so the card says which go out as their area before
+    /// anything is shared. A preview that fails leaves the photo counted as at home.
     private func markHomes() async {
         for index in photos.indices {
             let photo = photos[index]
@@ -210,9 +211,10 @@ final class YourDayModel {
         model.restoreChoices()
         await model.use(asset: photo.asset)
         guard model.draft != nil else { return model.error ?? "Couldn't open that photo." }
-        // Taken at home: shown as its area, as today's Post sheet asks before a Moment from home goes out (with the Sky
-        // on the server floats it anyway). The person saw "At home: shown as your area" on the card.
-        if model.place?.atHome == true || photo.atHome { model.showArea = true }
+        // Taken at home, or not known (the composer's own preview failed, or the card's had not said away): shown as its
+        // area, as today's Post sheet asks before a Moment from home goes out (with the Sky on the server floats it
+        // anyway). The person saw "At home: shown as your area" on the card.
+        if model.place == nil || model.place?.atHome == true || photo.atHome { model.showArea = true }
         model.audience = audience
         // Under the person's own name only: a made-up name chosen earlier in the Studio never carries into "Your day".
         model.postsUnderMadeUpName = false
