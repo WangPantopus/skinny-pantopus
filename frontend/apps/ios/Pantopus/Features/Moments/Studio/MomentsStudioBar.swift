@@ -29,6 +29,8 @@ struct MomentsStudioRail: View {
     var openLoop: (() -> Void)?
     /// Sound (phase 2): Voice Spark or place sound (`MomentsStudioSoundSheet`).
     var openSound: (() -> Void)?
+    /// Trim (phase 5 A2, `MomentsStudioTrimSheet`): opened from the rail itself.
+    @State private var showsTrim = false
 
     var body: some View {
         VStack(alignment: .trailing, spacing: Spacing.s3) {
@@ -57,6 +59,11 @@ struct MomentsStudioRail: View {
                 tool("Sound", id: "moments.studio.rail.sound") {
                     Icon(.mic, size: 19, strokeWidth: 2.2, color: .white)
                 } action: { openSound() }
+            }
+            if model.offersTrim {
+                tool(model.studioTrim == nil ? "Trim" : "Trimmed", id: "moments.studio.rail.trim") {
+                    Icon(.scissors, size: 19, strokeWidth: 2.2, color: .white)
+                } action: { showsTrim = true }
             }
             if let openLoop, model.offersLoop {
                 tool(model.studioLoop == nil ? "Loop" : "Loop on", id: "moments.studio.rail.loop") {
@@ -97,6 +104,13 @@ struct MomentsStudioRail: View {
         .opacity(model.isPosting ? 0.5 : 1)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Tools")
+        .sheet(isPresented: $showsTrim) {
+            MomentsStudioTrimSheet(model: model) { showsTrim = false }
+                .presentationDetents([.medium])
+                .presentationDragIndicator(.visible)
+                .presentationBackground { Theme.Color.appSurface.environment(\.colorScheme, .dark) }
+                .environment(\.colorScheme, .dark)
+        }
     }
 
     private func tool(
