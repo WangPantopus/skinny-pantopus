@@ -827,4 +827,6 @@ data class HolidayCardPreviewLinkPage(
     @Json(name = "sent_on") val sentOn: String? = null,
     /** A card by link: any account opens it, so the page names no address. */
     @Json(name = "by_link") val byLink: Boolean = false,
+    /** The page opens and reads it without an account (sent only while the card improvements are on). */
+    @Json(name = "guest_open") val guestOpen: Boolean = false,
 )

@@ -448,7 +448,7 @@ private fun ListSentRow(
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
-                if (back) "You took this card back, and its stamp is back with you." else arrivalLine(card, zone),
+                if (back) "You took this card back, and its stamp is back with you." else arrivalLine(card, zone, cards.improved),
                 fontSize = 13.sp,
                 lineHeight = 18.sp,
                 color = PantopusColors.cardTextBody,

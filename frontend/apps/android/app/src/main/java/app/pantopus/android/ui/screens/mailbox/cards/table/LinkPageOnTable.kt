@@ -46,7 +46,11 @@ import app.pantopus.android.ui.theme.Spacing
  * address it was sent to; by link any account works.
  */
 @Composable
-internal fun LinkPageOnTable(page: HolidayCardPreviewLinkPage) {
+internal fun LinkPageOnTable(
+    page: HolidayCardPreviewLinkPage,
+    /** Opened as a guest (the card improvements): open and read it right there, or save it, as the web's page says. */
+    guest: Boolean = false,
+) {
     val art = rememberCardTableArt()
     val shape = RoundedCornerShape(16.dp)
     val cloth =
@@ -121,13 +125,18 @@ internal fun LinkPageOnTable(page: HolidayCardPreviewLinkPage) {
         )
         Text(
             (if (page.sealed) "It’s sealed until Christmas morning. " else "") +
-                "You’ll need a free Pantopus account to open it and keep it.",
+                if (guest) guestLine(page) else "You’ll need a free Pantopus account to open it and keep it.",
             fontSize = 13.5.sp,
             lineHeight = 1.4.em,
             color = PantopusColors.tableCreamSoft,
             textAlign = TextAlign.Center,
             modifier = Modifier.padding(top = Spacing.s1),
         )
+        if (guest) {
+            PagePill(if (page.sealed) "Peek at the envelope" else "Open your card", strong = true)
+            PagePill(if (page.sealed) "Save for Christmas morning" else "Save to my mailbox", strong = false)
+            return@Column
+        }
         PagePill("Open your card", strong = true)
         PagePill("Create a free account", strong = false)
         if (!page.byLink && page.sentTo.isNotBlank()) {
@@ -141,6 +150,14 @@ internal fun LinkPageOnTable(page: HolidayCardPreviewLinkPage) {
         }
     }
 }
+
+/** The guest page's line under its words (the web's and iPhone's). */
+private fun guestLine(page: HolidayCardPreviewLinkPage): String =
+    when {
+        !page.sealed -> "Open and read it right here — no account needed."
+        page.sentTo.isBlank() -> "Save it to your mailbox so it’s waiting for you on Christmas morning."
+        else -> "We’ll email you on Christmas morning when the seal lifts — or save it to your mailbox now."
+    }
 
 /** A button on the picture of the page, drawn: it does nothing here. */
 @Composable
