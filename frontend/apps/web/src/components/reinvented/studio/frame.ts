@@ -63,3 +63,16 @@ export function offPicture(size: { w: number; h: number } | null, points: { x: n
   const slack = 0.002;
   return points.some((p) => p.x < left - slack || p.x > right + slack || p.y < top - slack || p.y > bottom + slack);
 }
+
+/** PHASE-6 K2: how much of an item, in px, always stays on the canvas, on both axes. */
+export const KEEP_ON_PX = 24;
+
+/**
+ * The middle (0 to 1 of the canvas, `lo`..`hi` at most) an item of `size` px may take on a canvas `total` px long so that at
+ * least 24 px of the item's own box stays on it (the whole item when it is smaller than that). PHASE-6 K2.
+ */
+export function keepOn(v: number, size: number, total: number, lo = 0, hi = 1): number {
+  if (!(total > 0) || !(size > 0)) return clamp(v, lo, hi);
+  const m = (Math.min(KEEP_ON_PX, size) - size / 2) / total;
+  return clamp(v, Math.max(lo, m), Math.min(hi, 1 - m));
+}

@@ -42,6 +42,8 @@
   height: 100%;
   width: min(100%, calc(100dvh * 9 / 16));
   overflow: hidden;
+  /* PHASE-6 K1: the canvas sizes itself by the frame's room (container units). */
+  container-type: size;
   background: var(--st-night);
 }
 .st-studio[data-wide] .st-stage {
@@ -58,6 +60,10 @@
 .st-art {
   position: absolute;
   inset: 0 0 auto;
+  /* PHASE-6 K1: fitted, whole, in the room above the bottom bar (its height is --st-foot-h, set by the Studio), so the bar
+     never covers it; centred in the frame when that makes it narrower. */
+  width: min(100cqw, (100cqh - var(--st-foot-h, 0px)) * 9 / 16);
+  margin: 0 auto;
   aspect-ratio: 9 / 16;
   max-height: 100%;
   overflow: hidden;
@@ -1104,4 +1110,23 @@
 .st-browse:focus-visible {
   outline: 2px solid #fff;
   outline-offset: 2px;
+}
+
+/* PHASE-6 K3: where an item and one of the Studio's small controls (the close button, the tool rail) overlap, the item gets
+   the touch: the items stack over the controls, and everything that opens over the canvas stacks over the items. */
+.st-studio .sp-layer[data-edit] .sp-stamp,
+.st-studio .pl-item[data-edit],
+.st-studio .dt-dot {
+  z-index: 1;
+}
+.st-studio :is(.st-toolpanel, .st-words, .st-start, .st-foot, .st-panel, .st-scrim, .st-drawer) {
+  z-index: 2;
+}
+/* While an item is dragged the controls fade to 30% and take no touches, and come back when it is let go. */
+.st-studio :is(.st-top, .st-rail, .st-foot, .st-toolpanel) {
+  transition: opacity 0.15s ease;
+}
+.st-studio[data-dragging] :is(.st-top, .st-rail, .st-foot, .st-toolpanel) {
+  opacity: 0.3;
+  pointer-events: none;
 }

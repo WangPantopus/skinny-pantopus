@@ -325,6 +325,50 @@ export default function Studio({
   // One id per post being made, so trying again after a failed photo upload never posts twice (today's composer).
   const postRequest = useRef<string | null>(null);
   const drawer = drawerOpen || wide;
+  // PHASE-6 K1: the canvas is fitted, whole, in the room above the bottom bar, so the bar never covers it (studio.css reads
+  // the bar's height from the frame).
+  const footFrame = useRef<HTMLElement | null>(null);
+  const footWatch = useRef<ResizeObserver | null>(null);
+  const footRef = useCallback((el: HTMLDivElement | null) => {
+    footWatch.current?.disconnect();
+    footWatch.current = null;
+    if (!el) {
+      footFrame.current?.style.removeProperty('--st-foot-h');
+      return;
+    }
+    const frame = el.closest<HTMLElement>('.st-frame');
+    footFrame.current = frame;
+    if (!frame) return;
+    const read = () => frame.style.setProperty('--st-foot-h', `${el.offsetHeight}px`);
+    read();
+    footWatch.current = new ResizeObserver(read);
+    footWatch.current.observe(el);
+  }, []);
+  useEffect(() => () => footWatch.current?.disconnect(), []);
+  // PHASE-6 K3: while an item (a stamp, a playable item, a dot, the words) is dragged, the Studio's controls fade to 30% and
+  // take no touches; they come back when it is let go.
+  const onItemPress = (e: React.PointerEvent<HTMLDivElement>) => {
+    const t = e.target as HTMLElement;
+    const item = t.closest('.sp-layer[data-edit] .sp-stamp, .pl-item[data-edit], .dt-dot, .st-frame[data-tool="text"] .st-picture canvas');
+    if (!item || t.closest('button:not(.dt-dot), input, textarea, select, .pl-edit-bar')) return;
+    const root = e.currentTarget;
+    const id = e.pointerId,
+      x0 = e.clientX,
+      y0 = e.clientY;
+    const move = (ev: PointerEvent) => {
+      if (ev.pointerId === id && Math.hypot(ev.clientX - x0, ev.clientY - y0) > 4) root.dataset.dragging = '';
+    };
+    const end = (ev: PointerEvent) => {
+      if (ev.pointerId !== id) return;
+      delete root.dataset.dragging;
+      window.removeEventListener('pointermove', move, true);
+      window.removeEventListener('pointerup', end, true);
+      window.removeEventListener('pointercancel', end, true);
+    };
+    window.addEventListener('pointermove', move, true);
+    window.addEventListener('pointerup', end, true);
+    window.addEventListener('pointercancel', end, true);
+  };
   // The eyedropper waits for one tap only while Text or Draw stays open.
   useEffect(() => setPicking(false), [tool]);
   // Undo: the lines as they were before the last line or rub; else today's step, the last line off.
@@ -2022,6 +2066,7 @@ export default function Studio({
       aria-label="Create Moment"
       data-wide={wide || undefined}
       data-drawer={(drawer && composing) || undefined}
+      onPointerDownCapture={onItemPress}
     >
       <div className="st-stage">
         <div
@@ -2809,7 +2854,7 @@ export default function Studio({
           )}
 
           {!gate && !camera && (
-            <div className="st-foot">
+            <div className="st-foot" ref={footRef}>
               {(busy || error || (askedPost && blocker)) && (
                 <p className="st-status" role={busy ? 'status' : 'alert'}>
                   {busy || error || blocker}
