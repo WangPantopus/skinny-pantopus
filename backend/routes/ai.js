@@ -49,7 +49,7 @@ const radonReport = require('../services/ai/radonReport');
 const postSuggestion = require('../services/ai/postSuggestion');
 const cardNote = require('../services/ai/cardNote');
 const holidayCards = require('../services/holidayCards');
-const { areLaunchFeaturesEnabled } = require('../utils/featureFlags');
+const { areLaunchFeaturesEnabled, cardImprovementsOn } = require('../utils/featureFlags');
 const { CHAT_MODEL, DRAFT_MODEL } = require('../config/anthropic');
 const propertyIntelligenceService = require('../services/ai/propertyIntelligenceService');
 const neighborhoodPulseComposer = require('../services/ai/neighborhoodPulseComposer');
@@ -469,7 +469,8 @@ router.post('/draft/card-note', verifyToken, (req, res, next) => {
   return next();
 }, aiDraftLimiter, draftBudget, validate(draftCardNoteSchema), asyncHandler(async (req, res) => {
   const { to, count, hint, note, passed_over: passedOver } = req.body;
-  const design = holidayCards.designById(req.body.design);
+  // A photo card too, while the card round is on (holidayCards.PHOTO_CARD: it is never in the catalog).
+  const design = cardImprovementsOn() ? holidayCards.designOf(req.body.design) : holidayCards.designById(req.body.design);
   if (!design) return res.status(400).json({ error: 'CARD_DESIGN_UNKNOWN', message: 'Pick a card first.' });
   const result = await agentService.suggestCardNote({
     design,
