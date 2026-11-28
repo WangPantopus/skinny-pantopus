@@ -65,7 +65,9 @@ struct HolidayCardToStep: View {
 
     var body: some View {
         Group {
-            if viewModel.byEmail {
+            if viewModel.byLink, viewModel.improved {
+                byLink
+            } else if viewModel.byEmail {
                 byEmail
             } else {
                 byName
@@ -97,6 +99,9 @@ struct HolidayCardToStep: View {
 
     private var byName: some View {
         VStack(alignment: .leading, spacing: Spacing.s3) {
+            if viewModel.improved, let design = viewModel.design {
+                chosenCard(design)
+            }
             if many {
                 HolidayCardListChips(viewModel: viewModel)
             }
@@ -155,7 +160,8 @@ struct HolidayCardToStep: View {
             if LaunchFeatures.cardTable, viewModel.listed.isEmpty {
                 Button {
                     focused = false
-                    viewModel.choose(.link)
+                    // With `improved`, the name on its envelope is asked first (cards-next 3.2).
+                    if viewModel.improved { viewModel.byLink = true } else { viewModel.choose(.link) }
                 } label: {
                     VStack(spacing: 2) {
                         HStack(spacing: Spacing.s2) {
@@ -284,6 +290,10 @@ struct HolidayCardToStep: View {
 
     private var byEmail: some View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
+            if viewModel.improved, let design = viewModel.design {
+                chosenCard(design)
+                    .padding(.bottom, Spacing.s2)
+            }
             if many {
                 HolidayCardListChips(viewModel: viewModel)
                     .padding(.bottom, Spacing.s2)
@@ -349,6 +359,108 @@ struct HolidayCardToStep: View {
             }
             .padding(.top, 2)
             .accessibilityIdentifier("sendCardSearchInstead")
+        }
+        .task {
+            try? await Task.sleep(nanoseconds: 350_000_000)
+            focused = true
+        }
+    }
+}
+
+// MARK: - Who it's for with `improved` (cards-next 3.1, 3.2)
+
+extension HolidayCardToStep {
+    /// The card already picked, small, with its caption and "Change" (back to Pick a card).
+    func chosenCard(_ design: HolidayCardDesign) -> some View {
+        HStack(spacing: Spacing.s3) {
+            HolidayCardPictureView(design: design.id, paper: design.paper, height: design.height, thumb: true)
+                .frame(width: 40)
+                .clipShape(RoundedRectangle(cornerRadius: 2, style: .continuous))
+                .shadow(color: MailPaper.cardShadow.opacity(0.22), radius: 3, x: 0, y: 2)
+                .accessibilityHidden(true)
+            Text(design.caption)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(HolidayCardDesk.text(scheme))
+                .lineLimit(2)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityLabel("Your card: \(design.caption)")
+            Button {
+                focused = false
+                viewModel.changeCard()
+            } label: {
+                Text("Change")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(MailPaper.wax)
+                    .frame(minWidth: 44, minHeight: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Change the card")
+            .accessibilityIdentifier("sendCardChangeCard")
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("sendCardChosenCard")
+    }
+
+    /// "Send it by link" with `improved`: an optional name for the envelope, as the email form is laid out.
+    var byLink: some View {
+        VStack(alignment: .leading, spacing: Spacing.s2) {
+            if let design = viewModel.design {
+                chosenCard(design)
+                    .padding(.bottom, Spacing.s2)
+            }
+            Text("Name on the envelope (optional)")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(HolidayCardDesk.text(scheme))
+            TextField(
+                "",
+                text: $viewModel.linkName,
+                prompt: Text("e.g. Mom, Aunt Lin, The Patel family").foregroundStyle(MailPaper.cardTextMuted)
+            )
+            .font(.system(size: 16))
+            .foregroundStyle(MailPaper.cardText)
+            .textInputAutocapitalization(.words)
+            .autocorrectionDisabled()
+            .submitLabel(.done)
+            .focused($focused)
+            .onChange(of: viewModel.linkName) { _, name in
+                if name.count > HolidayCardFlowViewModel.linkNameLimit {
+                    viewModel.linkName = String(name.prefix(HolidayCardFlowViewModel.linkNameLimit))
+                }
+            }
+            .padding(.horizontal, Spacing.s4)
+            .frame(minHeight: 48)
+            .typesInFieldOnTap($focused)
+            .background(MailPaper.cardField, in: RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: Radii.lg, style: .continuous)
+                    .strokeBorder(focused ? MailPaper.wax : MailPaper.cardFieldEdge, lineWidth: 1)
+            )
+            .accessibilityLabel("Name on the envelope, optional")
+            .accessibilityIdentifier("sendCardLinkName")
+            Text("Written in ink on the front of the envelope. Leave blank if you’d rather keep it unnamed.")
+                .font(.system(size: 14))
+                .foregroundStyle(HolidayCardDesk.muted(scheme))
+                .fixedSize(horizontal: false, vertical: true)
+            Text(
+                "Anyone with the link can open and read your card right away — no account needed. The first person "
+                    + "to save it to a mailbox keeps it."
+            )
+            .font(.system(size: 14))
+            .foregroundStyle(HolidayCardDesk.muted(scheme))
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.top, Spacing.s2)
+            HolidayCardWaxButton(title: "Continue") {
+                focused = false
+                viewModel.chooseLink()
+            }
+            .padding(.top, Spacing.s3)
+            .accessibilityIdentifier("sendCardLinkContinue")
+            HolidayCardPaperButton(title: "Search Pantopus instead", fullWidth: true) {
+                viewModel.byLink = false
+            }
+            .padding(.top, 2)
+            .accessibilityIdentifier("sendCardLinkSearchInstead")
         }
         .task {
             try? await Task.sleep(nanoseconds: 350_000_000)
@@ -602,7 +714,7 @@ struct HolidayCardPickBar: View {
                         .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
                 }
             }
-            HolidayCardWaxButton(title: "Write on this card", isEnabled: viewModel.design != nil) { viewModel.toWrite() }
+            HolidayCardWaxButton(title: viewModel.pickButtonTitle, isEnabled: viewModel.design != nil) { viewModel.toWrite() }
                 .accessibilityIdentifier("sendCardWriteOn")
         }
         .frame(maxWidth: 560)

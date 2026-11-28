@@ -43,7 +43,7 @@ extension HolidayCardFlowViewModel {
             // As Look it over lays it out: the name it will really carry, the postmark by their clock, the note.
             let envelope = MailPieceModel(
                 mail: preview.piece,
-                recipient: MailPieceRecipient(name: recipient.envelopeName, addressLine: nil),
+                recipient: MailPieceRecipient(name: envelopeName(recipient), addressLine: nil),
                 opened: false
             )
             let card = preview.piece.item.card
@@ -58,7 +58,7 @@ extension HolidayCardFlowViewModel {
                 mailedOn: envelope.postmarkDate,
                 note: MailPieceModel.firstText(preview.piece.item.content, message) ?? "",
                 fromName: envelope.from,
-                toName: recipient.envelopeName,
+                toName: envelopeName(recipient),
                 sealed: false,
                 sealedUntil: nil,
                 sealedInDays: "",
@@ -84,7 +84,7 @@ extension HolidayCardFlowViewModel {
             mailedOn: MailDates.postmarkDay(Date(), calendar: .current),
             note: message.trimmingCharacters(in: .whitespacesAndNewlines),
             fromName: fromName,
-            toName: recipient.envelopeName,
+            toName: envelopeName(recipient),
             sealed: false,
             sealedUntil: nil,
             sealedInDays: "",
@@ -129,6 +129,7 @@ struct CardTableSendCover: ViewModifier {
             toFirstName: viewModel.recipient?.isLink == true ? "" : first,
             count: max(1, entries?.count ?? 1),
             sealedForChristmas: viewModel.arrival == .sealedChristmas,
+            offersQuickSeal: viewModel.improved && CardTableQuickSeal.sealedOnce,
             seal: { [weak model, viewModel] in
                 guard let model else { return .refused(nil) }
                 return await Self.seal(viewModel, model: model)
