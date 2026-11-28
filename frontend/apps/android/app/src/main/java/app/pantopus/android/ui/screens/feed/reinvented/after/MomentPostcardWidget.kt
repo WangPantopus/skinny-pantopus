@@ -90,11 +90,16 @@ class PostcardWidgetSync
             refresh()
         }
 
-        /** The receiver on or off: the widget list shows "Postcards" only while it is on. */
+        /**
+         * The receiver on or off: the widget list shows "Postcards" only while it is on. The manifest's own setting ("default")
+         * is off, so with the switch off and never on nothing is written to the system.
+         */
         private fun enable(on: Boolean) {
-            val state = if (on) PackageManager.COMPONENT_ENABLED_STATE_ENABLED else PackageManager.COMPONENT_ENABLED_STATE_DISABLED
             val component = PostcardWidgetProvider.component(context)
-            if (context.packageManager.getComponentEnabledSetting(component) == state) return
+            val now = context.packageManager.getComponentEnabledSetting(component)
+            val off = now == PackageManager.COMPONENT_ENABLED_STATE_DEFAULT || now == PackageManager.COMPONENT_ENABLED_STATE_DISABLED
+            if (on == !off) return
+            val state = if (on) PackageManager.COMPONENT_ENABLED_STATE_ENABLED else PackageManager.COMPONENT_ENABLED_STATE_DISABLED
             context.packageManager.setComponentEnabledSetting(component, state, PackageManager.DONT_KILL_APP)
         }
 
