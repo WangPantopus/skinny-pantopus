@@ -1771,34 +1771,43 @@
 .rp-filter-close {
   display: grid;
   place-items: center;
-  width: 36px;
-  height: 36px;
-  border: 1px solid var(--rp-line);
+  /* A 44 px box; the circle is drawn 32 px inside it (LEAD-7's look, 05:26). */
+  width: 44px;
+  height: 44px;
+  margin: -6px -6px -6px 0;
+  padding: 0;
+  border: 0;
   border-radius: 50%;
-  background: var(--rp-paper);
+  background: radial-gradient(circle, var(--rp-paper) 15px, var(--rp-line) 15.5px, var(--rp-line) 16px, transparent 16.5px);
   color: var(--rp-ink);
 }
 .rp-filter-chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px 8px;
+  gap: 0 8px;
 }
+/* Each chip is a 44 px tall box to the finger; the 28 px pill with its 13 px words is drawn inside it (PHASE-6 C; LEAD-7's
+   look of 05:26 measured the drawn chips at 40 to 42). */
 .rp-filter-chips button {
-  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--rp-ink);
+  font-size: 13px;
+}
+.rp-filter-chips button > span {
+  display: inline-flex;
+  align-items: center;
   min-height: 28px;
   padding: 0 12px;
   border: 1px solid var(--rp-line);
   border-radius: 999px;
   background: var(--rp-paper);
-  color: var(--rp-ink);
-  font-size: 13px;
 }
-.rp-filter-chips button::before {
-  content: '';
-  position: absolute;
-  inset: -8px -2px;
-}
-.rp-filter-chips button[aria-pressed='true'] {
+.rp-filter-chips button[aria-pressed='true'] > span {
   border-color: var(--rp-ink);
   background: var(--rp-ink);
   color: var(--rp-paper);
