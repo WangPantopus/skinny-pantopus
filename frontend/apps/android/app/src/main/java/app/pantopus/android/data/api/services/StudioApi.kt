@@ -26,6 +26,7 @@ import retrofit2.http.Query
  * `pulse_reinvented` is on for the person. Today's screens never send them. Sent while the switch is off for the
  * caller, each answers `403 PULSE_REINVENTED_OFF` (CONTRACT 1).
  */
+@Suppress("TooManyFunctions") // The Studio's own routes, one per request, as ReinventedApi.
 interface StudioApi {
     /**
      * `POST /api/moments/place-preview` with `stamps: true` (CONTRACT 2a): what the tray's stamps would read for a Moment
