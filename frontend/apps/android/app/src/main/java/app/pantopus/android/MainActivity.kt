@@ -49,6 +49,7 @@ import app.pantopus.android.ui.components.ToastHost
 import app.pantopus.android.ui.components.closesKeyboardOnTapOrScroll
 import app.pantopus.android.ui.guidance.GuidanceDebug
 import app.pantopus.android.ui.navigation.PantopusNavHost
+import app.pantopus.android.ui.screens.feed.reinvented.after.PostcardWidgetSync
 import app.pantopus.android.ui.screens.mailbox.cards.ChristmasToday
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusTheme
@@ -117,6 +118,9 @@ class MainActivity : FragmentActivity() {
     /** "Pulse, reinvented"'s one server switch (founder, 2026-11-26): read at sign-in and on every foreground. */
     @Inject lateinit var pulseReinvented: PulseReinventedFeature
 
+    /** "Pulse, reinvented"'s postcard widget (CONTRACT 8j): follows the switch above; reads nothing unless one is placed. */
+    @Inject lateinit var postcardWidget: PostcardWidgetSync
+
     /** The guidance cards' record: app opens (a cold start, or a return after 30 minutes) and the seen cards. */
     @Inject lateinit var guidance: GuidanceRepository
 
@@ -150,6 +154,7 @@ class MainActivity : FragmentActivity() {
         plansFeature.start()
         momentsFeature.start()
         pulseReinvented.start()
+        postcardWidget.start()
         guidance.start()
         observeAppLockPrivacyHold()
         lifecycleScope.launch {
@@ -232,6 +237,7 @@ class MainActivity : FragmentActivity() {
         plansFeature.foregrounded()
         momentsFeature.foregrounded()
         pulseReinvented.foregrounded()
+        postcardWidget.foregrounded()
         guidance.foregrounded()
         launchPushTokenSync()
     }
