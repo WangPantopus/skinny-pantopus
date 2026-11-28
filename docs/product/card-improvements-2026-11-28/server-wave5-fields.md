@@ -196,4 +196,6 @@ cd backend && CARD_CLOCK=2026-12-27T18:00:00Z node -r ~/.pantopus-review/handoff
   backend shows only after that moment (restart a day later, or move its `delivered_at` in the local database);
   an account made today looks over 14 days old on a shifted date, so Wave 4's `welcome` and `joined_for` are absent
   there.
+- A photo or voice uploaded through a shifted backend can be sent from it: the server's Wave 5 branch stamps an upload
+  with its own clock. (On older server code such an upload answers `CARD_MEDIA_EXPIRED` on a shifted date.)
 - It refuses to run where `APP_ENV` is staging or production.
