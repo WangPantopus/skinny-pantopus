@@ -520,7 +520,7 @@ private fun StudioClose(
                 .semantics { contentDescription = if (card) "Back to your card" else "Back to the camera" },
         contentAlignment = Alignment.Center,
     ) {
-        PantopusIconImage(icon = PantopusIcon.X, contentDescription = null, size = 22.dp, strokeWidth = 2.2f, tint = Color.White)
+        PantopusIconImage(icon = PantopusIcon.X, contentDescription = null, size = 20.dp, strokeWidth = 2.2f, tint = Color.White)
     }
 }
 
@@ -598,7 +598,7 @@ private fun MarksTool(
     RailTool(label = label, spoken = spoken, enabled = enabled, tag = label.lowercase(), onClick = { onOpen(tool) }) {
         when (tool) {
             MomentMarksTool.Text ->
-                Text(text = "Aa", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.5).sp)
+                Text(text = "Aa", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.5).sp)
             MomentMarksTool.Draw ->
                 PantopusIconImage(
                     icon = PantopusIcon.Pencil,
@@ -639,7 +639,7 @@ internal fun RailTool(
         Text(
             text = label,
             color = Color.White,
-            fontSize = 14.sp,
+            fontSize = 12.sp,
             fontWeight = FontWeight.SemiBold,
             style = TextStyle(shadow = OnPicture),
         )
@@ -749,7 +749,7 @@ private fun StudioBar(
                 .navigationBarsPadding()
                 // A real sheet (PHASE-6 F3): dragging the bar up opens the details.
                 .studioSheetDrag(up = true, onDone = onOpenDrawer)
-                .padding(start = Spacing.s4, end = Spacing.s4, top = Spacing.s2, bottom = Spacing.s3)
+                .padding(start = Spacing.s3, end = Spacing.s3, top = Spacing.s2, bottom = Spacing.s3)
                 .testTag("moments.studio.bar"),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
@@ -781,12 +781,12 @@ private fun StudioWhoSeesIt(
                 .background(PantopusColors.studioBar)
                 // The sheet's top: dragging it down closes the details (PHASE-6 F3).
                 .studioSheetDrag(up = false, onDone = onClose)
-                .padding(start = Spacing.s4, end = Spacing.s4, top = Spacing.s2, bottom = Spacing.s3)
+                .padding(start = Spacing.s3, end = Spacing.s3, top = Spacing.s2, bottom = Spacing.s3)
                 .testTag("moments.studio.whoSees"),
         verticalArrangement = Arrangement.spacedBy(Spacing.s2),
     ) {
         StudioGrabber()
-        Text(text = "Who sees it", color = PantopusColors.studioPillSecondary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+        Text(text = "Who sees it", color = PantopusColors.studioPillSecondary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
         Row(
             modifier = Modifier.semantics { contentDescription = "Who sees it" },
             horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
@@ -808,7 +808,7 @@ private fun StudioWhoSeesIt(
                 StudioChip(text = MADE_UP_NAME, on = state.madeUp, usable = !state.posting, tag = "madeUp", onClick = onMadeUp)
             }
         }
-        refused?.let { Text(text = it, color = Color.White, fontSize = 13.sp) }
+        refused?.let { Text(text = it, color = Color.White, fontSize = 12.sp) }
     }
 }
 
@@ -821,15 +821,12 @@ internal fun StudioChip(
     tag: String,
     onClick: () -> Unit,
 ) {
+    // 28 dp drawn, 44 dp to the finger (PHASE-6 C).
     Box(
         modifier =
             Modifier
-                .height(38.dp)
-                .clip(RoundedCornerShape(19.dp))
-                .background(if (on) Color.White else Color.Transparent)
-                .then(if (on) Modifier else Modifier.border(1.dp, PantopusColors.studioChipOutline, RoundedCornerShape(19.dp)))
+                .height(44.dp)
                 .clickable(enabled = usable, role = Role.RadioButton, onClick = onClick)
-                .padding(horizontal = Spacing.s4)
                 .testTag("moments.studio.audience.$tag")
                 .clearAndSetSemantics {
                     contentDescription = text
@@ -838,18 +835,39 @@ internal fun StudioChip(
                 },
         contentAlignment = Alignment.Center,
     ) {
-        Text(
-            text = text,
-            fontSize = 15.sp,
-            fontWeight = FontWeight.SemiBold,
-            color =
-                when {
-                    on -> PantopusColors.appText
-                    usable -> Color.White
-                    else -> Color.White.copy(alpha = 0.4f)
-                },
-        )
+        Box(
+            modifier =
+                Modifier
+                    .height(28.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(if (on) Color.White else Color.Transparent)
+                    .then(if (on) Modifier else Modifier.border(1.dp, PantopusColors.studioChipOutline, RoundedCornerShape(14.dp)))
+                    .padding(horizontal = Spacing.s3),
+            contentAlignment = Alignment.Center,
+        ) {
+            StudioChipWords(text, on, usable)
+        }
     }
+}
+
+/** A "who sees it" chip's words (13 sp, PHASE-6 C). */
+@Composable
+private fun StudioChipWords(
+    text: String,
+    on: Boolean,
+    usable: Boolean,
+) {
+    Text(
+        text = text,
+        fontSize = 13.sp,
+        fontWeight = FontWeight.SemiBold,
+        color =
+            when {
+                on -> PantopusColors.appText
+                usable -> Color.White
+                else -> Color.White.copy(alpha = 0.4f)
+            },
+    )
 }
 
 /**
@@ -885,7 +903,7 @@ private fun StudioBarLine(
     Text(
         text = text,
         color = PantopusColors.studioPillSecondary,
-        fontSize = 13.sp,
+        fontSize = 12.sp,
         modifier = Modifier.testTag("moments.studio.$tag"),
     )
 }
@@ -895,7 +913,7 @@ private fun StudioBarLine(
 internal fun StudioMadeUpNote() {
     Text(
         text = "Under a made-up name it shows over its area, or at a public place, to people nearby.",
-        fontSize = 13.sp,
+        fontSize = 12.sp,
         color = PantopusColors.appTextSecondary,
         modifier = Modifier.padding(horizontal = Spacing.s5).padding(top = 2.dp).testTag("moments.studio.madeUpNote"),
     )
@@ -925,7 +943,7 @@ private fun StudioHomeLine(
         horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
     ) {
         PantopusIconImage(icon = PantopusIcon.Home, contentDescription = null, size = 16.dp, strokeWidth = 2.2f, tint = Color.White)
-        Text(text = line, color = PantopusColors.studioPillSecondary, fontSize = 13.sp)
+        Text(text = line, color = PantopusColors.studioPillSecondary, fontSize = 12.sp)
     }
 }
 
@@ -973,7 +991,7 @@ private fun StudioWhenPill(
     Row(
         modifier =
             modifier
-                .height(56.dp)
+                .height(44.dp)
                 .clip(RoundedCornerShape(18.dp))
                 .background(PantopusColors.studioPillFill)
                 .border(1.dp, PantopusColors.studioPillOutline, RoundedCornerShape(18.dp))
@@ -987,17 +1005,17 @@ private fun StudioWhenPill(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        PantopusIconImage(icon = PantopusIcon.Clock, contentDescription = null, size = 22.dp, strokeWidth = 2.2f, tint = Color.White)
+        PantopusIconImage(icon = PantopusIcon.Clock, contentDescription = null, size = 18.dp, strokeWidth = 2.2f, tint = Color.White)
         Text(
             text = line,
             color = Color.White,
-            fontSize = 15.sp,
+            fontSize = 14.sp,
             fontWeight = FontWeight.SemiBold,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
-        PantopusIconImage(icon = PantopusIcon.ChevronDown, contentDescription = null, size = 20.dp, strokeWidth = 2.2f, tint = Color.White)
+        PantopusIconImage(icon = PantopusIcon.ChevronDown, contentDescription = null, size = 18.dp, strokeWidth = 2.2f, tint = Color.White)
     }
 }
 
@@ -1021,12 +1039,12 @@ private fun StudioPost(
     Row(
         modifier =
             Modifier
-                .height(56.dp)
+                .height(44.dp)
                 .alpha(if (enabled || state.posting) 1f else 0.5f)
                 .clip(RoundedCornerShape(28.dp))
                 .background(PantopusColors.primary600)
                 .clickable(enabled = enabled, role = Role.Button, onClick = onPost)
-                .padding(horizontal = 22.dp)
+                .padding(horizontal = 18.dp)
                 .testTag("moments.studio.post")
                 .clearAndSetSemantics {
                     contentDescription =
@@ -1040,7 +1058,7 @@ private fun StudioPost(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Text(text = label, color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+        Text(text = label, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
         if (!state.posting) {
             PantopusIconImage(
                 icon = PantopusIcon.ArrowRight,
