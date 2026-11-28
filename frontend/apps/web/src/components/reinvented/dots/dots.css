@@ -19,6 +19,11 @@
   pointer-events: auto;
   animation: dt-pulse 2.4s ease-out infinite;
 }
+/* A dot is dragged to a new spot in the Studio (DotEditLayer's onMove): the browser leaves that drag to it. */
+.dt-dot[data-movable] {
+  touch-action: none;
+  cursor: grab;
+}
 .dt-dot[data-kind='thing'] {
   background: rgba(4, 120, 87, 0.9);
 }

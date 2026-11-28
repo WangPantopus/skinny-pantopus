@@ -40,11 +40,18 @@
 .st-frame {
   position: relative;
   height: 100%;
+  /* A drag on the frame's side margins selects nothing (LEAD-7's look, 08:55); fields keep their own selection. */
+  user-select: none;
+  -webkit-user-select: none;
   width: min(100%, calc(100dvh * 9 / 16));
   overflow: hidden;
   /* PHASE-6 K1: the canvas sizes itself by the frame's room (container units). */
   container-type: size;
   background: var(--st-night);
+}
+.st-frame :is(input, textarea, [contenteditable='true']) {
+  user-select: text;
+  -webkit-user-select: text;
 }
 .st-studio[data-wide] .st-stage {
   padding: 24px;
@@ -177,6 +184,16 @@
   align-items: center;
   justify-content: flex-end;
   gap: 10px;
+}
+/* Only the round buttons take presses: the rows and their labels reach over the picture, where a press is the picture's
+   (or the eyedropper's) (LEAD-7's look, 08:55: the rows were 159 px wide to the pointer). */
+.st-rail,
+.st-tool,
+.st-tool > span {
+  pointer-events: none;
+}
+.st-rail button {
+  pointer-events: auto;
 }
 .st-tool > span {
   font-size: 13px;
@@ -717,11 +734,18 @@
 }
 .st-picture-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: end;
-  gap: 12px;
+  gap: 10px 12px;
 }
+/* The sliders shrink and the row wraps, so Turn and Done stay on a 375 px screen (LEAD-7's look, 08:55). */
 .st-picture-row .st-field {
-  flex: 1;
+  flex: 1 1 110px;
+  min-width: 0;
+}
+.st-picture-row .st-field input[type='range'] {
+  width: 100%;
+  min-width: 0;
 }
 .st-why {
   margin: -4px 0 0 6px;
@@ -733,6 +757,11 @@
   display: flex;
   gap: 10px;
   justify-content: center;
+}
+/* While the eyedropper waits for a tap, the tool's controls step aside so the whole photo can be tapped (LEAD-7's look,
+   08:55: at 375 the Draw panel covered almost all of a wide photo). Escape or a tap brings them back. */
+.st-frame[data-picking] .st-toolpanel {
+  visibility: hidden;
 }
 /* While a tool's controls are open, the rail keeps its buttons and drops its labels (the controls sit there). */
 .st-frame[data-tool] .st-tool > span {
@@ -946,7 +975,9 @@
 .st-blur-layer {
   position: absolute;
   inset: 0;
-  z-index: 4;
+  /* Under the Studio's controls (the X, the rail, Blur's own panel, the Discard question): over the picture only (LEAD-7's
+     look, 08:55: at 4 it covered its own panel and the way out). */
+  z-index: 0;
   pointer-events: none;
 }
 .st-blur-layer[data-active] {
@@ -1145,14 +1176,22 @@
 .st-drawer-head {
   touch-action: none;
 }
+/* The header stays at the top while the settings scroll under it: it is the sheet's handle and holds Done (LEAD-7's look,
+   08:55: it scrolled away with the settings). */
 .st-drawer header.st-drawer-head {
-  position: relative;
-  padding-top: 10px;
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  margin: -10px -16px 0;
+  padding: 20px 16px 6px;
+  background: #111a2b;
   cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
 }
 .st-drawer-head .st-grabber {
   position: absolute;
-  top: 0;
+  top: 8px;
   left: 50%;
   margin: 0 0 0 -18px;
 }
