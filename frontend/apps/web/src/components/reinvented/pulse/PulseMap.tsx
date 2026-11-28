@@ -466,8 +466,10 @@ export default function PulseMap({ pins, listItems, fitKey, fallback, layoutKey,
 
   // The list moved to another height (or the window to another layout): what was in the middle of the open part of the
   // map stays in the middle of the open part, once the list has finished moving.
+  // Read again when the sheet or the panel ends its slide, so a slow frame never leaves the map a step behind (LEAD-8's look,
+  // 10:3x: a fold re-centred the wrong way when the panel had not moved yet at 300 ms); each reading pans only what changed.
   useEffect(() => {
-    const timer = window.setTimeout(() => {
+    const settle = () => {
       const map = mapNow.current;
       if (!map || !fitted.current) return;
       const before = insets.current, after = coveredInsets(ref.current);
@@ -475,8 +477,19 @@ export default function PulseMap({ pins, listItems, fitKey, fallback, layoutKey,
       const dy = (after.bottom - after.top - (before.bottom - before.top)) / 2;
       const dx = -(after.left - before.left) / 2;
       if (Math.abs(dy) > 2 || Math.abs(dx) > 2) map.panBy(dx, dy);
-    }, 300);
-    return () => window.clearTimeout(timer);
+    };
+    const timer = window.setTimeout(settle, 300);
+    const sheet = ref.current?.closest('.rp-board')?.querySelector<HTMLElement>('.rp-sheet') ?? null;
+    const ended = (e: TransitionEvent) => {
+      if (e.target === sheet) settle();
+    };
+    sheet?.addEventListener('transitionend', ended);
+    const stop = window.setTimeout(() => sheet?.removeEventListener('transitionend', ended), 3000);
+    return () => {
+      window.clearTimeout(timer);
+      window.clearTimeout(stop);
+      sheet?.removeEventListener('transitionend', ended);
+    };
   }, [layoutKey]);
 
   useEffect(() => {

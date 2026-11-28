@@ -5,6 +5,7 @@
 // to pin.
 
 import { useEffect, useRef } from 'react';
+import { useMouseDragScroll } from './mouseDragScroll';
 import { MomentFace } from '@/components/moments/MomentFace';
 import { colors } from '@/components/moments/momentState';
 import { statusLine } from './PostRow';
@@ -12,16 +13,30 @@ import { MAP_TIMES, MAP_TIME_WORDS, ticketWhen, type MapTime } from './listApi';
 import type { Pin } from './pins';
 
 export function TimeRow({ time, onTime }: { time: MapTime; onTime(t: MapTime): void }) {
-  const row = useRef<HTMLDivElement>(null);
+  // A mouse drags the strip sideways and a plain wheel scrolls it sideways too (LEAD-8's look, 10:3x: only a sideways wheel
+  // moved it); a finger keeps the browser's own scrolling.
+  const { ref: row, onPointerDown, onClickCapture } = useMouseDragScroll<HTMLDivElement>();
+  useEffect(() => {
+    const r = row.current;
+    if (!r) return undefined;
+    const wheel = (e: WheelEvent) => {
+      if (e.ctrlKey || Math.abs(e.deltaY) <= Math.abs(e.deltaX) || r.scrollWidth <= r.clientWidth) return;
+      const before = r.scrollLeft;
+      r.scrollLeft += e.deltaY;
+      if (r.scrollLeft !== before) e.preventDefault();
+    };
+    r.addEventListener('wheel', wheel, { passive: false });
+    return () => r.removeEventListener('wheel', wheel);
+  }, [row]);
   // The chosen time stays in sight on a narrow row (Live sits in the middle of it).
   useEffect(() => {
     const r = row.current, on = r?.querySelector<HTMLElement>('[aria-pressed="true"]');
     if (!r || !on || r.scrollWidth <= r.clientWidth) return;
     const a = on.getBoundingClientRect(), b = r.getBoundingClientRect();
     r.scrollLeft += a.left + a.width / 2 - (b.left + b.width / 2);
-  }, [time]);
+  }, [time, row]);
   return (
-    <div ref={row} className="rp-time" role="group" aria-label="When">
+    <div ref={row} className="rp-time" role="group" aria-label="When" onPointerDown={onPointerDown} onClickCapture={onClickCapture}>
       {MAP_TIMES.map((t) => (
         <button key={t} type="button" aria-pressed={time === t} onClick={() => onTime(t)}>
           {t === 'live' && <span className="rp-live-dot" aria-hidden />}

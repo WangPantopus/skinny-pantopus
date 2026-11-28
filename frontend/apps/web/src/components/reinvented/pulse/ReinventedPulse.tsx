@@ -187,7 +187,10 @@ export default function ReinventedPulse() {
   }, []);
   // At 700 px wide or more (the board's own width, beside the app's side bar) the list is a floating panel at the left.
   const board = useRef<HTMLDivElement>(null);
-  const [wide, setWide] = useState(false);
+  // Read from the window at once (this page renders in the browser only), so a Back on a wide screen never draws the phone's
+  // sheet first while the board's width is measured (LEAD-8's look, 10:3x: the panel came after 1.5 s); 64 px is the app's
+  // folded side bar.
+  const [wide, setWide] = useState(() => typeof window !== 'undefined' && window.innerWidth - 64 >= WIDE_PX);
   useLayoutEffect(() => {
     const el = board.current;
     if (!el) return undefined;
@@ -397,15 +400,18 @@ export default function ReinventedPulse() {
   // flew the map (PHASE-6 G: the list used to jump to its top and the row left the finger).
   // Coming Back, the row is put back on every settled list for 4 s, not once: on a wide screen the map's area settles and the
   // list is read again a moment after the first read, which sent the list to its top (LEAD-7's look, 08:39; LEAD-8's,
-  // 09:36: 2 of 4). The person's own scroll, wheel, tap or key on the list ends it at once.
-  const pendingRow = useRef<{ key: string; top: number; until: number } | null>(
+  // 09:36: 2 of 4). The person's own scroll, wheel, tap or key on the list ends that at once, and from then on nothing moves
+  // the list for the rest of the window, not even the map's area settling (`held`; LEAD-8's look, 10:08: a wheel 0.55 s after
+  // Back was thrown to the top).
+  const pendingRow = useRef<{ key: string; top: number; until: number; held?: boolean } | null>(
     back?.row ? { key: back.row, top: back.rowTop, until: Date.now() + 4000 } : null,
   );
   useEffect(() => {
     const el = scroller.current;
     if (!el) return undefined;
     const mine = () => {
-      if (pendingRow.current?.until) pendingRow.current = null;
+      const keep = pendingRow.current;
+      if (keep?.until && !keep.held) pendingRow.current = { ...keep, held: true };
     };
     const kinds = ['wheel', 'pointerdown', 'touchstart', 'keydown'] as const;
     kinds.forEach((k) => el.addEventListener(k, mine, { passive: true }));
@@ -624,7 +630,7 @@ export default function ReinventedPulse() {
       box = scroller.current;
     if (!keep || !box || !following || stale || waiting || !list.data || list.isPlaceholderData) return;
     const early = !!keep.until && Date.now() < keep.until;
-    const el = box.querySelector<HTMLElement>(`[data-row="${CSS.escape(keep.key)}"]`);
+    const el = keep.held ? null : box.querySelector<HTMLElement>(`[data-row="${CSS.escape(keep.key)}"]`);
     if (el) box.scrollTop += el.getBoundingClientRect().top - box.getBoundingClientRect().top - keep.top;
     // Coming Back it stays for the window (the list may be read again for the settled area); a flown row is put back once.
     if (!early) pendingRow.current = null;
@@ -1073,27 +1079,9 @@ export default function ReinventedPulse() {
         if ((e.target as HTMLElement).closest?.('.mo-watch-media, .rp-sheet img')) e.preventDefault();
       }}
     >
-      <div className="rp-map-layer" aria-hidden={(!wide && rest === 'full') || undefined}>
-        <PulseMap
-          pins={pins}
-          listItems={reach === 'explore' ? exploreListItems : first?.items ?? []}
-          fitKey={fitKey}
-          fallback={fallback}
-          layoutKey={`${wide}|${wide ? folded : rest}|${topInset}`}
-          flyTo={fly}
-          selected={selected}
-          onBox={onBox}
-          onPick={onPick}
-          onMoving={onMoving}
-          restore={restoreView}
-          view={mapView}
-          float={view === 'pulse' && reach !== 'explore' && !!map.data?.heights_on && !!map.data?.float_on}
-          lit={view === 'pulse' && reach !== 'explore' ? lit : null}
-          sounds={listening && view === 'pulse' && reach !== 'explore' ? sounds.data?.sounds ?? null : null}
-          beams={view === 'pulse' && reach !== 'explore' && time === 'live' ? beams.data?.beams : undefined}
-        />
-      </div>
 
+      {/* The map's layer comes last in the page (it is drawn behind everything by its z-index), so Tab reaches the top line,
+          the rail and the list before the map's own stops (LEAD-8's look, 10:3x: 95 map stops came first). */}
       {topLine}
       {words && (
         <p className="rp-filter-pill" role="status">
@@ -1374,7 +1362,23 @@ export default function ReinventedPulse() {
               </ol>
               <div ref={sentinel} className="rp-sentinel" />
               {isFetchingNextPage && <p className="rp-muted rp-center">Loading more…</p>}
-              {!hasNextPage && last?.end && <p className="rp-end">{last.end}</p>}
+              {/* The end of the list, the reach's ("… Keep exploring?", CONTRACT 6a) or the map's ("That's everything on the map
+                  here."), offers the way to Explore (round 7, g7). */}
+              {!hasNextPage && last?.end && (
+                <p className="rp-end">
+                  {last.end.replace(/\s*Keep exploring\?$/, '')}{' '}
+                  <button
+                    type="button"
+                    className="rp-end-more"
+                    onClick={() => {
+                      setReach('explore');
+                      setCircle(null);
+                    }}
+                  >
+                    Keep exploring?
+                  </button>
+                </p>
+              )}
             </>
           )}
       </PulseSheet>
@@ -1384,6 +1388,26 @@ export default function ReinventedPulse() {
           <Plus size={22} strokeWidth={2.6} aria-hidden />
         </button>
       )}
+      <div className="rp-map-layer" aria-hidden={(!wide && rest === 'full') || undefined}>
+        <PulseMap
+          pins={pins}
+          listItems={reach === 'explore' ? exploreListItems : first?.items ?? []}
+          fitKey={fitKey}
+          fallback={fallback}
+          layoutKey={`${wide}|${wide ? folded : rest}|${topInset}`}
+          flyTo={fly}
+          selected={selected}
+          onBox={onBox}
+          onPick={onPick}
+          onMoving={onMoving}
+          restore={restoreView}
+          view={mapView}
+          float={view === 'pulse' && reach !== 'explore' && !!map.data?.heights_on && !!map.data?.float_on}
+          lit={view === 'pulse' && reach !== 'explore' ? lit : null}
+          sounds={listening && view === 'pulse' && reach !== 'explore' ? sounds.data?.sounds ?? null : null}
+          beams={view === 'pulse' && reach !== 'explore' && time === 'live' ? beams.data?.beams : undefined}
+        />
+      </div>
       {skyOpen && <ConvergenceView id={skyOpen} onClose={() => setSkyOpen(null)} />}
       {boardOpen && (
         <PinboardView

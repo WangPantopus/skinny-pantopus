@@ -33,6 +33,10 @@
   position: absolute;
   inset: 0;
 }
+/* Behind everything on the board, whatever its place in the page (it comes last, for the keyboard's order). */
+.rp-map-layer {
+  z-index: 0;
+}
 .rp-leaflet {
   z-index: 0;
   background: #e6e9ec;
@@ -293,6 +297,14 @@
 .rp-top[data-phone] .rp-bell button {
   padding: 6px;
 }
+/* The bell (today's NotificationBell, drawn here) gets the same 44 px hit box as the other round buttons (LEAD-8's look,
+   10:08: only its 32 px drawing answered). */
+.rp-top[data-phone] .rp-bell button::before {
+  content: '';
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+}
 .rp-top[data-phone] .rp-scope {
   gap: 4px;
   padding: 0 6px;
@@ -459,6 +471,29 @@
   border-radius: 18px;
   background: var(--rp-paper);
   box-shadow: 0 10px 34px #0003;
+}
+/* A short phone-shaped window (375 x 480, say): the rail lies along the top, right under the line, so the "+" riding on the
+   sheet never covers Listen or My place (round 3's note); its cards open under it, at its right edge. */
+@media (max-width: 699px) and (max-height: 620px) {
+  .rp-rail {
+    flex-direction: row;
+  }
+  .rp-rail-item {
+    position: static;
+  }
+  .rp-rail-card {
+    top: calc(100% + 8px);
+    right: 0;
+  }
+  /* The filters' pill stays left of the rail's row. */
+  .rp-filter-pill {
+    max-width: calc(100% - 200px);
+  }
+  /* The flat map's zoom buttons step under the rail's row (Listen lay over the zoom-in: LEAD-8's look, 10:3x). */
+  .rp-board .leaflet-top.leaflet-right {
+    top: 108px;
+    right: 8px;
+  }
 }
 .rp-rail-card-when {
   width: min(400px, calc(100vw - 72px));
@@ -719,6 +754,9 @@
   display: flex;
   gap: 4px;
   margin: 0 16px;
+  /* A mouse drags it sideways (TimeRow): no text selection on the way. */
+  user-select: none;
+  -webkit-user-select: none;
   padding: 4px;
   overflow-x: auto;
   scrollbar-width: none;
@@ -1118,6 +1156,22 @@
   color: var(--rp-muted);
   text-align: center;
   font-size: 12px;
+}
+.rp-end-more {
+  position: relative;
+  min-height: 32px;
+  padding: 0 4px;
+  border: 0;
+  background: none;
+  color: var(--rp-brand);
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+}
+.rp-end-more::before {
+  content: '';
+  position: absolute;
+  inset: -6px -4px;
 }
 .rp-muted {
   color: var(--rp-muted);
