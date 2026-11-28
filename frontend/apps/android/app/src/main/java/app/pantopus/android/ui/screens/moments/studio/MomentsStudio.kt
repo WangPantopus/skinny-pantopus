@@ -366,23 +366,23 @@ internal fun MomentsStudioStep(
                     },
                 )
                 MomentsPostSheet(
-                state = state,
-                avatarUrl = avatarUrl,
-                onShowArea = onShowArea,
-                onHours = onHours,
-                onAudience = onAudience,
-                onCaption = onCaption,
-                onPost = onPost,
-                modifier = Modifier.testTag("moments.studio.drawer"),
-                onPlace = onPlace,
-                onFindPlace = onFindPlace,
-                onNoLocation = onNoLocation,
-                onShowHeight = onShowHeight,
-                onShowWeather = onShowWeather,
-                sky = sky,
-                onOpenMap = { fullMap = true },
-                studio = true,
-            )
+                    state = state,
+                    avatarUrl = avatarUrl,
+                    onShowArea = onShowArea,
+                    onHours = onHours,
+                    onAudience = onAudience,
+                    onCaption = onCaption,
+                    onPost = onPost,
+                    modifier = Modifier.testTag("moments.studio.drawer"),
+                    onPlace = onPlace,
+                    onFindPlace = onFindPlace,
+                    onNoLocation = onNoLocation,
+                    onShowHeight = onShowHeight,
+                    onShowWeather = onShowWeather,
+                    sky = sky,
+                    onOpenMap = { fullMap = true },
+                    studio = true,
+                )
             }
         }
         StudioStampTray(
