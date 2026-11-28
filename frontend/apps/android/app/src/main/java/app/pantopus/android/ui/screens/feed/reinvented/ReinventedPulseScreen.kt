@@ -455,7 +455,8 @@ private fun BoxScope.ReinventedOverMap(
     )
     parts.header(Modifier.onSizeChanged { headerPx = it.height })
     if (settled == ReinventedHeight.Map) parts.mapExtras(this, header, null)
-    ReinventedSheetAdd(sheet, header, full, ADD_SIZE + Spacing.s4, parts.add)
+    // + is ADD_SIZE high, with its own bottom padding under it: its edge stands 12 dp over the sheet's.
+    ReinventedSheetAdd(sheet, header, full, ADD_SIZE, parts.add)
 }
 
 /** + : the Studio, as the Moments tab's + opens it. */
