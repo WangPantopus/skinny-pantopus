@@ -28,15 +28,15 @@
       "unresolved_or_above_90_direct": 0
     },
     "stored-off": {
-      "typed_house_rows": 26166234,
+      "typed_house_rows": 26165753,
       "counties_with_typed_house_rows": 580,
       "field_totals": {
-        "year": 19693327,
-        "living_sqft": 13009632,
-        "bedrooms": 3318486,
-        "bath_total": 2982906,
-        "lot_at_least": 22080833,
-        "value_at_least": 24853476
+        "year": 19693317,
+        "living_sqft": 13009615,
+        "bedrooms": 3318476,
+        "bath_total": 2982884,
+        "lot_at_least": 22080352,
+        "value_at_least": 24853471
       },
       "unresolved_or_above_90_direct": 2
     }
@@ -4409,18 +4409,18 @@
       "state": "MI",
       "name": "Oakland County",
       "scope": "stored-off",
-      "release": "20261116-11160311",
-      "house_rows": 344339,
+      "release": "20261128-11281245",
+      "house_rows": 343858,
       "counts": {
-        "year": 336404,
-        "living_sqft": 342360,
-        "bedrooms": 322563,
-        "bath_total": 342656,
-        "lot_at_least": 344339,
-        "value_at_least": 342666
+        "year": 336394,
+        "living_sqft": 342343,
+        "bedrooms": 322553,
+        "bath_total": 342634,
+        "lot_at_least": 343858,
+        "value_at_least": 342661
       },
-      "direct_field_joint_lower_count": 309293,
-      "direct_field_joint_upper_count": 322563,
+      "direct_field_joint_lower_count": 311153,
+      "direct_field_joint_upper_count": 322553,
       "has_untyped_property_rows": false,
       "house_held_groups": [
         "derived_rows",

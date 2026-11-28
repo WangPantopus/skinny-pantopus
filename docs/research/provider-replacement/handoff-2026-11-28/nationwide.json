@@ -1,6 +1,6 @@
 {
   "summary": {
-    "audited_utc": "2026-11-28T11:48:34.666537+00:00",
+    "audited_utc": "2026-11-28T12:57:10.035725+00:00",
     "age_as_of": "2026-11-28",
     "production_switch_updated": "2026-11-26T11:29:38.764Z",
     "staging_switch_updated": "2026-11-26T11:26:54.688Z",
@@ -14,7 +14,7 @@
       "stored-off": 800,
       "municipal": 1
     },
-    "property_records": 70304905,
+    "property_records": 70304930,
     "records_in_countywide_releases": 25633350,
     "registry_counties": 2606,
     "registry_state_jurisdictions": 52,
@@ -30687,12 +30687,12 @@
       "property_scope": "stored-off",
       "municipality": null,
       "staging_mode": "off",
-      "property_release": "20261116-11160311",
+      "property_release": "20261128-11281245",
       "property_status": "active",
       "source": "mi-oakland",
-      "property_records": 539426,
-      "as_of": "2026-11-16",
-      "stale_after": "2028-02-09",
+      "property_records": 539451,
+      "as_of": "2026-11-28",
+      "stale_after": "2028-02-21",
       "registry_release": "20261125-11250038",
       "registry_records": 506054,
       "registry_counts": {

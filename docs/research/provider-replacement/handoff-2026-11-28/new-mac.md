@@ -32,10 +32,10 @@ export VX_PRIVATE="$HOME/Library/Application Support/Pantopus/VENDORX"
 mkdir -p "$VX_PRIVATE" "$VX_PRIVATE/audit" "$VX_PRIVATE/lanes"
 cd "$VX_PACKET"
 shasum -a 256 -c SHA256SUMS
-python3 "$VX_PACKET/audit-national.py" --repo "$VX_REPO" --out "$VX_PRIVATE/audit" --reader-env "$HOME/.config/pantopus/property-index.env"
+python3 "$VX_PACKET/audit-national.py" --repo "$VX_REPO" --out "$VX_PRIVATE/audit" --verify-objects --reader-env "$HOME/.config/pantopus/property-index.env"
 ```
 
-If using a named read-only AWS profile, export AWS_PROFILE for that profile and omit the reader-env argument. For the optional full field-report audit, install the free Python botocore package in a local virtualenv, or use the Python interpreter bundled with AWS CLI v2. Run audit-house-fields.py with --nationwide pointing at the snapshot and --out in the private audit directory. For release-level changes, run audit-release-changes.py --since 2026-11-23T06:29:00+00:00 with the same reader profile and a private --out. The national inventory program only lists state objects and reads state manifests and switches. Keep the bundled November 28 snapshot as a baseline and write the new snapshot to the private audit directory. Verify a fresh deployment and the actual runtime registry state independently. Property releases, Add Home registry switches and mail operations use different controls.
+If using a named read-only AWS profile, export AWS_PROFILE for that profile and omit the reader-env argument. For the optional full field-report audit, install the free Python botocore package in a local virtualenv, or use the Python interpreter bundled with AWS CLI v2. Run audit-house-fields.py with --nationwide pointing at the snapshot and --out in the private audit directory. For release-level changes, run audit-release-changes.py --since 2026-11-23T06:29:00+00:00 with the same reader profile and a private --out. With --verify-objects the audit also lists dated objects and writes storage-check.json with every absent or empty component of a current property, registry or estimate release. Check its result before deciding to upload a county again. Keep the bundled November 28 snapshot as a baseline and write the new snapshot to the private audit directory. Verify a fresh deployment and the actual runtime registry state independently. Property releases, Add Home registry switches and mail operations use different controls.
 
 ## Build and verify
 
