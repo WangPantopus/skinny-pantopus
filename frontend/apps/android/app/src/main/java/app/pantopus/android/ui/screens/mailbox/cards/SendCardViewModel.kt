@@ -584,6 +584,8 @@ class SendCardViewModel
                 }
             // Each address keeps the list's choice where the server offers every email choice.
             val keep = true.takeIf { cards.value?.arrivals?.emailAll != null }
+            // A photo and a greeting go on a list only while the card improvements are on (Wave 2).
+            val media = form.takeIf { cards.value?.improved == true }
             return form.copy(listIds = ids) to
                 SendHolidayCardListBody(
                     design,
@@ -591,6 +593,9 @@ class SendCardViewModel
                     arrival,
                     recipients,
                     signature = form.signature,
+                    photo = media?.photo?.fileId,
+                    photoAlt = media?.photo?.sentAlt,
+                    voice = media?.voice?.fileId,
                     emailsKeepArrival = keep,
                     travel = true.takeIf { town.travels(form) },
                 )
@@ -608,16 +613,20 @@ class SendCardViewModel
             viewModelScope.launch {
                 val result = repo.previewList(body)
                 if (result is NetworkResult.Failure && town.refused(result.error, TownThen.Look)) return@launch
+                // The list's photo or greeting needs more bought stamps than are left: the stamp books, saying why.
+                val forMedia = (result as? NetworkResult.Failure)?.error?.let { it.forMedia() && it.wantsStamps(cards.value) } == true
                 _form.update {
                     when {
                         it.step != SendCardStep.Seal || it.to != started.to -> it.copy(previewing = false)
                         result is NetworkResult.Success ->
                             it.copy(previewing = false, listPreview = result.data, step = SendCardStep.Look, sendError = null)
+                        forMedia -> it.copy(previewing = false)
                         result is NetworkResult.Failure ->
                             it.copy(previewing = false, sealError = sendMessage(result.error, doing = "show how your cards will look"))
                         else -> it
                     }
                 }
+                if (forMedia) _stampsNeeded.tryEmit(true)
             }
         }
 
@@ -634,6 +643,11 @@ class SendCardViewModel
             viewModelScope.launch {
                 val result = repo.sendList(body)
                 if (result is NetworkResult.Failure && town.refused(result.error, TownThen.SendList)) return@launch
+                if (result is NetworkResult.Failure && result.error.forMedia() && result.error.wantsStamps(cards.value)) {
+                    _form.update { it.copy(sending = false) }
+                    _stampsNeeded.tryEmit(true)
+                    return@launch
+                }
                 if (result is NetworkResult.Failure && result.error.serverCode() == STAMPS_REQUIRED) {
                     val (needed, available) = result.error.stampCounts()
                     val cards = needed ?: body.recipients.size

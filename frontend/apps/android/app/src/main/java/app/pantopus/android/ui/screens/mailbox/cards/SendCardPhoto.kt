@@ -241,9 +241,9 @@ internal const val MEDIA_NEEDS_BOUGHT_STAMP = "Free stamps send your card and no
 
 /** Under "Add a photo" and "Record a greeting" while no bought stamp is left (`media.bought_stamp` "buy"). */
 @Composable
-internal fun MediaNeedsBoughtStamp() {
+internal fun MediaNeedsBoughtStamp(text: String = MEDIA_NEEDS_BOUGHT_STAMP) {
     Text(
-        MEDIA_NEEDS_BOUGHT_STAMP,
+        text,
         fontSize = 13.sp,
         color = DeskInk.quiet,
         modifier = Modifier.padding(top = Spacing.s2).testTag("sendCardMediaNeedsStamp"),

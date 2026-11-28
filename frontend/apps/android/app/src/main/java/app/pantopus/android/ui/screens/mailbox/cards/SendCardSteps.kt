@@ -875,6 +875,8 @@ internal fun WriteStep(
     voices: CardVoiceCalls? = null,
     /** No bought stamp left (`media.bought_stamp` "buy"): both buttons open the stamp books, with the line under them. */
     buyStamp: (() -> Unit)? = null,
+    /** Under the photo and greeting buttons: why they open the stamp books, or the free photo cards line. */
+    mediaWords: CardMediaWords = CardMediaWords(buyStamp = buyStamp != null),
     /** "Help me write it" (`GET /api/mailbox/cards` `note_help`, the server's launch key `card_note_help`); null: no button. */
     noteHelp: CardNoteHelper? = null,
 ) {
@@ -968,7 +970,7 @@ internal fun WriteStep(
             // A note picked there lands on the back, face up.
             CardNoteHelpRow(noteHelp, design.id, to, message, limit, onOpen = { focusManager.clearFocus() }, onPicked = { showBack = true })
         }
-        MediaUnderTheNote(design, to, fromName, photo, photos, voice, voices, buyStamp) { focusManager.clearFocus() }
+        MediaUnderTheNote(design, to, fromName, photo, photos, voice, voices, buyStamp, mediaWords) { focusManager.clearFocus() }
         if (canSign) {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(top = Spacing.s2),
@@ -1043,6 +1045,7 @@ private fun MediaUnderTheNote(
     voice: CardVoiceDraft?,
     voices: CardVoiceCalls?,
     buyStamp: (() -> Unit)?,
+    words: CardMediaWords,
     beforeAdd: () -> Unit,
 ) {
     if (photos != null) {
@@ -1069,7 +1072,9 @@ private fun MediaUnderTheNote(
             beforeRecord = beforeAdd,
         )
     }
-    if (buyStamp != null && (photos != null || voices != null)) MediaNeedsBoughtStamp()
+    if (photos != null || voices != null) {
+        if (buyStamp != null) MediaNeedsBoughtStamp(words.needsStampLine) else words.freeHint?.let { MediaFreeHint(it) }
+    }
 }
 
 // ── Step 4: seal it for the day ──────────────────────────────
