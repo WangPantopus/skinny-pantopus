@@ -76,6 +76,8 @@ final class ReinventedPulseModel {
     private(set) var chip = "all"
     /// One of the person's circles inside Close circle (CONTRACT 8d); nil is all their connections.
     private(set) var circle: ReinventedCirclePick?
+    /// The filters on (CONTRACT 10a), sent instead of the chip; nil sends today's request.
+    private(set) var filters: [String: String]?
     let cards: ProfilePostCardsModel
 
     @ObservationIgnored private var items: [ReinventedListItemDTO] = []
@@ -167,6 +169,18 @@ final class ReinventedPulseModel {
         await read(cursor: cursor)
     }
 
+    /// The kept filters, before the first read.
+    func prime(filters: [String: String]?) {
+        self.filters = filters
+    }
+
+    /// The filters changed (the sheet, the pill's ✕, the When): the list reads again with them.
+    func apply(filters: [String: String]?) async {
+        guard filters != self.filters else { return }
+        self.filters = filters
+        await refresh()
+    }
+
     func pick(chip: String) async {
         guard chip != self.chip else { return }
         self.chip = chip
@@ -197,7 +211,8 @@ final class ReinventedPulseModel {
             chip: chip,
             at: here.map { ($0.latitude, $0.longitude) },
             cursor: cursor,
-            circle: reach == "close" ? circle?.id : nil
+            circle: reach == "close" ? circle?.id : nil,
+            filters: filters
         )
         guard let data = await fetch(endpoint) else { return }
         guard let page = try? JSONDecoder().decode(ReinventedListResponse.self, from: data) else {

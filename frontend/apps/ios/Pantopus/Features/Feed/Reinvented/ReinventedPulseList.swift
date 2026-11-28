@@ -21,6 +21,8 @@ struct ReinventedPulseList: View {
     let onRefreshStrip: () async -> Void
     /// "Tonight in <town>" (8k): the film's Moments as one run in the viewer.
     var onOpenRun: ([MomentRingDTO]) -> Void = { _ in }
+    /// Nothing passed the filters (PHASE-5 B): clear them.
+    var onClearFilters: () -> Void = {}
 
     var body: some View {
         switch model.load {
@@ -181,11 +183,33 @@ struct ReinventedPulseList: View {
                 .font(.system(size: 14))
                 .foregroundStyle(Theme.Color.appTextSecondary)
                 .multilineTextAlignment(.center)
+            if model.filters != nil {
+                // Nothing passed the filters: clear them, or look wider.
+                HStack(spacing: Spacing.s3) {
+                    Button("Clear the filters", action: onClearFilters)
+                        .accessibilityIdentifier("reinventedPulse.empty.clearFilters")
+                    Button("Look wider") { Task { await widen() } }
+                        .accessibilityIdentifier("reinventedPulse.empty.wider")
+                }
+                .font(.system(size: 14, weight: .semibold))
+                .frame(minHeight: 44)
+            }
         }
         .frame(maxWidth: .infinity)
         .padding(.horizontal, Spacing.s5)
         .padding(.top, Spacing.s5)
         .accessibilityIdentifier("reinventedPulse.empty")
+    }
+
+    /// One step wider: Close circle to Around me, Around me to its farthest, then Explore.
+    private func widen() async {
+        if model.reach == "close" {
+            await model.pick(reach: "around", miles: model.miles)
+        } else if model.miles < 25 {
+            await model.pick(reach: "around", miles: 25)
+        } else {
+            await model.pick(reach: "explore", miles: model.miles)
+        }
     }
 
     private func bandLine(_ band: ReinventedBandDTO) -> some View {

@@ -54,6 +54,10 @@ final class ReinventedMapModel {
     var position: MapCameraPosition = .userLocation(fallback: .automatic)
     /// The card the deck shows, and the pin it lights.
     var focused: String?
+    /// The map is being moved (PHASE-6 A2: the rail fades meanwhile). Set once when a move starts and once at its end.
+    var moving = false
+    /// The filters on (CONTRACT 10a, without `when`: the time row is the map's When); nil sends today's request.
+    private(set) var filters: [String: String]?
 
     @ObservationIgnored private var region: MKCoordinateRegion?
     @ObservationIgnored private var reading: Task<Void, Never>?
@@ -122,9 +126,18 @@ final class ReinventedMapModel {
         reading = Task { [weak self] in await self?.read() }
     }
 
+    /// The filters changed: the map reads again with them.
+    func apply(filters: [String: String]?) {
+        guard filters != self.filters else { return }
+        self.filters = filters
+        reading?.cancel()
+        reading = Task { [weak self] in await self?.read() }
+    }
+
     func pick(time: String) {
         guard time != self.time else { return }
         self.time = time
+        ReinventedPulseFilterStore.shared.set(time: time) // kept with the filters, per person on this phone
         reading?.cancel()
         reading = Task { [weak self] in await self?.read() }
     }
@@ -147,7 +160,8 @@ final class ReinventedMapModel {
             west: box.west,
             north: box.north,
             east: box.east,
-            time: time
+            time: time,
+            filters: filters
         )
         guard let response = try? await api.requestDataResponse(endpoint, includingForbidden: true, includingNotFound: true),
               !Task.isCancelled else { return }
@@ -207,8 +221,14 @@ struct ReinventedPulseMap: View {
         .reinventedNight() // phase 4: the map turns dark when the sun is down over it
         .mapControls {}
         // The globe follows the zoom as it happens, not after the map stops.
-        .onMapCameraChange(frequency: .continuous) { context in globe.follow(context.region) }
-        .onMapCameraChange(frequency: .onEnd) { context in model.moved(to: context.region) }
+        .onMapCameraChange(frequency: .continuous) { context in
+            globe.follow(context.region)
+            if !model.moving { model.moving = true }
+        }
+        .onMapCameraChange(frequency: .onEnd) { context in
+            model.moving = false
+            model.moved(to: context.region)
+        }
         .accessibilityIdentifier("reinventedPulse.map")
     }
 }
