@@ -348,6 +348,7 @@ extension MomentsViewer {
                 .accessibilityLabel("\(moment.author.shortName)'s video")
                 .accessibilityIdentifier("moments.viewer.video")
                 .overlay { MomentLayersOverlay(moment: moment, picture: moment.pictureSize) }
+                .modifier(MomentWholeVideoFrame(moment: moment, player: model.video.player, poster: model.poster)) // CONTRACT 10c
             case .text:
                 // While a reply is being written the card keeps its color and gives up its words, so they
                 // don't read through the reactions and the reply box. On a table nothing covers the card.

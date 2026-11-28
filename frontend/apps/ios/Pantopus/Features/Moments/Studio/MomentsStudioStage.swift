@@ -422,6 +422,8 @@ struct MomentsStudioPicture: View {
                 backdrop: model.marking.backdrop
             )
             .accessibilityLabel("The photo you're posting")
+        case .video where model.studioWholeOffered:
+            MomentsStudioWholeCanvas(model: model) // See the picture first (phase 5 A): a video whole too.
         case let .video(url):
             video(url: url)
                 .accessibilityLabel("The video you're posting")
@@ -460,7 +462,7 @@ struct MomentsStudioPicture: View {
 }
 
 /// The video, muted, looping, for as long as it shows.
-private struct MomentsStudioLoop: View {
+struct MomentsStudioLoop: View {
     let url: URL
     @State private var player: AVPlayer?
 

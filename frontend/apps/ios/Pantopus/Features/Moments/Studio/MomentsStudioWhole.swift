@@ -117,10 +117,13 @@ struct MomentsStudioWholeMap {
 }
 
 extension MomentsComposerModel {
-    /// The Studio's first screen shows this picture whole: a photo, not a before-and-after.
+    /// The Studio's first screen shows this picture whole: a photo or a video, not a before-and-after.
     var studioWholeOffered: Bool {
-        guard marking.studio != nil, studioPair == nil, case .photo = draft else { return false }
-        return true
+        guard marking.studio != nil, studioPair == nil else { return false }
+        switch draft {
+        case .photo, .video: return true
+        case .text, nil: return false
+        }
     }
 
     /// Where the picture sits on the canvas as shown now (the fingers' while they move it, Done's after); nil: whole as
@@ -129,10 +132,13 @@ extension MomentsComposerModel {
         marking.isOpen ? marking.editingPlacement : marking.placement
     }
 
-    /// The photo's own shape, width over height.
+    /// The photo's or the video's own shape, width over height (a video's once its size is read).
     var studioPictureAspect: CGFloat? {
-        guard case let .photo(image) = draft, image.size.height > 0 else { return nil }
-        return image.size.width / image.size.height
+        switch draft {
+        case let .photo(image): image.size.height > 0 ? image.size.width / image.size.height : nil
+        case .video: marking.video.flatMap { $0.size.height > 0 ? $0.size.width / $0.size.height : nil }
+        case .text, nil: nil
+        }
     }
 
     /// The picture fills the canvas (Fill): the rail offers Fit.
@@ -207,11 +213,25 @@ extension MomentsComposerModel {
         return marking.isOpen && marking.studio?.adjusting == true
     }
 
-    /// Done: the photo at its place, with its marks, as Resize's Done keeps it (drawn into the canvas once placed).
+    /// Done: the photo at its place, with its marks, as Resize's Done keeps it (drawn into the canvas once placed). A
+    /// video keeps its own file and only its place is kept, sent as `placement`; one with marks drawn on it is exported
+    /// again as Resize's Done exports it (onto the canvas when placed), and then goes up whole without `placement`.
     private func keepWhole() {
         defer { marking.studio?.adjusting = false }
-        guard case let .photo(image) = draft, !isPosting else { return marking.cancel() }
-        use(marked: marking.base ?? image, marking.editing, placement: marking.editingPlacement)
+        guard !isPosting else { return marking.cancel() }
+        switch draft {
+        case let .photo(image):
+            use(marked: marking.base ?? image, marking.editing, placement: marking.editingPlacement)
+        case let .video(url):
+            guard let video = marking.video else { return marking.cancel() }
+            if marking.editing.isEmpty, marking.marks.isEmpty {
+                marking.keep(marking.editing, base: nil, video: video, placement: marking.editingPlacement, backdrop: marking.backdrop)
+            } else {
+                use(marked: url, video: video, marking.editing, placement: marking.editingPlacement)
+            }
+        case .text, nil:
+            marking.cancel()
+        }
     }
 
     private func keepFilled(aspect: CGFloat) {
@@ -240,9 +260,18 @@ extension MomentsComposerModel {
         return true
     }
 
-    /// A whole video's place on the canvas: a video shows and posts as before for now.
+    /// A whole video's place on the canvas (CONTRACT 10c), while it keeps its own file (no marks drawn in): where it was
+    /// put, or, left whole, its fit, so readers always draw it on its canvas as its author saw it.
     var studioWholePlacement: MomentWholePlacementDTO? {
-        nil
+        guard case .video = draft, marking.marks.isEmpty, let aspect = studioPictureAspect else { return nil }
+        let placement = marking.placement ?? .fit(aspect: aspect)
+        // CONTRACT 10c takes a width of 0.25 to 32 (a very wide video's Fill is wider than four canvases).
+        return MomentWholePlacementDTO(
+            width: min(max(Double(placement.width), 0.25), 32),
+            x: Double(placement.center.x),
+            y: Double(placement.center.y),
+            turn: Double(placement.turn)
+        )
     }
 
     /// The two colours the picture sits on, once read from it.
@@ -310,7 +339,13 @@ struct MomentsStudioWholeCanvas: View {
             ZStack {
                 LinearGradient(colors: [Color(uiColor: colors.top), Color(uiColor: colors.bottom)], startPoint: .top, endPoint: .bottom)
                     .accessibilityHidden(true)
-                if case let .photo(image) = model.draft {
+                if case let .video(url) = model.draft {
+                    MomentsStudioWholeVideo(model: model, url: url)
+                        .frame(width: frames.layers.width, height: frames.layers.height)
+                        .clipped()
+                        .position(x: frames.layers.midX, y: frames.layers.midY)
+                        .task(id: url) { model.marking.sampleBackdrop(video: url) }
+                } else if case let .photo(image) = model.draft {
                     MomentsMarkedPhoto(
                         image: image,
                         marks: model.marking.isOpen ? model.marking.shown : model.marking.marks,
@@ -364,6 +399,27 @@ extension MomentsComposerModel {
         case let .photo(image): return studioPair == nil ? image.size : MomentBeforeAfterHalves.size(of: image.size)
         case .video: return marking.video?.size
         case .text, nil: return nil
+        }
+    }
+}
+
+/// The video on the first screen: on the canvas where it was put, or fitted whole as taken, with its marks; muted,
+/// looping, as the Studio plays it.
+struct MomentsStudioWholeVideo: View {
+    let model: MomentsComposerModel
+    let url: URL
+
+    var body: some View {
+        let marks = model.marking.isOpen ? model.marking.shown : model.marking.marks
+        if let placement = model.studioShownPlacement, let aspect = model.studioPictureAspect {
+            MomentsPlacedPicture(aspect: aspect, placement: placement, backdrop: model.marking.backdrop, marks: marks) {
+                MomentsStudioLoop(url: url).id(url)
+            }
+        } else {
+            MomentsStudioLoop(url: url)
+                .id(url)
+                .overlay { MomentMarksOverVideo(marks: marks, picture: model.marking.video?.size) }
+                .accessibilityLabel("The video you're posting, whole")
         }
     }
 }
