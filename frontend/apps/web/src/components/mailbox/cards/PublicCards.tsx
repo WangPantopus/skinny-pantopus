@@ -23,8 +23,12 @@ const art = (name: string) => `${TABLE_ART}${name}`;
 const SLATE = '#3b4c6e';
 // Every picture on a public page prints the same postmark: there's no person's day to print.
 const POSTMARK_DAY = '2026-12-25';
+/** A thank-you card's page (Wave 5): a fixed postmark day too, never this browser's clock. */
+const THANKS_POSTMARK_DAY = '2026-12-27';
 
-export type PublicDesign = { id: string; number: number; slug: string; caption: string; paper: string; collection?: string | null; table: string; verse?: string | null };
+export type PublicDesign = { id: string; number: number; slug: string; caption: string; paper: string; collection?: string | null; table: string; verse?: string | null;
+  /** A thank-you card's design (Wave 5): its words, the cream envelope and "THANK YOU" under its picture. */
+  kind?: 'thank_you' };
 export type PublicCollection = {
   id: string; name: string; designs: string[];
   /** The shelves' facts (card shelves SPEC A3): the short name, the public name in a link, the line, the opening card, the parts. */
@@ -102,20 +106,24 @@ function SendThisCard({ designId, inviteCode, asLink = false }: { designId: stri
 }
 
 export function PublicCardPage({ design, year, inviteCode, store = null }: { design: PublicDesign; year: number; inviteCode: string | null; store?: PublicCardsStore | null }) {
+  // A thank-you card (Wave 5): the cream linen envelope, "THANK YOU" under its picture (one page serves every year it
+  // is open, so no year), and its own words.
+  const thanks = design.kind === 'thank_you';
+  const env = (name: string) => art(thanks ? `cream-${name}` : name);
   return (
     <TablePage table={design.table}>
       <div className={styles.one}>
-        <div className={styles.lying} role="img" aria-label={`A Christmas card: ${design.caption}`}>
+        <div className={styles.lying} role="img" aria-label={`${thanks ? 'A thank-you card' : 'A Christmas card'}: ${design.caption}`}>
           <div className={styles.envelope}>
             {/* eslint-disable @next/next/no-img-element */}
-            <img src={art('env-flap-in.webp')} alt="" className={styles.flapIn} />
-            <img src={art('env-inside.webp')} alt="" />
-            <img src={art('env-pocket-shadow.webp')} alt="" />
-            <img src={art('env-pocket.webp')} alt="" />
+            <img src={env('env-flap-in.webp')} alt="" className={styles.flapIn} />
+            <img src={env('env-inside.webp')} alt="" />
+            <img src={env('env-pocket-shadow.webp')} alt="" />
+            <img src={env('env-pocket.webp')} alt="" />
             {/* eslint-enable @next/next/no-img-element */}
           </div>
           <div className={styles.card}>
-            <PaperFront design={design.id} caption={design.caption} paper={design.paper} year={year} mailedOn={POSTMARK_DAY} />
+            <PaperFront design={design.id} caption={design.caption} paper={design.paper} year={year} mailedOn={thanks ? THANKS_POSTMARK_DAY : POSTMARK_DAY} strip={thanks ? 'THANK YOU' : null} />
           </div>
         </div>
         {/* Beside the card on a wide screen, under it on a phone (`display: contents` there). */}
@@ -126,7 +134,7 @@ export function PublicCardPage({ design, year, inviteCode, store = null }: { des
               screen; under the first button when the words are under the card, so that button stays on the first
               screen beside a card as wide as the phone (SPEC E3). */}
           {design.verse ? <blockquote className={`${styles.verseText} ${styles.verseBeside}`} data-testid="publicCardVerse">{design.verse}</blockquote> : null}
-          <p className={styles.line}>A Christmas card you can send on Pantopus</p>
+          <p className={styles.line}>{thanks ? 'A thank-you card you can send on Pantopus' : 'A Christmas card you can send on Pantopus'}</p>
         </div>
         <div className={styles.actions}>
           {store ? (

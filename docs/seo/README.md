@@ -32,7 +32,7 @@ Read from `dev` and from the live site on November 23, 2026; kept up to date by 
 |---|---|
 | Place | `/place`, `/start` (the address lookup), `/tax-check`, `/property-records` with its state and county pages |
 | Today, Pulse, Moments, Plans, Support Train, chat | `/today`, `/pulse`, `/moments`, `/plans`, `/support-train`, `/chat` |
-| Mail and Christmas cards | `/mail`, `/cards`, `/cards/<card>`, `/cards/collection/<name>` (while Christmas cards are on) |
+| Mail and Christmas cards | `/mail`, `/cards`, `/cards/<card>`, `/cards/collection/<name>` (while Christmas cards are on); the thank-you cards' `/cards/<card>` and `/cards/collection/<name>` pages, in the sitemap and as the last shelf on `/cards`, only while the server's public list (`thank_you` on `GET /api/mailbox/cards/designs`) says a collection is `open` |
 | Topics and guides | `/social-network`, `/home-buying`, `/home-management`, `/home-safety`; `/guides` and ten `/guides/<slug>` |
 | The account and the app | `/register` (Sign up), `/login` (Sign in), `/download` (Get the app), `/pricing`, `/help` |
 | The company | `/about`, `/about/data-sources`, `/contact`, `/privacy`, `/terms`, `/child-safety`, `/delete-account`, `/llms.txt` |
@@ -75,6 +75,7 @@ What each switched-off feature will need:
 | `public_scheduling` | Booking pages at `/book/<slug>`: readable for a business that wants a public page; one-off and token links stay closed. |
 | `beacon`, `personas` | Public pages at `/persona/<handle>`: profile structured data. |
 | `household_extras`, `mail_extras`, `gift_funds`, the card keys | Inside the app: the Today, Mail, Christmas cards and Support Train pages and the store text name what was added. |
+| `CARD_EVERYDAY` (server) | The year-round thank-you collection's pages appear and leave with the server's `open`; when it is on for good, the store text and `/cards`' own title and description name thank-you cards too. |
 
 ## Rules that hold
 

@@ -8,7 +8,7 @@
 import { APP_WEB_URL } from '@pantopus/utils';
 import type { PublicCardDesigns } from '@/lib/publicShare';
 
-type Design = PublicCardDesigns['designs'][number];
+type Design = PublicCardDesigns['designs'][number] & { kind?: 'thank_you' };
 type Collection = NonNullable<PublicCardDesigns['collections']>[number];
 
 const abs = (path: string) => `${APP_WEB_URL}${path}`;
@@ -63,21 +63,21 @@ export function cardDescription(design: Design, collection: Collection | null, t
   const words = design.verse ? `${design.caption}: “${clip(design.verse, 50)}”` : `“${design.caption}”`;
   const from = collection ? ` from the ${collection.name} collection` : '';
   // A verse card's own words fill the line; the others also say how the card arrives.
-  return `${words} A Christmas card${from}${twin ? ` (card ${design.number})` : ''} to send online on Pantopus.${design.verse ? '' : ' It arrives with their morning mail.'}`;
+  return `${words} A ${design.kind === 'thank_you' ? 'thank-you card' : 'Christmas card'}${from}${twin ? ` (card ${design.number})` : ''} to send online on Pantopus.${design.verse ? '' : ' It arrives with their morning mail.'}`;
 }
 
 /** One collection's description: how many cards it holds, and its own line. */
-export function collectionDescription(collection: Collection): string {
+export function collectionDescription(collection: Collection, thanks = false): string {
   const count = collection.designs.length;
-  return `${collection.name}: ${count} Christmas ${count === 1 ? 'card' : 'cards'} to send online on Pantopus.${collection.line ? ` ${collection.line}` : ''}`;
+  return `${collection.name}: ${count} ${thanks ? 'thank-you' : 'Christmas'} ${count === 1 ? 'card' : 'cards'} to send online on Pantopus.${collection.line ? ` ${collection.line}` : ''}`;
 }
 
 /** The trail to a card or a collection: Pantopus › Christmas cards › its collection (while the shelves are on) › the card. */
-export function cardTrailLd(steps: { name: string; path: string }[]) {
+export function cardTrailLd(steps: { name: string; path: string }[], rootName = 'Christmas cards') {
   return {
     '@context': 'https://schema.org',
     '@type': 'BreadcrumbList',
-    itemListElement: [{ name: 'Pantopus', path: '/' }, { name: 'Christmas cards', path: '/cards' }, ...steps].map((step, i) => ({
+    itemListElement: [{ name: 'Pantopus', path: '/' }, { name: rootName, path: '/cards' }, ...steps].map((step, i) => ({
       '@type': 'ListItem',
       position: i + 1,
       name: step.name,
@@ -96,7 +96,7 @@ export function cardLd({ design, collection, shelves, twin = false }: { design: 
     url: abs(`/cards/${design.slug}`),
     image: abs(`/holiday-cards/${design.id}.jpg`),
     thumbnailUrl: abs(`/holiday-cards/${design.id}-thumb.jpg`),
-    genre: 'Christmas card',
+    genre: design.kind === 'thank_you' ? 'Thank-you card' : 'Christmas card',
     inLanguage: 'en',
     publisher: PUBLISHER,
     ...(collection

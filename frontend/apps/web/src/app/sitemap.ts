@@ -1,7 +1,7 @@
 import type { MetadataRoute } from 'next';
 import { API_BASE_URL } from '@pantopus/utils';
 import { isLaunchCutPath } from '@/lib/featureFlags';
-import { fetchPublicCardDesigns, publicShelvesOn } from '@/lib/publicShare';
+import { fetchPublicCardDesigns, openThankYou, publicShelvesOn } from '@/lib/publicShare';
 import { GUIDE_PAGES } from '@/lib/site/guidePages';
 import { GUIDES } from '@/lib/site/guides';
 import { PILLAR_PAGES } from '@/lib/site/pillarPages';
@@ -58,8 +58,13 @@ async function countyPages(): Promise<string[]> {
 async function cardPages(): Promise<{ paths: string[]; pictures: Map<string, string> }> {
   const { data } = await fetchPublicCardDesigns();
   if (!data?.designs?.length) return { paths: [], pictures: new Map() };
-  const collections = publicShelvesOn(data) ? (data.collections ?? []).map((c) => `/cards/collection/${c.slug}`) : [];
-  const cards = data.designs.filter((d) => d.slug);
+  // Thank-you cards (Wave 5): a collection's pages and its cards' pages only while the server lists it as open.
+  const thanks = openThankYou(data);
+  const collections = [
+    ...(publicShelvesOn(data) ? (data.collections ?? []).map((c) => `/cards/collection/${c.slug}`) : []),
+    ...thanks.collections.map((c) => `/cards/collection/${c.slug}`),
+  ];
+  const cards = [...data.designs, ...thanks.designs].filter((d) => d.slug);
   return {
     paths: [...cards.map((d) => `/cards/${d.slug}`), ...collections],
     pictures: new Map(cards.map((d) => [`/cards/${d.slug}`, `${SITE_URL}/holiday-cards/${d.id}.jpg`])),

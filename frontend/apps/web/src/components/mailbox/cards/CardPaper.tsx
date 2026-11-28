@@ -312,7 +312,10 @@ export function PaperFront({
   className = '',
   style,
   children,
+  strip = null,
 }: {
+  /** What prints under the picture in place of "CHRISTMAS, {year}" (a thank-you card's `strip`, Wave 5). */
+  strip?: string | null;
   design: string;
   caption: string | null;
   paper: string;
@@ -338,7 +341,7 @@ export function PaperFront({
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={cardTrimmedPicture(design)} alt="" className={styles.photo} draggable={false} />
         <div className={`${styles.caption} ${isVerseReference(text) ? styles.verse : cardHand.className}`} style={{ fontSize: `${captionSize}cqw` }}>{text}</div>
-        <div className={styles.year}>CHRISTMAS, {year}</div>
+        <div className={styles.year}>{strip ?? `CHRISTMAS, ${year}`}</div>
         <div className={styles.pm}><CardPostmarkSvg day={day} year={year} /></div>
         <div className={`${styles.grain} ${styles.grainFront}`} />
         <div className={styles.edges} />

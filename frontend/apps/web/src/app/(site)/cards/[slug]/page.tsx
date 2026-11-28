@@ -12,7 +12,7 @@ import { notFound } from 'next/navigation';
 import { APP_WEB_URL } from '@pantopus/utils';
 import { tableEdge } from '@/components/mailbox/cards/cardArt';
 import { PublicCardPage, PublicCardsTrouble } from '@/components/mailbox/cards/PublicCards';
-import { cardsStoreLink, fetchPublicCardDesigns, getStoreDownloadCta, publicShelvesOn, shareRefFrom, storePlatform } from '@/lib/publicShare';
+import { cardsStoreLink, fetchPublicCardDesigns, getStoreDownloadCta, openThankYou, publicShelvesOn, shareRefFrom, storePlatform } from '@/lib/publicShare';
 import type { PublicCardsStore } from '@/components/mailbox/cards/PublicCards';
 import { cardDescription, cardLd, cardTrailLd, cardsJsonLd, collectionOf, hasTwin } from '../_lib/structuredData';
 
@@ -28,10 +28,15 @@ type CardPageProps = {
 
 async function designFor(slug: string) {
   const { data, status } = await fetchPublicCardDesigns();
-  const design = data?.designs.find((candidate) => candidate.slug === slug) ?? null;
-  const collection = data && design ? collectionOf(design, data.collections ?? []) : null;
-  const twin = data && design ? hasTwin(design, data.designs) : false;
-  return { design, collection, twin, shelves: data ? publicShelvesOn(data) : false, year: data?.year ?? new Date().getFullYear(), status };
+  // A thank-you card's page (Wave 5) exists only while the server lists its collection as open.
+  const thanks = openThankYou(data);
+  const design = data?.designs.find((candidate) => candidate.slug === slug) ?? thanks.designs.find((candidate) => candidate.slug === slug) ?? null;
+  const thanked = design?.kind === 'thank_you';
+  const collection = data && design ? collectionOf(design, thanked ? thanks.collections : data.collections ?? []) : null;
+  const twin = data && design && !thanked ? hasTwin(design, data.designs) : false;
+  // A thank-you collection has its own page whenever it is open (no shelves switch).
+  const shelves = thanked ? true : data ? publicShelvesOn(data) : false;
+  return { design, collection, twin, shelves, year: data?.year ?? new Date().getFullYear(), status };
 }
 
 export async function generateMetadata({ params }: CardPageProps): Promise<Metadata> {
@@ -40,10 +45,11 @@ export async function generateMetadata({ params }: CardPageProps): Promise<Metad
   if (!design) return { metadataBase: new URL(APP_WEB_URL), title: 'Christmas cards on Pantopus', robots: { index: false, follow: true } };
   // A caption ends with a full stop, or a question mark; the First Christmas ones end with their verse's reference.
   const sentence = /[.!?]$/.test(design.caption) ? design.caption : `${design.caption}.`;
-  const title = `${sentence} A Christmas card on Pantopus${twin ? ` (card ${design.number})` : ''}`;
+  const kind = design.kind === 'thank_you' ? 'thank-you card' : 'Christmas card';
+  const title = `${sentence} A ${kind} on Pantopus${twin ? ` (card ${design.number})` : ''}`;
   const description = cardDescription(design, collection, twin);
   const url = `/cards/${design.slug}`;
-  const image = { url: `/holiday-cards/share/${design.id}-link.jpg`, width: 1200, height: 630, alt: `A Christmas card: ${design.caption}` };
+  const image = { url: `/holiday-cards/share/${design.id}-link.jpg`, width: 1200, height: 630, alt: `A ${kind}: ${design.caption}` };
   return {
     metadataBase: new URL(APP_WEB_URL),
     title,
@@ -83,7 +89,7 @@ export default async function OneCardPage({ params, searchParams }: CardPageProp
             cardTrailLd([
               ...(shelves && collection?.slug ? [{ name: collection.name, path: `/cards/collection/${collection.slug}` }] : []),
               { name: design.caption, path: `/cards/${design.slug}` },
-            ]),
+            ], design.kind === 'thank_you' ? 'Cards' : undefined),
           ),
         }}
       />

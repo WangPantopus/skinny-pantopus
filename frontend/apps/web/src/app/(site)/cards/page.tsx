@@ -11,7 +11,7 @@ import { notFound } from 'next/navigation';
 import { APP_WEB_URL } from '@pantopus/utils';
 import { PublicCardsPage, PublicCardsTrouble, PublicShelvesPage } from '@/components/mailbox/cards/PublicCards';
 import CardsGoal from '@/components/mailbox/cards/CardsGoal';
-import { cardsStoreLink, fetchCardJourneyGoal, fetchPublicCardDesigns, getStoreDownloadCta, publicShelvesOn, shareRefFrom, storePlatform } from '@/lib/publicShare';
+import { cardsStoreLink, fetchCardJourneyGoal, fetchPublicCardDesigns, getStoreDownloadCta, openThankYou, publicShelvesOn, shareRefFrom, storePlatform } from '@/lib/publicShare';
 import type { PublicCardsStore } from '@/components/mailbox/cards/PublicCards';
 import { cardListLd, cardsInPageOrder, cardsJsonLd } from './_lib/structuredData';
 
@@ -60,12 +60,17 @@ export default async function AllCardsPage({ searchParams }: { searchParams: Pro
   // and at least one card is travelling (an empty map and "0 of 50 states" say nothing on the day it's switched on).
   const goalShown = goal.data && goal.data.travelling > 0 ? <CardsGoal goal={goal.data} /> : null;
   const shelves = publicShelvesOn(data);
+  // Thank-you cards (Wave 5): while the server lists a thank-you collection as open, it is the last shelf, after every
+  // Christmas collection, and its cards and page are linked from here. The Christmas catalog and its order are untouched.
+  const thanks = openThankYou(data);
+  const designs = [...data.designs, ...thanks.designs];
+  const collections = [...(data.collections ?? []), ...thanks.collections];
   // For search engines, every card the page shows, in its order (data only; nothing drawn).
   const list = (
     <script
       type="application/ld+json"
       dangerouslySetInnerHTML={{
-        __html: cardsJsonLd(cardListLd({ name: TITLE, path: '/cards', designs: cardsInPageOrder(data.designs, data.collections ?? [], shelves) })),
+        __html: cardsJsonLd(cardListLd({ name: TITLE, path: '/cards', designs: cardsInPageOrder(designs, collections, shelves) })),
       }}
     />
   );
@@ -73,7 +78,7 @@ export default async function AllCardsPage({ searchParams }: { searchParams: Pro
   if (shelves) {
     return (
       <>
-        <PublicShelvesPage designs={data.designs} collections={data.collections ?? []} opening={data.opening ?? null} inviteCode={inviteCode} store={store}
+        <PublicShelvesPage designs={designs} collections={collections} opening={data.opening ?? null} inviteCode={inviteCode} store={store}
           freeCards={data.free_cards ?? null} goal={goalShown} />
         {list}
       </>
@@ -81,7 +86,7 @@ export default async function AllCardsPage({ searchParams }: { searchParams: Pro
   }
   return (
     <>
-      <PublicCardsPage designs={data.designs} collections={data.collections ?? []} inviteCode={inviteCode} store={store} freeCards={data.free_cards ?? null}
+      <PublicCardsPage designs={designs} collections={collections} inviteCode={inviteCode} store={store} freeCards={data.free_cards ?? null}
         goal={goalShown} />
       {list}
     </>

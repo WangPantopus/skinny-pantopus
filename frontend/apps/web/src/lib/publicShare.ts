@@ -57,19 +57,43 @@ export type PublicCardDesigns = {
   collections?: { id: string; name: string; short?: string; slug?: string; line?: string; designs: string[]; pick?: string;
     parts?: { name: string; designs: string[] }[] }[];
   designs: { id: string; number: number; slug: string; caption: string; paper: string; collection?: string | null; table: string;
-    mood?: 'reverence' | 'santa' | 'nostalgia' | null; verse?: string | null }[];
+    mood?: 'reverence' | 'santa' | 'nostalgia' | null; verse?: string | null;
+    /** Set here on a thank-you design taken from `thank_you` (openThankYou); the server never sends it in `designs`. */
+    kind?: 'thank_you' }[];
   /** With digital stamps on: the free cards an account starts with. Absent: sending is free, one card a day. */
   free_cards?: number;
   /** The shelves and a page per collection (server key card_shelves). Absent: today's pages. */
   shelves?: boolean;
   /** The order "One from each collection" draws the collections in (SPEC E2); absent: the collections' order. */
   opening?: string[];
+  /**
+   * Thank-you cards (Wave 5, only while the card improvements are on): every thank-you collection there is, `open` by
+   * Pacific time, and their designs (square pictures, `number` null). The web builds a collection's pages while open.
+   */
+  thank_you?: {
+    collections: { id: string; name: string; short?: string; slug?: string; line?: string; designs: string[]; pick?: string;
+      opens_on: string; closes_on: string | null; open: boolean }[];
+    designs: { id: string; number: number | null; slug: string; caption: string; paper: string; collection?: string | null; table: string;
+      mood?: 'reverence' | 'santa' | 'nostalgia' | null }[];
+  };
 };
 
 /** The shelves are on (server key card_shelves, card shelves SPEC Part D) and the collections carry their facts. */
 export function publicShelvesOn(data: Pick<PublicCardDesigns, 'shelves' | 'collections'>): boolean {
   const collections = data.collections ?? [];
   return data.shelves === true && collections.length > 0 && collections.every((c) => typeof c.slug === 'string' && Boolean(c.slug));
+}
+
+/**
+ * The thank-you collections open now and their designs (Wave 5), shaped as the Christmas ones and marked `kind`; none
+ * while the read has no `thank_you` or nothing is open. Their pages exist only while this lists them.
+ */
+export function openThankYou(data: Pick<PublicCardDesigns, 'thank_you'> | null) {
+  const collections = (data?.thank_you?.collections ?? []).filter((c) => c.open && c.slug);
+  const ids = new Set(collections.flatMap((c) => c.designs));
+  const designs = (data?.thank_you?.designs ?? []).filter((d) => ids.has(d.id) && d.slug)
+    .map((d) => ({ ...d, number: d.number ?? 0, kind: 'thank_you' as const }));
+  return { collections, designs };
 }
 
 /** Every Christmas card, for the public card pages (on with Christmas cards; 404 while they're off). */
