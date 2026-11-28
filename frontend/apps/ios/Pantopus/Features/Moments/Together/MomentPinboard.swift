@@ -5,7 +5,12 @@
 //  Pinboards ("Pulse, reinvented" phase 3, PHASE-3 piece 3; CONTRACT 8i): add your piece to a shared prompt, such as
 //  "Best fall tree on your walk". A pinboard is its first photo and the pieces people add for a week, one each; it
 //  stays. In Pulse it is one row ("Pinboard · 4 pieces") that opens the board; in the viewer a chip opens it too.
-//  "Add your piece" opens the Studio with the prompt in its drawer. Only while the switch is on. Words as the web's.
+//  "Add your piece" opens the Studio with the prompt in its drawer. A tap on a piece plays that piece in the viewer, and
+//  closing the viewer comes back to the board (LEAD-8, 11-28 10:37): from the list, the board steps aside for the Pulse
+//  tab's own viewer (`ReinventedStudioCover`; a cover presented from inside the tab's stack closed again as the viewer
+//  turned the screen dark) and opens again once that viewer has gone; over a viewer, the piece plays in a full-height
+//  sheet over the board (a cover would take the viewer under it out of the window, and it would close the board as it
+//  came back). Only while the switch is on. Words as the web's.
 //
 
 import Observation
@@ -118,6 +123,57 @@ final class PinboardPrompt {
 
     var fromList: Open?
     var inViewer: Open?
+    /// The viewer playing a piece of a board: it plays on although a board may be open under it, and shows no pinboard
+    /// chip (the board is where it came from).
+    private(set) var piece: ObjectIdentifier?
+    /// A piece played from a board open over a viewer: it plays over that board.
+    private(set) var overBoard: MomentsWatchSession?
+    /// A piece played from the list's board waits for the board to close, plays in the Pulse tab's viewer, and the board
+    /// opens again when that viewer closes.
+    @ObservationIgnored private var waiting: MomentsWatchSession?
+    @ObservationIgnored private var returnTo: Open?
+
+    func isPiece(_ model: MomentsViewerModel) -> Bool {
+        piece == ObjectIdentifier(model)
+    }
+
+    /// A tap on a piece of the board `startId`, read and ready to play.
+    func play(_ session: MomentsWatchSession, from startId: String) {
+        piece = ObjectIdentifier(session.model)
+        if inViewer != nil {
+            overBoard = session
+            return
+        }
+        waiting = session
+        returnTo = Open(id: startId)
+        fromList = nil
+    }
+
+    /// The list's board has closed (`onDismiss`): a piece waiting for it plays now.
+    func boardClosed() {
+        guard let session = waiting else { return }
+        waiting = nil
+        ReinventedViewerPresenter.shared.watching = session
+    }
+
+    /// The Pulse tab's viewer closed: back to the board its piece came from, once the viewer has gone (a sheet presented
+    /// while it leaves would keep its dark).
+    func viewerClosed() {
+        piece = nil
+        guard let board = returnTo else { return }
+        returnTo = nil
+        Task {
+            try? await Task.sleep(for: .milliseconds(500))
+            fromList = board
+        }
+    }
+
+    /// The piece over a board open over a viewer closed: the board is there again.
+    func closeOverBoard() {
+        guard overBoard != nil else { return }
+        overBoard = nil
+        piece = nil
+    }
 
     /// A Moment of a pinboard opens the board (switch on); anything else opens as before.
     func opens(_ moment: MomentDTO) -> Bool {
@@ -142,13 +198,20 @@ final class PinboardPrompt {
 /// Pulse's list opens a pinboard here (`ReinventedPulseView`).
 struct MomentPinboardListSheet: ViewModifier {
     @State private var prompt = PinboardPrompt.shared
+    @State private var viewer = ReinventedViewerPresenter.shared
 
     func body(content: Content) -> some View {
-        content.sheet(item: $prompt.fromList) { open in
-            MomentPinboardView(id: open.id) { prompt.addPiece(to: $0) }
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-        }
+        content
+            .sheet(
+                item: $prompt.fromList,
+                onDismiss: { prompt.boardClosed() },
+                content: { open in
+                    MomentPinboardView(id: open.id) { prompt.addPiece(to: $0) }
+                        .presentationDetents([.large])
+                        .presentationDragIndicator(.visible)
+                }
+            )
+            .onChange(of: viewer.closings) { _, _ in prompt.viewerClosed() }
     }
 }
 
@@ -158,6 +221,11 @@ struct MomentPinboardView: View {
     let onAdd: (PinboardDTO) -> Void
     @State private var board: PinboardDTO?
     @State private var failed = false
+    /// The piece being opened, and a line when one couldn't open.
+    @State private var opening: String?
+    @State private var pieceNote: String?
+    @State private var prompt = PinboardPrompt.shared
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         ScrollView {
@@ -165,6 +233,7 @@ struct MomentPinboardView: View {
                 header
                 if let board {
                     pieces(board.pieces)
+                    if let pieceNote { note(pieceNote) }
                     if board.canAdd {
                         Button { onAdd(board) } label: {
                             Text("Add your piece")
@@ -188,6 +257,19 @@ struct MomentPinboardView: View {
         .background(Theme.Color.appBg)
         .task(id: id) { await read() }
         .accessibilityIdentifier("together.pinboard")
+        // Over a viewer the piece plays over the board (from the list it plays in the Pulse tab's viewer instead).
+        .sheet(item: Binding(get: { prompt.overBoard }, set: { if $0 == nil { prompt.closeOverBoard() } })) { session in
+            MomentsViewer(
+                session: session,
+                systemScheme: colorScheme,
+                stopsOnDisappear: true,
+                onHideAuthor: { _ in },
+                onShowAuthor: { _ in },
+                onClose: { prompt.closeOverBoard() }
+            )
+            .presentationDetents([.large])
+            .presentationBackground(.black)
+        }
     }
 
     private var header: some View {
@@ -222,25 +304,58 @@ struct MomentPinboardView: View {
     private func pieces(_ pieces: [PinboardDTO.Piece]) -> some View {
         LazyVGrid(columns: [GridItem(.flexible(), spacing: Spacing.s2), GridItem(.flexible(), spacing: Spacing.s2)], spacing: Spacing.s2) {
             ForEach(pieces) { piece in
-                VStack(alignment: .leading, spacing: 4) {
-                    Color.clear
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 180)
-                        .overlay {
-                            AsyncImage(url: piece.picture) { image in
-                                image.resizable().scaledToFill()
-                            } placeholder: {
-                                Theme.Color.appSurfaceSunken
-                            }
-                        }
-                        .clipShape(RoundedRectangle(cornerRadius: Radii.md))
-                    Text(piece.author?.name ?? "Someone")
-                        .font(.system(size: 12.5, weight: .semibold))
-                        .foregroundStyle(Theme.Color.appTextSecondary)
-                        .lineLimit(1)
+                Button { open(piece) } label: { tile(piece) }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("\(piece.author?.name ?? "Someone")’s piece")
+                    .accessibilityHint("Plays the piece")
+                    .accessibilityIdentifier("together.pinboard.piece")
+            }
+        }
+    }
+
+    private func tile(_ piece: PinboardDTO.Piece) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Color.clear
+                .frame(maxWidth: .infinity)
+                .frame(height: 180)
+                .overlay {
+                    AsyncImage(url: piece.picture) { image in
+                        image.resizable().scaledToFill()
+                    } placeholder: {
+                        Theme.Color.appSurfaceSunken
+                    }
                 }
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel("\(piece.author?.name ?? "Someone")’s piece")
+                .overlay {
+                    if opening == piece.id { ProgressView().tint(.white) }
+                }
+                .clipShape(RoundedRectangle(cornerRadius: Radii.md))
+            Text(piece.author?.name ?? "Someone")
+                .font(.system(size: 12.5, weight: .semibold))
+                .foregroundStyle(Theme.Color.appTextSecondary)
+                .lineLimit(1)
+        }
+        .contentShape(Rectangle())
+    }
+
+    /// A piece is a Moment the reader may see: read it and play it.
+    private func open(_ piece: PinboardDTO.Piece) {
+        guard opening == nil, prompt.overBoard == nil, let startId = board?.startId else { return }
+        opening = piece.id
+        pieceNote = nil
+        Task {
+            defer { opening = nil }
+            do {
+                let moment = try await MomentsAPI.send(MomentsEndpoints.moment(id: piece.id), as: MomentEnvelope.self).moment
+                var me: String?
+                if case let .signedIn(user) = AuthManager.shared.state { me = user.id }
+                let ring = MomentRingDTO(moment: moment, mine: moment.author.id == me)
+                let session = MomentsWatchSession(request: MomentsWatchRequest(rings: [ring], start: 0, newOnly: false)) { _ in }
+                prompt.play(session, from: startId)
+            } catch {
+                let failure = error as? MomentsFailure
+                pieceNote = failure == .ended || failure == .notFound ? "This piece isn’t there any more."
+                    : failure?.message ?? "This piece couldn’t open."
+                await PulseReinventedFlags.shared.recheck()
             }
         }
     }
@@ -269,7 +384,7 @@ struct MomentPinboardChip: View {
     @State private var prompt = PinboardPrompt.shared
 
     var body: some View {
-        if PulseReinventedFlags.shared.isOn, let board = model.moment?.together.pinboard {
+        if PulseReinventedFlags.shared.isOn, let board = model.moment?.together.pinboard, !prompt.isPiece(model) {
             Button { prompt.inViewer = .init(id: board.startId) } label: {
                 HStack(spacing: 6) {
                     Icon(.layoutGrid, size: 15, strokeWidth: 2.2, color: .white)
@@ -299,8 +414,8 @@ struct MomentPinboardChip: View {
 }
 
 extension MomentsViewerModel {
-    /// The viewer holds still while a pinboard is open over it.
+    /// The viewer holds still while a pinboard is open over it; the piece playing over that board plays.
     var pinboardOpen: Bool {
-        PinboardPrompt.shared.inViewer != nil
+        PinboardPrompt.shared.inViewer != nil && !PinboardPrompt.shared.isPiece(self)
     }
 }
