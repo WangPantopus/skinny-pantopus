@@ -54,6 +54,7 @@ import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.moments.MomentMedia
 import app.pantopus.android.data.moments.MomentMediaFile
 import app.pantopus.android.data.moments.MomentsPosting
+import app.pantopus.android.data.moments.MomentsRepository
 import app.pantopus.android.data.moments.serverCode
 import app.pantopus.android.data.pulse.TogetherRepository
 import app.pantopus.android.ui.screens.compose.placepicker.MediaLocationExtractor
@@ -110,6 +111,8 @@ data class YourDayPhoto(
     val longitude: Double,
     val at: Instant,
     val chosen: Boolean = true,
+    /** Taken at the person's own home (today's place preview): it goes out as its area only, as today's composer does. */
+    val atHome: Boolean = false,
 )
 
 data class YourDayUi(
@@ -132,6 +135,7 @@ class MomentYourDayViewModel
     constructor(
         @ApplicationContext private val context: Context,
         private val repository: TogetherRepository,
+        private val moments: MomentsRepository,
         private val posting: MomentsPosting,
         private val moshi: Moshi,
     ) : ViewModel() {
@@ -173,15 +177,21 @@ class MomentYourDayViewModel
                         else -> photos += YourDayPhoto(copy, found.latitude, found.longitude, at)
                     }
                 }
+                // Today's place preview for each (as today's composer asks for a library pick): one taken at home goes out
+                // as its area. A failed read is taken as at home, so a home is never shown by mistake.
+                val placed = photos.map { photo -> photo.copy(atHome = atHome(photo)) }
                 _ui.update {
                     it.copy(
-                        photos = (it.photos + photos).distinctBy { p -> p.at to (p.latitude to p.longitude) }.sortedBy { p -> p.at },
+                        photos = (it.photos + placed).distinctBy { p -> p.at to (p.latitude to p.longitude) }.sortedBy { p -> p.at },
                         setAside = asideWords(noPlace, notToday),
                         reading = false,
                     )
                 }
             }
         }
+
+        private suspend fun atHome(photo: YourDayPhoto): Boolean =
+            (moments.placePreview(photo.latitude, photo.longitude) as? NetworkResult.Success)?.data?.atHome ?: true
 
         fun toggle(index: Int) =
             _ui.update { ui -> ui.copy(photos = ui.photos.mapIndexed { i, p -> if (i == index) p.copy(chosen = !p.chosen) else p }) }
@@ -240,7 +250,8 @@ class MomentYourDayViewModel
                     kind = "photo",
                     hours = HOURS,
                     audience = audience,
-                    showArea = false,
+                    // At home: today's own "Show the area instead", so others read the town, never the home.
+                    showArea = photo.atHome,
                     location =
                         MomentLocationBody(
                             source = "capture",
@@ -463,6 +474,14 @@ private fun DayPhotos(
                     fontSize = 12.sp,
                     color = PantopusColors.appTextSecondary,
                 )
+                if (p.atHome && p.chosen) {
+                    Text(
+                        "At home: others see only the area",
+                        fontSize = 12.sp,
+                        color = PantopusColors.appTextSecondary,
+                        modifier = Modifier.testTag("reinventedPulse.yourDay.photo.$i.home"),
+                    )
+                }
             }
         }
     }
