@@ -268,10 +268,9 @@ const DESIGN_BY_ID = new Map(DESIGNS.map((design) => [design.id, design]));
 // travels. The website serves one stock picture at its address, which lists, the mantel and apps from before it draw;
 // its caption is what they print under it. The photo is the card's own photo (services/holidayCardMedia) and the
 // frame and caption live in the card's private stored copy (frontOf), never in the Mail row.
-// `height` is the stock picture's at 960 px wide, as every design's is. PLACEHOLDER: the picture is being made; the
-// number is the 4:5 portrait card's and is to be taken from the finished file.
+// `height` is the stock picture's at 960 px wide, as every design's is (christmas-2026-photo.jpg is 960 × 1056).
 const PHOTO_CARD = Object.freeze({
-  id: 'christmas-2026-photo', number: null, caption: 'Merry Christmas', paper: '#f7f0e2', collection: null, height: 1200,
+  id: 'christmas-2026-photo', number: null, caption: 'Merry Christmas', paper: '#f7f0e2', collection: null, height: 1056,
   slug: null, table: '#1c2233', mood: 'nostalgia',
 });
 const PHOTO_CARD_FRAMES = ['heirloom', 'midnight', 'arch'];
