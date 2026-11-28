@@ -29,7 +29,6 @@ struct ReinventedPulseView: View {
     @State private var map = ReinventedMapModel()
     @State private var strip = ReinventedStripModel()
     @State private var height: Height = .half
-    @State private var showsDial = false
     @State private var showsFilters = false
     @State private var lensOpen = false
     private let filterStore = ReinventedPulseFilterStore.shared
@@ -39,26 +38,31 @@ struct ReinventedPulseView: View {
     @State private var atlasItem: MomentDTO?
     /// "This Moment has ended." after a link to one that can't be played.
     @State private var linkNote: String?
-    /// Regular width (an iPad, the iPhone Duo open) puts the list and the map side by side where they fit.
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    /// 700 pt wide or more (PHASE-6 E): the list floats as a panel at the left, folded away to a peek when asked.
+    @State private var folded = false
 
     var body: some View {
         // Read in layout, so the first pass already picks over the map or beside it.
         GeometryReader { geo in
-            let sideBySide = ReinventedPulseColumns.fits(width: geo.size.width, sizeClass: horizontalSizeClass)
+            let sideBySide = ReinventedPulseColumns.fits(width: geo.size.width)
             ZStack(alignment: .top) {
                 ReinventedPulseMap(model: map, onOpen: open)
                     .ignoresSafeArea()
-                    .padding(.leading, ReinventedPulseColumns.mapInset(height, sideBySide: sideBySide))
                 if sideBySide {
-                    besideMap
+                    panel(in: geo)
                 } else {
                     overMap(in: geo)
                 }
             }
+            // The list follows what the map shows (PHASE-6 B): when the map rests, the sheet moves, or Atlas closes.
+            .onChange(of: map.rests) { _, _ in follow(in: geo, sideBySide: sideBySide) }
+            .onChange(of: height) { _, _ in follow(in: geo, sideBySide: sideBySide) }
+            .onChange(of: inAtlas) { _, _ in follow(in: geo, sideBySide: sideBySide) }
+            .onChange(of: model.reach) { _, _ in follow(in: geo, sideBySide: sideBySide) }
+            .onChange(of: folded) { _, _ in follow(in: geo, sideBySide: sideBySide) }
         }
         // The tab keeps its pages to a reading column: where the map fits beside the list, Pulse takes the width.
-        .readableColumnWidens(from: ReinventedPulseColumns.widensFrom(sizeClass: horizontalSizeClass))
+        .readableColumnWidens(from: ReinventedPulseColumns.widensFrom)
         .task {
             // The kept filters and When first (PHASE-5 B: remembered per person on this phone), so the first reads carry them.
             filterStore.read()
@@ -118,160 +122,9 @@ struct ReinventedPulseView: View {
 
     // MARK: - Top
 
-    /// The top line (PHASE-6 A1): one row, 44 pt high: the side menu, the scope pill, Map | Atlas, the search lens and
-    /// the chat button. Pulled down (here, the map's top), it drops the Filters sheet.
-    private func topLine(sideBySide: Bool) -> some View {
-        // The round buttons are 36 drawn in 44 to the finger, so 2 pt between them still leaves 10 between the circles:
-        // the room goes to the scope pill (it read "Aroun…" on a 402 pt iPhone).
-        HStack(spacing: 2) {
-            NavigationMenuButton(accessibilityIdentifier: "reinventedPulse.menu", floating: false)
-                .background(Circle().fill(.regularMaterial).frame(width: 36, height: 36))
-            scopePill
-            viewSwitch(sideBySide: sideBySide)
-            lensButton
-            MessagesButton(accessibilityIdentifier: "reinventedPulse.chat", floating: false)
-                .background(Circle().fill(.regularMaterial).frame(width: 36, height: 36))
-        }
-        .frame(height: 44)
-        .padding(.horizontal, Spacing.s3)
-        .contentShape(Rectangle())
-        .gesture(pullDown)
-    }
-
-    /// A pull down from the top line drops the Filters sheet (PHASE-6 A3, the gesture the founder asked for).
-    private var pullDown: some Gesture {
-        DragGesture(minimumDistance: 12)
-            .onEnded { value in
-                guard filtering, value.translation.height > 36,
-                      value.translation.height > abs(value.translation.width) else { return }
-                showsFilters = true
-            }
-    }
-
     /// Filters and When apply to Pulse's own list and map, not to My Atlas or Explore.
     private var filtering: Bool {
         !inAtlas && model.reach != "explore"
-    }
-
-    /// The town's name (or Close circle, or Explore); it opens the reach dial.
-    private var scopePill: some View {
-        Button { showsDial = true } label: {
-            HStack(spacing: 5) {
-                Icon(scopeIcon, size: 14, strokeWidth: 2.2, color: Theme.Color.primaryTint)
-                Text(scopeTitle)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Theme.Color.appText)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.85)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .padding(.horizontal, 10)
-            .frame(height: 36)
-            .background(Capsule().fill(.regularMaterial))
-            .frame(minHeight: 44)
-            .contentShape(Capsule())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Showing \(scopeTitle). Change what Pulse shows")
-        .accessibilityIdentifier("reinventedPulse.scope")
-        .sheet(isPresented: $showsDial) {
-            ReinventedReachDial(reach: model.reach, miles: model.miles, circle: model.circle) { reach, miles, circle in
-                Task { await model.pick(reach: reach, miles: miles, circle: circle) }
-            }
-        }
-    }
-
-    private var scopeIcon: PantopusIcon {
-        switch model.reach {
-        case "close": .users
-        case "explore": .globe
-        default: .mapPin
-        }
-    }
-
-    private var scopeTitle: String {
-        switch model.reach {
-        case "close": model.circle?.name ?? "Close circle"
-        case "explore": "Explore"
-        default: model.placeLabel.map { "\($0) · \(model.miles) mi" } ?? "Around me"
-        }
-    }
-
-    /// Map | Atlas, small, in the top line (PHASE-6 A1: the List button is gone, the sheet is the list).
-    private func viewSwitch(sideBySide: Bool) -> some View {
-        HStack(spacing: 2) {
-            switchButton("Map", on: !inAtlas) { pick(.peek, sideBySide: sideBySide) }
-            switchButton("Atlas", on: inAtlas) { show(atlas: true, at: sideBySide ? .half : .full) }
-        }
-        .padding(2)
-        .background(Capsule().fill(.regularMaterial))
-        .fixedSize()
-    }
-
-    private func switchButton(_ title: String, on: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(title)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(on ? Color.white : Theme.Color.appText)
-                .padding(.horizontal, 8)
-                .frame(height: 32)
-                .background(Capsule().fill(on ? Theme.Color.primarySolid : Color.clear))
-                .frame(minHeight: 44)
-                .contentShape(Capsule())
-        }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(on ? [.isButton, .isSelected] : .isButton)
-        .accessibilityIdentifier("reinventedPulse.view.\(title.lowercased())")
-    }
-
-    /// The search lens: one field for both jobs (Ask the map, and search).
-    private var lensButton: some View {
-        Button {
-            withAnimation(.snappy(duration: 0.2)) { lensOpen = true }
-        } label: {
-            Icon(.search, size: 18, strokeWidth: 2.2, color: Theme.Color.appText)
-                .frame(width: 36, height: 36)
-                .background(Circle().fill(.regularMaterial))
-                .frame(width: 44, height: 44)
-                .contentShape(Circle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Ask the map or search")
-        .accessibilityIdentifier("reinventedPulse.lens")
-    }
-
-    /// Under the top line: what is filtered, and what the map lit for its question; nothing when neither.
-    @ViewBuilder private var pills: some View {
-        let count = filterStore.count(time: map.time)
-        if filtering, count > 0 {
-            ReinventedFilterPill(words: filterStore.words(time: map.time)) {
-                showsFilters = true
-            } onClear: {
-                clearFilters()
-            }
-        }
-        if let asked = askedLine {
-            ReinventedFilterPill(words: asked) {
-                withAnimation(.snappy(duration: 0.2)) { lensOpen = true }
-            } onClear: {
-                ReinventedMapAsk.shared.clear()
-            }
-        }
-    }
-
-    /// How many pills show under the top line.
-    private var pillCount: Int {
-        (filtering && filterStore.count(time: map.time) > 0 ? 1 : 0) + (askedLine == nil ? 0 : 1)
-    }
-
-    /// "3 lit for "cafe"", that nothing here matched, or why it couldn't ask.
-    private var askedLine: String? {
-        let ask = ReinventedMapAsk.shared
-        if let error = ask.error { return error }
-        guard let lit = ask.lit else { return nil }
-        let shown = map.items.filter { lit.pins[$0.id] != nil }.count
-        guard shown > 0 else { return "Nothing here for \u{201C}\(lit.q)\u{201D}" }
-        return "\(shown) lit for \u{201C}\(lit.q)\u{201D}" + (lit.more ? ", and more" : "")
     }
 
     /// The filters on (or the When moved): the list and the map read again with them.
@@ -280,23 +133,11 @@ struct ReinventedPulseView: View {
         Task { await model.apply(filters: filterStore.params(time: map.time, forList: true)) }
     }
 
-    static func chipTitle(_ chip: String) -> String {
-        switch chip {
-        case "all": "All"
-        case "live": "Live"
-        case "learn": "Learn"
-        case "spots": "Spots"
-        case "ask": "Ask"
-        case "plans": "Plans"
-        case "sports": "Sports"
-        default: chip.capitalized
-        }
-    }
-
     // MARK: - The list over the map
 
     /// List, Map or Atlas: Atlas shows the person's kept Moments in the list's place and on the map.
     private func show(atlas: Bool, at next: Height) {
+        if atlas { folded = false }
         inAtlas = atlas
         map.show(atlas: atlas)
         setHeight(next)
@@ -308,15 +149,27 @@ struct ReinventedPulseView: View {
 
     /// Under the top line and its pills: where the sheet's top stops at full.
     private var topHeight: CGFloat {
-        4 + 44 + 8 + CGFloat(pillCount) * 38
+        4 + 44 + 8 + CGFloat(ReinventedPulsePills.count(map: map, filtering: filtering)) * 38
     }
 
-    /// The header's one line: how many things the map holds and when ("23 here · Live").
+    /// The header's one line: how many things the map holds and when ("23 here · Live"); following the map, the list's
+    /// own count of the area (CONTRACT 11a).
     private var sheetLine: String {
-        let count = map.items.count
-        if inAtlas { return count == 1 ? "1 kept here" : "\(count) kept here" }
+        if inAtlas {
+            let count = map.items.count
+            return count == 1 ? "1 kept here" : "\(count) kept here"
+        }
         let when = ReinventedMapModel.times.first { $0.key == map.time }?.title ?? "Live"
-        return "\(count) here · \(when)"
+        // Following the map: the list's own count of the area. Otherwise (full, Close circle, Explore) the whole list,
+        // never a count of the map's pins, which would say another number than the list under it.
+        if model.box != nil, let count = model.count {
+            return "\(count)\(model.countMore ? "+" : "") here · \(when)"
+        }
+        switch model.reach {
+        case "close": return "Your circle · \(when)"
+        case "explore": return "Today, elsewhere"
+        default: return "Nearest first · \(when)"
+        }
     }
 
     /// The viewer opens from the Pulse tab's root (`ReinventedStudioCover`), outside the tab's navigation stack.
@@ -332,6 +185,8 @@ struct ReinventedPulseView: View {
     }
 
     private func open(_ moment: MomentDTO) {
+        // Following the map, a row's Moment is flown to on the map behind it too (PHASE-6 B).
+        if model.box != nil { map.light(map.pin(ofMoment: moment.id)) }
         if RetakePrompt.shared.opens(moment) { return }
         if ConvergencePrompt.shared.opens(moment) { return }
         if PinboardPrompt.shared.opens(moment) { return }
@@ -355,8 +210,16 @@ struct ReinventedPulseView: View {
         }
     }
 
-    /// A pin or a card on the map: a ring plays its Moments, a mark opens its post, a ticket its plan in Plans.
+    /// A pin or a card on the map: a ring plays its Moments, a mark opens its post, a ticket its plan in Plans. While the
+    /// list follows the map (PHASE-6 B), a first tap lights the pin and scrolls the list to its row (raising the sheet
+    /// from its peek); a tap on the lit pin opens it.
     private func open(_ item: ReinventedMapModel.Item) {
+        if model.box != nil, map.focused != item.id, let row = rowId(of: item) {
+            map.focused = item.id
+            model.scrollTarget = row
+            if height == .peek { setHeight(.half) }
+            return
+        }
         switch item {
         case let .ring(ring):
             watch(ring)
@@ -385,6 +248,8 @@ extension ReinventedPulseView {
             height: geo.size.height,
             fullTop: topHeight,
             line: sheetLine,
+            lineDimmed: !inAtlas && model.box != nil && model.counting,
+            accessory: noPlaceToggle,
             content: panelContent
         ) { small in
             addButton(small: small)
@@ -393,17 +258,103 @@ extension ReinventedPulseView {
             .background(height == .full ? Theme.Color.appBg : Color.clear)
     }
 
-    /// An iPad or the open iPhone Duo held sideways (PHASE-1 §2.2): the list and the map side by side.
-    private var besideMap: some View {
-        ReinventedPulseSideBySide(
-            height: height,
-            map: map,
+    /// 700 pt wide or more (PHASE-6 E): the map fills the screen and the list floats as a panel at the left.
+    private func panel(in geo: GeometryProxy) -> some View {
+        ReinventedPulsePanel(
+            folded: $folded,
+            width: geo.size.width,
             header: header(sideBySide: true),
+            line: sheetLine,
+            lineDimmed: !inAtlas && model.box != nil && model.counting,
+            accessory: noPlaceToggle,
             content: panelContent,
             add: addButton,
-            rail: rail,
-            onOpen: open
+            rail: rail
         )
+    }
+
+    /// "No place" (PHASE-6 A3, CONTRACT 11b): posts and Moments without a location follow the placed ones. Off at first.
+    private var noPlaceToggle: some View {
+        HStack(spacing: Spacing.s1) {
+            // PHASE-6 H: the last rows stay when a read fails or is slow; one small line offers to ask again.
+            if !inAtlas, model.couldNotRefresh {
+                Button {
+                    Task { await model.refresh() }
+                } label: {
+                    Text("Couldn\u{2019}t refresh \u{00B7} Try again")
+                        .pulseFont(sized: 12, weight: .semibold)
+                        .foregroundStyle(Theme.Color.primaryTint)
+                        .lineLimit(1)
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("reinventedPulse.retry")
+            }
+            noPlaceButton
+        }
+    }
+
+    @ViewBuilder private var noPlaceButton: some View {
+        if !inAtlas, model.reach == "around" {
+            let on = model.noPlace
+            Button {
+                Task { await model.show(noPlace: !on) }
+            } label: {
+                HStack(spacing: 4) {
+                    Icon(on ? .checkCircle : .mapPinOff, size: 13, strokeWidth: 2.2, color: on ? .white : Theme.Color.appTextSecondary)
+                    Text("No place")
+                        .pulseFont(12, weight: .semibold)
+                        .foregroundStyle(on ? Color.white : Theme.Color.appTextSecondary)
+                }
+                .padding(.horizontal, 8)
+                .frame(height: 24)
+                .background(Capsule().fill(on ? Theme.Color.primarySolid : Theme.Color.appSurface))
+                .overlay(Capsule().stroke(on ? Color.clear : Theme.Color.appBorder, lineWidth: 1))
+                .frame(minWidth: 44, minHeight: 44)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Show posts without a place")
+            .accessibilityAddTraits(on ? [.isButton, .isSelected] : .isButton)
+            .accessibilityIdentifier("reinventedPulse.noPlace")
+        }
+    }
+
+    /// The area the list follows: the part of the map not under the top line or the sheet, while the sheet rests at peek
+    /// or half; at full (the map covered), in My Atlas or away from Around me, nil: the reach's whole list.
+    private func follow(in geo: GeometryProxy, sideBySide: Bool) {
+        guard !inAtlas, model.reach == "around", sideBySide || height != .full, let region = map.shownRegion else {
+            model.follow(nil)
+            return
+        }
+        if sideBySide {
+            // The panel covers the map's left part: what shows is to its right (the map runs under the side insets).
+            let inset = geo.safeAreaInsets
+            let whole = geo.size.width + inset.leading + inset.trailing
+            let left = (inset.leading + ReinventedPulseColumns.covered(in: geo.size.width, folded: folded)) / whole
+            let span = region.span.longitudeDelta
+            let west = region.center.longitude - span / 2
+            let shown = MKCoordinateRegion(
+                center: CLLocationCoordinate2D(latitude: region.center.latitude, longitude: west + span * (left + 1) / 2),
+                span: MKCoordinateSpan(latitudeDelta: region.span.latitudeDelta, longitudeDelta: span * max(1 - left, 0.05))
+            )
+            return model.follow(ReinventedMapBox(shown))
+        }
+        // The map is drawn under the status bar and the tab bar too: what shows is between the top line and the sheet.
+        let inset = geo.safeAreaInsets
+        let whole = geo.size.height + inset.top + inset.bottom
+        let top = (inset.top + topHeight) / whole
+        let bottom = (inset.top + ReinventedPulseSheet<EmptyView, EmptyView, EmptyView>.top(
+            of: height, in: geo.size.height, fullTop: topHeight
+        )) / whole
+        let north = region.center.latitude + region.span.latitudeDelta / 2
+        let span = region.span.latitudeDelta
+        let shown = MKCoordinateRegion(
+            center: CLLocationCoordinate2D(latitude: north - span * (top + bottom) / 2, longitude: region.center.longitude),
+            span: MKCoordinateSpan(latitudeDelta: span * max(bottom - top, 0.05), longitudeDelta: region.span.longitudeDelta)
+        )
+        model.follow(ReinventedMapBox(shown))
     }
 
     /// The rail of round buttons down the right edge (PHASE-6 A2).
@@ -425,12 +376,48 @@ extension ReinventedPulseView {
                 .padding(.horizontal, Spacing.s3)
                 .frame(minHeight: 44, alignment: .top)
             } else {
-                topLine(sideBySide: sideBySide)
+                ReinventedPulseTopLine(
+                    model: model,
+                    inAtlas: inAtlas,
+                    filtering: filtering,
+                    lensOpen: $lensOpen,
+                    showsFilters: $showsFilters,
+                    onMap: { pick(.peek, sideBySide: sideBySide) },
+                    onAtlas: { show(atlas: true, at: sideBySide ? .half : .full) }
+                )
             }
-            pills
+            ReinventedPulsePills(
+                map: map,
+                filtering: filtering,
+                onFilters: { showsFilters = true },
+                onClearFilters: clearFilters,
+                onLens: openLens
+            )
         }
         .padding(.top, 4)
         .padding(.bottom, 8)
+    }
+
+    private func openLens() {
+        withAnimation(.snappy(duration: 0.2)) { lensOpen = true }
+    }
+
+    /// The list's row for a pin, when the list holds it.
+    private func rowId(of item: ReinventedMapModel.Item) -> String? {
+        let ids = Set(model.rows.map(\.id))
+        let candidates: [String] = switch item {
+        case let .ring(ring): ring.moments.map { "moment-\($0.id)" }
+        case let .mark(mark): ["post-\(mark.post.id)"]
+        case let .kept(kept): ["moment-\(kept.moment.id)"]
+        case .ticket: []
+        }
+        return candidates.first(where: ids.contains)
+    }
+
+    /// A post opened from the list: following the map, its pin is flown to as well.
+    private func openPost(_ id: String) {
+        if model.box != nil { map.light(map.pin(ofPost: id)) }
+        onOpenPost(id)
     }
 
     /// The list, or My Atlas in its place.
@@ -441,7 +428,7 @@ extension ReinventedPulseView {
             ReinventedPulseList(
                 model: model,
                 strip: strip.strip,
-                onOpenPost: onOpenPost,
+                onOpenPost: openPost,
                 onOpenMoment: open,
                 onOpenRing: { ring in open(.ring(ring)) },
                 onRefreshStrip: { await strip.read() },
@@ -456,15 +443,16 @@ extension ReinventedPulseView {
         map.pick(time: "live")
     }
 
-    /// Map from the switch. On a phone the sheet lowers to its peek to show the map. Side by side, Map shows the map
-    /// alone, and tapped again both.
+    /// Map from the switch. On a phone the sheet lowers to its peek to show the map; on a big screen the panel folds
+    /// away to its peek, and back. From My Atlas, back to Pulse.
     private func pick(_ next: Height, sideBySide: Bool) {
         if !sideBySide {
             show(atlas: false, at: next)
         } else if inAtlas {
             show(atlas: false, at: .half)
         } else {
-            show(atlas: false, at: height == next ? .half : next)
+            // The panel: Map folds it away to show the map, and brings it back.
+            withAnimation(.interpolatingSpring(duration: 0.35, bounce: 0.14)) { folded.toggle() }
         }
     }
 }

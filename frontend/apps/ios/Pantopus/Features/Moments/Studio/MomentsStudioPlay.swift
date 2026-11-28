@@ -47,8 +47,10 @@ extension MomentsComposerModel {
 
     func moveStudioPlay(_ id: String, x: Double, y: Double) {
         guard let index = marking.studio?.play.firstIndex(where: { $0.id == id }) else { return }
-        marking.studio?.play[index].x = (min(max(x, 0.05), 0.95) * 1000).rounded() / 1000
-        marking.studio?.play[index].y = (min(max(y, 0.05), 0.95) * 1000).rounded() / 1000
+        // On the first screen the item was held already (anywhere on the canvas, PHASE-6 F2).
+        let edge = studioWholeOffered ? 0 : 0.05
+        marking.studio?.play[index].x = (min(max(x, edge), 1 - edge) * 1000).rounded() / 1000
+        marking.studio?.play[index].y = (min(max(y, edge), 1 - edge) * 1000).rounded() / 1000
     }
 
     /// A fresh id for an item of `kind` ("poll-1", "poll-2"…); never "c-" or "k-" (those are a dot's answers).
@@ -156,6 +158,8 @@ private struct MomentsStudioPlacedPlay: View {
     let frame: CGRect
     let screen: CGSize
     @GestureState private var moving: CGSize = .zero
+    /// The item's own size as drawn, for the 24 pt that stay on the canvas.
+    @State private var size = CGSize(width: 215, height: 120)
 
     var body: some View {
         let picked = model.marking.studio?.pickedPlay == item.id
@@ -183,22 +187,33 @@ private struct MomentsStudioPlacedPlay: View {
                     .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color.white, lineWidth: picked ? 2 : 0))
             }
         }
+        // The card is drawn as readers see it, with its own touches off (`preview`): the whole item takes the finger.
+        .contentShape(Rectangle())
+        .onGeometryChange(for: CGSize.self) { $0.size } action: { size = CGSize(width: $0.width * 0.86, height: $0.height * 0.86) }
         .scaleEffect(0.86)
         .position(
-            x: min(max(frame.minX + item.x * frame.width, 120), screen.width - 120) + moving.width,
+            x: (model.studioWholeOffered
+                ? frame.minX + item.x * frame.width
+                : min(max(frame.minX + item.x * frame.width, 120), screen.width - 120)) + moving.width,
             y: frame.minY + item.y * frame.height + moving.height
         )
         .gesture(
             DragGesture(minimumDistance: 4)
                 .updating($moving) { value, moving, _ in moving = value.translation }
                 .onEnded { value in
-                    model.moveStudioPlay(
-                        item.id,
+                    let moved = CGPoint(
                         x: item.x + value.translation.width / max(frame.width, 1),
                         y: item.y + value.translation.height / max(frame.height, 1)
                     )
+                    guard model.studioWholeOffered else { return model.moveStudioPlay(item.id, x: moved.x, y: moved.y) }
+                    // Anywhere on the canvas, 24 pt of it kept on; off the picture, the picture goes onto its canvas.
+                    let held = MomentsStudioAnywhere.hold(moved, size: size, frame: frame.size, canvas: model.studioCanvasBox)
+                    model.moveStudioPlay(item.id, x: held.x, y: held.y)
+                    if MomentsStudioAnywhere.offPicture(held, size: size, frame: frame.size) { model.studioWholeOntoCanvas() }
                 }
         )
+        // Under a finger, the Studio's controls fade and take no touches (PHASE-6 K).
+        .onChange(of: moving != .zero) { _, dragging in model.studioDragging(dragging) }
         .simultaneousGesture(TapGesture().onEnded { model.marking.studio?.pickedPlay = picked ? nil : item.id })
         .accessibilityElement(children: .contain)
         .accessibilityHint("Drag to move it. Tap to pick it, then Remove.")

@@ -221,6 +221,9 @@ struct MomentsStudioTools {
     var motion: MomentsStudioMotionClip?
     var motionFor: String?
     var keepsMotion = true
+    /// Anywhere on the canvas (`MomentsStudioAnywhere`, PHASE-6 F2): a stamp or an item is under a finger now (the
+    /// controls fade and take no touches).
+    var dragging = false
 
     /// A line just begun: made with the pen and ink picked here.
     func dress(_ stroke: inout MomentMarks.Stroke) {

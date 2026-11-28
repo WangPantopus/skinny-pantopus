@@ -163,7 +163,7 @@ struct ReinventedAskBar: View {
             HStack(spacing: Spacing.s2) {
                 Icon(.search, size: 15, strokeWidth: 2.2, color: Theme.Color.appTextSecondary)
                 TextField("Ask the map: cozy study cafe", text: $text)
-                    .font(.system(size: 15))
+                    .pulseFont(15)
                     .foregroundStyle(Theme.Color.appText)
                     .submitLabel(.search)
                     .focused($typing)
@@ -197,7 +197,7 @@ struct ReinventedAskBar: View {
             .padding(.trailing, 48)
             if let said {
                 Text(said)
-                    .font(.system(size: 13, weight: .semibold))
+                    .pulseFont(13, weight: .semibold)
                     .foregroundStyle(Theme.Color.appText)
                     .padding(.horizontal, Spacing.s3)
                     .padding(.vertical, 5)
@@ -237,7 +237,7 @@ private struct ReinventedLitPin: ViewModifier {
             content
                 .overlay(alignment: .top) {
                     Text(words.prefix(3).joined(separator: " · "))
-                        .font(.system(size: 12, weight: .bold))
+                        .pulseFont(12, weight: .bold)
                         .foregroundStyle(.white)
                         .lineLimit(1)
                         .fixedSize()

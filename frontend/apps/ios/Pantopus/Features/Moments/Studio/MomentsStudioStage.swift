@@ -42,6 +42,8 @@ struct MomentsStudioStage: View {
     @State private var showsSound = false
     /// Loop (phase 0 step 5): a short piece of the video, over and over.
     @State private var showsLoop = false
+    /// The room the canvas is fitted in, above the bottom bar (PHASE-6 K).
+    @State private var room = MomentsStudioRoom()
 
     init(model: MomentsComposerModel, onPosted: @escaping () -> Void) {
         self.model = model
@@ -116,8 +118,9 @@ struct MomentsStudioStage: View {
                 onPosted: onPosted,
                 openDrawer: openDrawer
             )
+            .studioBarTop(room, frozen: writing)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .studioFillsWhileFading(model)
         // Behind the screen, never part of its layout: a photo that fills the screen is larger than the screen.
         .background {
             ZStack {
@@ -131,10 +134,9 @@ struct MomentsStudioStage: View {
                     TogetherStudioGhost(model: model) // Phase 3 (CONTRACT 8): a Retake's first picture to line up with.
                     // Cutouts (step 4): a long press lifts one; under the stamps.
                     MomentsStudioCutoutLayer(model: model)
-                    // The stamps sit on the picture, under the X, the tools, the caption and the bar.
-                    MomentsStudioStampLayer(model: model, stamps: stamps, picture: stampPicture)
-                    // Playable items (phase 2), over the stamps.
-                    MomentsStudioPlayLayer(model: model, picture: stampPicture)
+                    // A tap away from every stamp lets go of the picked one; the stamps and playable items themselves
+                    // lie over the X, the tools, the caption and the bar (`MomentsStudioItemsOnTop`, PHASE-6 K).
+                    MomentsStudioStampLayer(model: model, stamps: stamps, picture: stampPicture, catchOnly: true)
                     // Illuminate's dots (phase 2), over the stamps.
                     MomentsStudioDotLayer(model: model, picture: stampPicture, open: openIlluminate)
                     // Blur before posting (phase 2): the spots found, and boxes drawn by hand.
@@ -150,6 +152,7 @@ struct MomentsStudioStage: View {
             }
             .ignoresSafeArea()
         }
+        .studioItemsOnTop(model: model, stamps: stamps, picture: stampPicture, room: room)
         .sheet(isPresented: $showsDrawer) {
             MomentsStudioDrawer(model: model) { showsDrawer = false }
                 .presentationDetents([.medium, .large])

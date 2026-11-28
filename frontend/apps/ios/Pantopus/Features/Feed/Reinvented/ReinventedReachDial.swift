@@ -59,7 +59,7 @@ struct ReinventedReachDial: View {
     private var choices: some View {
         VStack(alignment: .leading, spacing: Spacing.s3) {
             Text("What Pulse shows")
-                .font(.system(size: 20, weight: .bold))
+                .pulseFont(20, weight: .bold)
                 .foregroundStyle(Theme.Color.appText)
                 .accessibilityAddTraits(.isHeader)
             option(
@@ -93,12 +93,12 @@ struct ReinventedReachDial: View {
             )
             HStack(spacing: Spacing.s2) {
                 Text("No hidden ranking.")
-                    .font(.system(size: 14, weight: .semibold))
+                    .pulseFont(14, weight: .semibold)
                     .foregroundStyle(Theme.Color.appText)
                 Button("See the rules") {
                     if let url = Self.rulesURL { openURL(url) }
                 }
-                .font(.system(size: 14, weight: .semibold))
+                .pulseFont(14, weight: .semibold)
                 .accessibilityIdentifier("reinventedPulse.dial.rules")
             }
             .padding(.top, Spacing.s2)
@@ -131,11 +131,11 @@ struct ReinventedReachDial: View {
             Button { path.append(.circles) } label: {
                 HStack(spacing: Spacing.s2) {
                     Text(circles.circles.isEmpty ? "Make a circle of 2 to 8 close people" : "Your circles")
-                        .font(.system(size: 14.5, weight: .semibold))
+                        .pulseFont(14.5, weight: .semibold)
                         .foregroundStyle(Theme.Color.primaryTint)
                     if circles.news > 0 {
                         Text("\(circles.news) new")
-                            .font(.system(size: 12, weight: .bold))
+                            .pulseFont(12, weight: .bold)
                             .foregroundStyle(.white)
                             .padding(.horizontal, 8)
                             .padding(.vertical, 3)
@@ -163,7 +163,7 @@ struct ReinventedReachDial: View {
                     color: on ? Theme.Color.primarySolid : Theme.Color.appTextSecondary
                 )
                 Text(title)
-                    .font(.system(size: 15))
+                    .pulseFont(15)
                     .foregroundStyle(Theme.Color.appText)
                 Spacer(minLength: 0)
             }
@@ -198,10 +198,10 @@ struct ReinventedReachDial: View {
                     .background(Circle().fill(on ? Theme.Color.primarySolid : Theme.Color.appSurfaceRaised))
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
-                        .font(.system(size: 16, weight: .bold))
+                        .pulseFont(16, weight: .bold)
                         .foregroundStyle(Theme.Color.appText)
                     Text(line)
-                        .font(.system(size: 13.5))
+                        .pulseFont(13.5)
                         .foregroundStyle(Theme.Color.appTextSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }

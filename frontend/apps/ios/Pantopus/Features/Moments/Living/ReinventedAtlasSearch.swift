@@ -172,7 +172,7 @@ struct ReinventedAtlasSearch: View {
             field
             if let error = model.error {
                 Text(error)
-                    .font(.system(size: 14))
+                    .pulseFont(14)
                     .foregroundStyle(Theme.Color.appText)
                     .accessibilityIdentifier("reinventedAtlas.search.error")
             } else if let q = model.q {
@@ -200,7 +200,7 @@ struct ReinventedAtlasSearch: View {
         HStack(spacing: Spacing.s2) {
             Icon(.search, size: 16, strokeWidth: 2.2, color: Theme.Color.appTextSecondary)
             TextField("Search your Atlas: mushroom, sunset", text: $text)
-                .font(.system(size: 15))
+                .pulseFont(15)
                 .foregroundStyle(Theme.Color.appText)
                 .submitLabel(.search)
                 .onSubmit { model.search(text) }
@@ -232,7 +232,7 @@ struct ReinventedAtlasSearch: View {
                 .frame(maxWidth: .infinity, minHeight: 60)
         } else if model.results.isEmpty {
             Text("Nothing found for \u{201C}\(q)\u{201D}. Try other words.")
-                .font(.system(size: 14))
+                .pulseFont(14)
                 .foregroundStyle(Theme.Color.appTextSecondary)
                 .accessibilityIdentifier("reinventedAtlas.search.none")
         } else {
@@ -242,7 +242,7 @@ struct ReinventedAtlasSearch: View {
                 }
                 if model.hasMore {
                     Button(model.reading ? "Loading…" : "Show more") { model.more() }
-                        .font(.system(size: 14, weight: .semibold))
+                        .pulseFont(14, weight: .semibold)
                         .disabled(model.reading)
                         .accessibilityIdentifier("reinventedAtlas.search.more")
                 }
@@ -258,14 +258,14 @@ struct ReinventedAtlasSearch: View {
                 thumb(result)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(words(result))
-                        .font(.system(size: 15, weight: .semibold))
+                        .pulseFont(15, weight: .semibold)
                         .foregroundStyle(Theme.Color.appText)
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
                     Text([result.why, result.at.map { $0.formatted(.dateTime.month(.abbreviated).day()) }]
                         .compactMap { $0?.isEmpty == false ? $0 : nil }
                         .joined(separator: " · "))
-                        .font(.system(size: 13))
+                        .pulseFont(13)
                         .foregroundStyle(Theme.Color.appTextSecondary)
                         .lineLimit(1)
                 }

@@ -260,6 +260,85 @@
 .rp-lens-card .am-ask {
   margin: 0;
 }
+/* At a phone's width the app's top bar steps aside on the new Pulse: this line holds the side menu, the bell and Messages too
+   (PHASE-6 J), so the switch draws a little tighter and the place pill gives way first. */
+.rp-top[data-phone] {
+  top: max(8px, env(safe-area-inset-top));
+  gap: 3px;
+  padding: 0 3px;
+}
+/* Map | Atlas as two small icons here, and the pill drawn tighter, so the town reads in full at 375 and its first letters at
+   320 (LEAD-7's look, 08:39); the reach lives in the dial alone at this width. */
+.rp-top[data-phone] .rp-switch {
+  padding: 2px;
+}
+.rp-top[data-phone] .rp-switch button {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  padding: 0;
+}
+/* The round buttons draw at the web's 32 px here (section C), each still 44 px to the pointer, so the pill keeps its words:
+   a twelve-letter town in full at 375 and at least six letters at 320 (LEAD-8's look, 09:36). */
+.rp-top[data-phone] .rp-lens {
+  width: 32px;
+  height: 32px;
+}
+.rp-top[data-phone] .rp-lens::before {
+  inset: -6px;
+}
+.rp-top[data-phone] .rp-bell {
+  min-width: 32px;
+}
+.rp-top[data-phone] .rp-bell button {
+  padding: 6px;
+}
+.rp-top[data-phone] .rp-scope {
+  gap: 4px;
+  padding: 0 6px;
+}
+.rp-top[data-phone] .rp-scope strong {
+  font-size: 14px;
+}
+.rp-top[data-phone] .rp-scope-dot {
+  width: 8px;
+  height: 8px;
+}
+@media (max-width: 340px) {
+  .rp-top[data-phone] {
+    left: 6px;
+    right: 6px;
+    gap: 2px;
+    padding: 0 2px;
+  }
+  .rp-top[data-phone] .rp-scope {
+    padding: 0 4px;
+  }
+}
+.rp-bell {
+  display: grid;
+  flex: none;
+  place-items: center;
+  min-width: 36px;
+}
+.rp-messages {
+  color: var(--rp-ink);
+}
+.rp-lens-more {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 44px;
+  margin-top: 6px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--rp-ink) 6%, transparent);
+  color: var(--rp-ink);
+  font-size: 13px;
+  font-weight: 600;
+}
 /* One small pill under the top line says which filters are on; nothing shows when none is. */
 .rp-filter-pill {
   position: absolute;
@@ -323,6 +402,12 @@
 }
 .rp-board[data-moving] .rp-rail {
   opacity: 0.4;
+}
+/* At full the sheet covers the map, so the rail steps away: it covered the list's right edge and a card's menu button
+   (PHASE-6 G). Filters stay a pull down on the top line away. */
+.rp-board[data-rest='full'] .rp-rail {
+  visibility: hidden;
+  opacity: 0;
 }
 .rp-rail-item {
   position: relative;
@@ -614,11 +699,13 @@
   position: absolute;
   inset: 0 -8px;
 }
+/* Beside the panel, clear of the map's own zoom buttons and the rail at the right (LEAD-7's look, 08:39: its ✕ lay on the
+   map's "+", so a click meant to zoom cleared the filters). */
 .rp-board[data-wide] .rp-filter-pill {
   top: 64px;
-  left: auto;
-  right: 56px;
-  max-width: calc(100% - 480px);
+  left: 404px;
+  right: auto;
+  max-width: calc(100% - 404px - 140px);
 }
 .rp-board[data-wide] > .rp-create {
   z-index: 800;
@@ -1325,6 +1412,9 @@
   padding: 0 12px 2px;
   overflow-x: auto;
   scrollbar-width: none;
+  /* A mouse drags it sideways (AliveStrip's useMouseDragScroll): no text selection on the way. */
+  user-select: none;
+  -webkit-user-select: none;
 }
 .rp-alive-row::-webkit-scrollbar {
   display: none;

@@ -110,6 +110,11 @@ struct MomentsStudioStampLayer: View {
     let stamps: MomentsStudioStamps
     /// The picture's own size, for where it's drawn (nil for a text card: the card is the screen).
     let picture: CGSize?
+    /// Whether a tap away from every stamp is caught here (it lets go of the picked one). Over the Studio's controls
+    /// (PHASE-6 K) the stamps take only their own touches, and the catch stays under the controls.
+    var catchesTaps = true
+    /// Only the catch, under the controls; the stamps themselves are drawn over them.
+    var catchOnly = false
 
     var body: some View {
         GeometryReader { geo in
@@ -117,11 +122,13 @@ struct MomentsStudioStampLayer: View {
             let unit = frame.width / 402
             ZStack {
                 // A tap on the picture away from every stamp lets go of the picked one.
-                Color.clear
-                    .contentShape(Rectangle())
-                    .onTapGesture { stamps.picked = nil }
-                    .allowsHitTesting(stamps.picked != nil)
-                ForEach(model.studioStamps, id: \.kind) { placement in
+                if catchesTaps {
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .onTapGesture { stamps.picked = nil }
+                        .allowsHitTesting(stamps.picked != nil)
+                }
+                ForEach(catchOnly ? [] : model.studioStamps, id: \.kind) { placement in
                     MomentsStudioPlacedStamp(
                         model: model,
                         stamps: stamps,
@@ -189,6 +196,8 @@ private struct MomentsStudioPlacedStamp: View {
             .rotationEffect(.degrees(placement.rotation) + turn)
             .position(center)
             .gesture(moveGesture.simultaneously(with: pinchGesture).simultaneously(with: turnGesture))
+            // Under a finger, the Studio's controls fade and take no touches (PHASE-6 K).
+            .onChange(of: drag != .zero || pinch != 1 || turn != .zero) { _, moving in model.studioDragging(moving) }
             .onTapGesture { stamps.picked = picked ? nil : placement.kind }
             .accessibilityElement(children: .contain)
             .accessibilityLabel(MomentStampView.name(placement.kind))
@@ -200,6 +209,8 @@ private struct MomentsStudioPlacedStamp: View {
         DragGesture(minimumDistance: 2)
             .updating($drag) { value, drag, _ in drag = value.translation }
             .onEnded { value in
+                // On the Studio's first screen: anywhere on the canvas (PHASE-6 F2).
+                if model.studioWholeOffered { return drop(by: value.translation) }
                 update { placement in
                     // Inside the part every viewer shows (`MomentMarks.safeBox`): the whole stamp, as far as its size goes.
                     let box = stamps.safeBox
@@ -224,6 +235,7 @@ private struct MomentsStudioPlacedStamp: View {
             .updating($pinch) { value, pinch, _ in pinch = value.magnification }
             .onEnded { value in
                 update { placement in placement.scale = min(max(placement.scale * value.magnification, 0.25), 4) }
+                if model.studioWholeOffered { drop(by: .zero) }
             }
     }
 
@@ -241,7 +253,25 @@ private struct MomentsStudioPlacedStamp: View {
                     }
                     placement.rotation = degrees
                 }
+                if model.studioWholeOffered { drop(by: .zero) }
             }
+    }
+
+    /// Let go anywhere on the canvas: at least 24 pt of the stamp stays on it, and its middle; off the picture's own
+    /// box, the picture goes onto its canvas so readers see the stamp where it was put.
+    private func drop(by translation: CGSize) {
+        guard let now = model.studioStamps.first(where: { $0.kind == placement.kind }) else { return }
+        let size = MomentsStudioAnywhere.turned(
+            CGSize(width: natural.width * CGFloat(now.scale) * unit, height: natural.height * CGFloat(now.scale) * unit),
+            by: now.rotation
+        )
+        let moved = CGPoint(x: now.x + translation.width / max(frame.width, 1), y: now.y + translation.height / max(frame.height, 1))
+        let held = MomentsStudioAnywhere.hold(moved, size: size, frame: frame.size, canvas: model.studioCanvasBox)
+        update { placement in
+            placement.x = Double(held.x)
+            placement.y = Double(held.y)
+        }
+        if MomentsStudioAnywhere.offPicture(held, size: size, frame: frame.size) { model.studioWholeOntoCanvas() }
     }
 
     private func update(_ change: (inout MomentStampPlacement) -> Void) {

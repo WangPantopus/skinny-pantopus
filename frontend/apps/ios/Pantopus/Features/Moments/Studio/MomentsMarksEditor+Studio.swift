@@ -400,6 +400,8 @@ extension MomentsComposerModel {
     func openStudioMarks(_ tool: MomentsMarking.Tool) {
         if marking.studio == nil { marking.studio = MomentsStudioTools() }
         marking.studio?.dropping = false
+        // Text goes anywhere on the canvas (PHASE-6 F2): the picture goes onto its canvas first.
+        if tool == .text { studioOpensText() }
         openMarks(tool)
     }
 }

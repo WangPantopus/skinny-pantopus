@@ -9,7 +9,8 @@
 import Foundation
 
 public enum ReinventedEndpoints {
-    /// `GET /api/reinvented/list` (CONTRACT 6a): the Moments and posts by reach, chip and cursor, with the bands.
+    /// `GET /api/reinvented/list` (CONTRACT 6a): the Moments and posts by reach, chip and cursor, with the bands; by the
+    /// map's box and with the posts without a place (CONTRACT 11) when asked.
     /// Route `backend/routes/reinvented.js:50` (list).
     static func list(
         reach: String,
@@ -18,18 +19,30 @@ public enum ReinventedEndpoints {
         at point: (latitude: Double, longitude: Double)?,
         cursor: String?,
         circle: String? = nil,
-        filters: [String: String]? = nil
+        filters: [String: String]? = nil,
+        box: ReinventedMapBox? = nil,
+        noPlace: Bool = false
     ) -> Endpoint {
         var query = ["reach": reach, "limit": "20"]
         // The filters (CONTRACT 10a: kinds, when, from, state, since) instead of the chip; with none on, today's chip.
         if let filters { query.merge(filters) { _, new in new } } else { query["chip"] = chip }
-        // One of the person's circles inside Close circle (CONTRACT 8d): only its people who are in.
-        if let circle { query["circle"] = circle }
-        if let miles { query["miles"] = String(miles) }
-        if let point {
-            query["latitude"] = String(format: "%.5f", point.latitude)
-            query["longitude"] = String(format: "%.5f", point.longitude)
+        if let box {
+            // What the map shows (CONTRACT 11a): the box is the reach, so no miles, point or circle go with it.
+            query["south"] = String(format: "%.5f", box.south)
+            query["west"] = String(format: "%.5f", box.west)
+            query["north"] = String(format: "%.5f", box.north)
+            query["east"] = String(format: "%.5f", box.east)
+        } else {
+            // One of the person's circles inside Close circle (CONTRACT 8d): only its people who are in.
+            if let circle { query["circle"] = circle }
+            if let miles { query["miles"] = String(miles) }
+            if let point {
+                query["latitude"] = String(format: "%.5f", point.latitude)
+                query["longitude"] = String(format: "%.5f", point.longitude)
+            }
         }
+        // Posts and Moments without a place, after the placed ones (CONTRACT 11b).
+        if noPlace { query["no_place"] = "1" }
         if let cursor { query["cursor"] = cursor }
         return Endpoint(method: .get, path: "/api/reinvented/list", query: query, cachePolicy: .reloadIgnoringLocalCacheData)
     }

@@ -76,6 +76,8 @@ final class MomentsMarking {
     @ObservationIgnored private var making: Task<Void, Never>?
     /// The Studio's Text and Draw tools (`MomentMarks+Studio`), set by the Studio only: nil in today's composer.
     var studio: MomentsStudioTools?
+    /// Where a label may go, in picture coordinates: nil is today's safe box; only the Studio sets it (PHASE-6 F2).
+    var labelBounds: CGRect?
 
     /// The marks the canvas draws while editing: all but the label being typed in, which is a text field.
     var shown: MomentMarks {
@@ -288,6 +290,7 @@ extension MomentsMarking {
     /// `label` with its middle where its whole (turned) box stays between `rows` (picture heights); where it's taller
     /// than they are, its top stays below the top buttons (the top buttons win, as on Android).
     private func hold(_ label: MomentMarks.Label, within rows: ClosedRange<CGFloat>) -> MomentMarks.Label {
+        guard labelBounds == nil else { return label }
         var label = label
         let box = MomentMarksDrawing.turned(MomentMarksDrawing.lay(label, aspect: aspect).box.size, by: label.turn)
         let half = box.height / 2 / (MomentMarksDrawing.unit / max(aspect, 0.01))
@@ -361,7 +364,7 @@ extension MomentsMarking {
     /// turned) stays inside.
     func clamped(_ label: MomentMarks.Label) -> MomentMarks.Label {
         var label = label
-        let safe = MomentMarks.safeBox(aspect: aspect)
+        let safe = labelBounds ?? MomentMarks.safeBox(aspect: aspect)
         let unit = MomentMarksDrawing.unit
         let tall = unit / max(aspect, 0.01)
         let smallest = MomentMarks.minLetterSize(aspect: aspect)

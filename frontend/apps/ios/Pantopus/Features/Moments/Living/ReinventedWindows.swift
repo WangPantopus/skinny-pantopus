@@ -98,8 +98,10 @@ struct ReinventedWindowsRow: View {
             if !windows.isEmpty {
                 VStack(alignment: .leading, spacing: Spacing.s2) {
                     Text("Windows")
-                        .font(.system(size: 15, weight: .bold))
+                        .pulseFont(15, weight: .bold)
                         .foregroundStyle(Theme.Color.appText)
+                        .padding(.horizontal, Spacing.s4)
+                    // A 16 pt gutter, scrolling from it (PHASE-6 A3).
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: Spacing.s2) {
                             ForEach(windows) { window in
@@ -107,6 +109,7 @@ struct ReinventedWindowsRow: View {
                             }
                         }
                     }
+                    .contentMargins(.horizontal, Spacing.s4, for: .scrollContent)
                 }
                 .accessibilityIdentifier("reinventedWindows")
             }
@@ -136,11 +139,11 @@ private struct ReinventedWindowTile: View {
                 }
                 .shadow(color: window.lit ? ReinventedLivingPalette.lantern.opacity(0.8) : .clear, radius: 10)
             Text(window.label)
-                .font(.system(size: 13, weight: .semibold))
+                .pulseFont(13, weight: .semibold)
                 .foregroundStyle(Theme.Color.appText)
                 .lineLimit(1)
             Text(window.lit ? "Shared today" : window.circle)
-                .font(.system(size: 12))
+                .pulseFont(12)
                 .foregroundStyle(Theme.Color.appTextSecondary)
                 .lineLimit(1)
         }
@@ -169,10 +172,10 @@ struct ReinventedCircleWindowChoice: View {
             })) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Show a window for my home to this circle")
-                        .font(.system(size: 13.5))
+                        .pulseFont(13.5)
                         .foregroundStyle(Theme.Color.appText)
                     Text("It lights when I share something, and never says what or where.")
-                        .font(.system(size: 12))
+                        .pulseFont(12)
                         .foregroundStyle(Theme.Color.appTextSecondary)
                 }
             }
@@ -190,12 +193,12 @@ struct ReinventedCircleWindowChoice: View {
                 }
             } else if let label {
                 Text("Shown as \u{201C}\(label)\u{201D}")
-                    .font(.system(size: 12))
+                    .pulseFont(12)
                     .foregroundStyle(Theme.Color.appTextSecondary)
             }
             if let error {
                 Text(error)
-                    .font(.system(size: 12, weight: .semibold))
+                    .pulseFont(12, weight: .semibold)
                     .foregroundStyle(Theme.Color.error)
             }
         }

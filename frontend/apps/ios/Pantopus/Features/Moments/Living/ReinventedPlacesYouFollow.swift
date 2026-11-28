@@ -136,15 +136,18 @@ struct ReinventedFollowedPlacesSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
             Text("Places you follow")
-                .font(.system(size: 15, weight: .bold))
+                .pulseFont(15, weight: .bold)
                 .foregroundStyle(Theme.Color.appText)
+                .padding(.horizontal, Spacing.s4)
+                .accessibilityAddTraits(.isHeader)
+            // PHASE-6 A3: a 16 pt gutter, and the row scrolls from it (it sat against the screen's left edge).
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: Spacing.s2) {
                     ForEach(model.places) { place in
                         HStack(spacing: 6) {
                             Icon(.mapPin, size: 13, strokeWidth: 2.2, color: Theme.Color.primaryTint)
                             Text(place.label)
-                                .font(.system(size: 13.5, weight: .semibold))
+                                .pulseFont(13.5, weight: .semibold)
                                 .foregroundStyle(Theme.Color.appText)
                                 .lineLimit(1)
                             Button {
@@ -169,7 +172,7 @@ struct ReinventedFollowedPlacesSection: View {
                             HStack(spacing: 5) {
                                 Icon(.plus, size: 13, strokeWidth: 2.4, color: .white)
                                 Text("Follow a place")
-                                    .font(.system(size: 13.5, weight: .bold))
+                                    .pulseFont(13.5, weight: .bold)
                                     .foregroundStyle(.white)
                             }
                             .padding(.horizontal, 12)
@@ -181,16 +184,19 @@ struct ReinventedFollowedPlacesSection: View {
                     }
                 }
             }
+            .contentMargins(.horizontal, Spacing.s4, for: .scrollContent)
             if model.places.isEmpty {
                 Text(Self.followNote)
-                    .font(.system(size: 13))
+                    .pulseFont(13)
                     .foregroundStyle(Theme.Color.appTextSecondary)
                     .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, Spacing.s4)
             }
             if let error = model.error {
                 Text(error)
-                    .font(.system(size: 13, weight: .semibold))
+                    .pulseFont(13, weight: .semibold)
                     .foregroundStyle(Theme.Color.error)
+                    .padding(.horizontal, Spacing.s4)
             }
             if !model.followed.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -200,6 +206,7 @@ struct ReinventedFollowedPlacesSection: View {
                         }
                     }
                 }
+                .contentMargins(.horizontal, Spacing.s4, for: .scrollContent)
             }
         }
         .padding(.bottom, Spacing.s2)
@@ -231,7 +238,7 @@ struct ReinventedFollowedPlacesSection: View {
                         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                 case let .post(post):
                     Text(post.title?.isEmpty == false ? post.title ?? "" : post.content)
-                        .font(.system(size: 14, weight: .semibold))
+                        .pulseFont(14, weight: .semibold)
                         .foregroundStyle(Theme.Color.appText)
                         .lineLimit(5)
                         .padding(10)
@@ -240,7 +247,7 @@ struct ReinventedFollowedPlacesSection: View {
                 }
                 if let why = entry.why {
                     Text(why)
-                        .font(.system(size: 12))
+                        .pulseFont(12)
                         .foregroundStyle(Theme.Color.appTextSecondary)
                         .lineLimit(2)
                         .frame(width: 128, alignment: .leading)
@@ -271,7 +278,7 @@ private struct ReinventedPlaceFinder: View {
                         Text(result.title).foregroundStyle(Theme.Color.appText)
                         if !result.subtitle.isEmpty {
                             Text(result.subtitle)
-                                .font(.system(size: 13))
+                                .pulseFont(13)
                                 .foregroundStyle(Theme.Color.appTextSecondary)
                         }
                     }

@@ -108,12 +108,14 @@ struct MomentsStudioRail: View {
         Button(action: action) {
             HStack(spacing: 10) {
                 Text(name)
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(.white)
                     .shadow(color: .black.opacity(0.55), radius: 4, x: 0, y: 1)
+                // One step smaller to the eye (PHASE-6 C), 44 pt to the finger.
                 glyph()
-                    .frame(width: 44, height: 44)
+                    .frame(width: 36, height: 36)
                     .background(Circle().fill(Color.black.opacity(0.42)))
+                    .frame(width: 44, height: 44)
             }
             .contentShape(Rectangle())
         }
@@ -137,22 +139,20 @@ struct MomentsStudioBar: View {
     let openDrawer: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.s3) {
+        VStack(alignment: .leading, spacing: Spacing.s2) {
+            // The details are a sheet (PHASE-6 F3): its grabber, and the one summary line it opens from (PHASE-5 A4).
+            Capsule()
+                .fill(Color.white.opacity(0.35))
+                .frame(width: 36, height: 5)
+                .frame(maxWidth: .infinity)
+                .accessibilityHidden(true)
             HStack(spacing: Spacing.s2) {
-                audienceChip(.nearby, "Nearby", id: "moments.studio.audience.nearby")
-                audienceChip(.friends, "Friends", id: "moments.studio.audience.friends")
-                if model.offersMadeUpName || model.postsUnderMadeUpName {
-                    audienceChip(.madeUp, "Made-up name", id: "moments.studio.audience.madeUp")
-                }
-                Spacer(minLength: 0)
-            }
-            HStack(spacing: 10) {
                 pill
                 postButton
             }
             if explainsHomeArea {
                 Text(SkyWords.homeTitle)
-                    .font(.system(size: 13))
+                    .font(.system(size: 12))
                     .foregroundStyle(Color.white.opacity(0.75))
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.horizontal, Spacing.s1)
@@ -160,68 +160,41 @@ struct MomentsStudioBar: View {
             }
         }
         .padding(.horizontal, Spacing.s4)
-        .padding(.top, Spacing.s4)
-        .padding(.bottom, Spacing.s3)
+        .padding(.top, Spacing.s2)
+        .padding(.bottom, Spacing.s2)
         .background {
-            UnevenRoundedRectangle(topLeadingRadius: 24, topTrailingRadius: 24, style: .continuous)
+            UnevenRoundedRectangle(topLeadingRadius: 20, topTrailingRadius: 20, style: .continuous)
                 .fill(Theme.Color.appSurface)
                 .ignoresSafeArea(edges: .bottom)
         }
+        // Dragged up from anywhere on the bar, the details open; a tap on the line does too. Down closes the sheet.
+        .contentShape(Rectangle())
+        .gesture(
+            DragGesture(minimumDistance: 12).onEnded { value in
+                guard !model.isPosting, value.translation.height < -24 || value.predictedEndTranslation.height < -90 else { return }
+                openDrawer()
+            }
+        )
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("moments.studio.bar")
-    }
-
-    // MARK: Who sees it
-
-    private func audienceChip(_ value: MomentsStudioAudience, _ title: String, id: String) -> some View {
-        // A Moment with no location goes only to connections: "Nearby" needs a place.
-        let selected = model.studioAudience == value
-        let usable = !model.noLocationOn || value == .friends
-        return Button {
-            if value == .madeUp, PenNameStore.shared.penName == nil {
-                needsMadeUpName()
-            } else {
-                model.pickStudioAudience(value)
-            }
-        } label: {
-            Text(title)
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(selected ? Theme.Color.appText : Color.white.opacity(usable ? 1 : 0.4))
-                .padding(.horizontal, Spacing.s4)
-                .frame(height: 38)
-                .background(Capsule().fill(selected ? Color.white : Color.white.opacity(0.08)))
-                .overlay(Capsule().stroke(Color.white.opacity(selected ? 0 : 0.22), lineWidth: 1))
-                .contentShape(Capsule())
-        }
-        .buttonStyle(.plain)
-        // The selected chip is white: its word is the light scheme's ink.
-        .environment(\.colorScheme, selected ? .light : .dark)
-        .disabled(!usable || model.isPosting)
-        .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
-        .accessibilityIdentifier(id)
     }
 
     // MARK: How long, and where
 
     private var pill: some View {
         Button(action: openDrawer) {
-            HStack(spacing: 10) {
-                Icon(.clock, size: 20, strokeWidth: 2.2, color: .white)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(pillTitle)
-                        .font(.system(size: 15, weight: .bold))
-                        .foregroundStyle(.white)
-                    Text(pillPlace)
-                        .font(.system(size: 13))
-                        .foregroundStyle(Color.white.opacity(0.75))
-                }
-                .lineLimit(1)
-                .minimumScaleFactor(0.85)
+            HStack(spacing: Spacing.s2) {
+                Icon(.clock, size: 18, strokeWidth: 2.2, color: .white)
+                Text(summary)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
                 Spacer(minLength: 0)
-                Icon(.chevronDown, size: 16, strokeWidth: 2.4, color: Color.white.opacity(0.8))
+                Icon(.chevronUp, size: 14, strokeWidth: 2.4, color: Color.white.opacity(0.8))
             }
-            .padding(.horizontal, 14)
-            .frame(maxWidth: .infinity, minHeight: 54)
+            .padding(.horizontal, Spacing.s3)
+            .frame(maxWidth: .infinity, minHeight: 44)
             .background(Capsule().fill(Color.white.opacity(0.08)))
             .overlay(Capsule().stroke(Color.white.opacity(0.22), lineWidth: 1))
             .contentShape(Capsule())
@@ -229,10 +202,23 @@ struct MomentsStudioBar: View {
         .buttonStyle(.plain)
         .disabled(model.isPosting)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(pillTitle), \(pillPlace)")
-        .accessibilityHint("Shows where it pins, how long it shows, and when it shares")
+        .accessibilityLabel(summary)
+        .accessibilityHint("Shows who sees it, where it pins, how long it shows, and when it shares")
         .accessibilityAddTraits(.isButton)
         .accessibilityIdentifier("moments.studio.pill")
+    }
+
+    /// The one summary line (PHASE-5 A4): "Fallen Leaf Lake Park · 24 hours · Everyone nearby".
+    var summary: String {
+        [pillPlace, pillTitle, audienceWords].joined(separator: " · ")
+    }
+
+    private var audienceWords: String {
+        switch model.studioAudience {
+        case .nearby: "Everyone nearby"
+        case .friends: "Friends"
+        case .madeUp: PenNameStore.shared.penName.map { "As \($0.name)" } ?? "Made-up name"
+        }
     }
 
     private var hoursWords: String {
@@ -296,15 +282,15 @@ struct MomentsStudioBar: View {
             ZStack {
                 HStack(spacing: 6) {
                     Text(postWord)
-                        .font(.system(size: 17, weight: .bold))
-                    Icon(.arrowRight, size: 18, strokeWidth: 2.4, color: .white)
+                        .font(.system(size: 15, weight: .bold))
+                    Icon(.arrowRight, size: 16, strokeWidth: 2.4, color: .white)
                 }
                 .foregroundStyle(.white)
                 .opacity(model.isPosting ? 0 : 1)
                 if model.isPosting { ProgressView().tint(.white) }
             }
-            .padding(.horizontal, 22)
-            .frame(minHeight: 54)
+            .padding(.horizontal, 18)
+            .frame(minHeight: 44)
             .background(Capsule().fill(Theme.Color.primarySolid))
             .opacity(model.canPost && !blocksPost ? 1 : 0.5)
             .contentShape(Capsule())
@@ -318,5 +304,53 @@ struct MomentsStudioBar: View {
     /// "Post", or "Post 2 of 3" while several picked together go one by one.
     private var postWord: String {
         model.pickedPosition.map { "Post \($0)" } ?? "Post"
+    }
+}
+
+/// Who sees it, in the details sheet (PHASE-5 A4: the bar keeps one summary line): Nearby, Friends, and the made-up
+/// name where it may be offered. Chips 28 pt high, 44 pt to the finger (PHASE-6 C).
+struct MomentsStudioAudienceRow: View {
+    let model: MomentsComposerModel
+    /// "Made-up name" picked before the person has one: the name screen opens.
+    let needsMadeUpName: () -> Void
+
+    var body: some View {
+        HStack(spacing: Spacing.s2) {
+            audienceChip(.nearby, "Nearby", id: "moments.studio.audience.nearby")
+            audienceChip(.friends, "Friends", id: "moments.studio.audience.friends")
+            if model.offersMadeUpName || model.postsUnderMadeUpName {
+                audienceChip(.madeUp, "Made-up name", id: "moments.studio.audience.madeUp")
+            }
+            Spacer(minLength: 0)
+        }
+    }
+
+    private func audienceChip(_ value: MomentsStudioAudience, _ title: String, id: String) -> some View {
+        // A Moment with no location goes only to connections: "Nearby" needs a place.
+        let selected = model.studioAudience == value
+        let usable = !model.noLocationOn || value == .friends
+        return Button {
+            if value == .madeUp, PenNameStore.shared.penName == nil {
+                needsMadeUpName()
+            } else {
+                model.pickStudioAudience(value)
+            }
+        } label: {
+            Text(title)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(selected ? Theme.Color.appText : Color.white.opacity(usable ? 1 : 0.4))
+                .padding(.horizontal, Spacing.s3)
+                .frame(height: 28)
+                .background(Capsule().fill(selected ? Color.white : Color.white.opacity(0.08)))
+                .overlay(Capsule().stroke(Color.white.opacity(selected ? 0 : 0.22), lineWidth: 1))
+                .frame(minWidth: 44, minHeight: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        // The selected chip is white: its word is the light scheme's ink.
+        .environment(\.colorScheme, selected ? .light : .dark)
+        .disabled(!usable || model.isPosting)
+        .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
+        .accessibilityIdentifier(id)
     }
 }

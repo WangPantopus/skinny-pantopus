@@ -208,23 +208,23 @@ struct ReinventedStrandsYoureIn: View {
     private var section: some View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
             Text("Strands you’re in")
-                .font(.system(size: 16, weight: .bold))
+                .pulseFont(16, weight: .bold)
                 .foregroundStyle(Theme.Color.appText)
                 .accessibilityAddTraits(.isHeader)
             Text("Take one back and that person no longer sees it.")
-                .font(.system(size: 13))
+                .pulseFont(13)
                 .foregroundStyle(Theme.Color.appTextSecondary)
             ForEach(model.strands) { strand in
                 row(strand)
             }
             if let failed = model.failed {
                 Text(failed)
-                    .font(.system(size: 13))
+                    .pulseFont(13)
                     .foregroundStyle(Theme.Color.error)
             }
             if model.nextCursor != nil {
                 Button(model.loadingMore ? "Loading…" : "Show more") { Task { await model.loadMore() } }
-                    .font(.system(size: 14, weight: .semibold))
+                    .pulseFont(14, weight: .semibold)
                     .disabled(model.loadingMore)
             }
         }
@@ -241,12 +241,12 @@ struct ReinventedStrandsYoureIn: View {
                 MomentAvatar(author: author, size: 30).accessibilityHidden(true)
             }
             Text(Self.words(strand))
-                .font(.system(size: 14))
+                .pulseFont(14)
                 .foregroundStyle(Theme.Color.appText)
                 .multilineTextAlignment(.leading)
                 .frame(maxWidth: .infinity, alignment: .leading)
             Button("Take back") { Task { await model.takeBack(strand) } }
-                .font(.system(size: 14, weight: .semibold))
+                .pulseFont(14, weight: .semibold)
                 .disabled(model.takingBack.contains(strand.id))
                 .accessibilityIdentifier("reinventedStrandsMine.takeBack")
         }

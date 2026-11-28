@@ -7,6 +7,7 @@
 // here. Heads-ups always show, whatever is filtered (the server keeps them in).
 
 import { useEffect, useRef, useState } from 'react';
+import { useDialogFocusTrap } from '@/lib/useDialogFocusTrap';
 import { SlidersHorizontal, X } from 'lucide-react';
 import { CHIP_WORDS, type Chip, type MapTime } from './listApi';
 
@@ -199,13 +200,9 @@ export function FilterSheet({
   onTime(t: MapTime): void;
   onClose(): void;
 }) {
-  const sheet = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    sheet.current?.focus();
-    const key = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
-    window.addEventListener('keydown', key);
-    return () => window.removeEventListener('keydown', key);
-  }, [onClose]);
+  // Escape closes it, Tab stays inside it while it is open, and the focus goes back where it was (LEAD-7's look, 08:39: Tab
+  // left the card for the tab bar).
+  const sheet = useDialogFocusTrap<HTMLDivElement>(onClose);
   const chip = (on: boolean, label: string, act: () => void, disabled = false) => (
     <button key={label} type="button" aria-pressed={on} disabled={disabled} onClick={act}>
       <span>{label}</span>

@@ -5,6 +5,9 @@ import app.pantopus.android.data.api.models.moments.MomentDto
 import app.pantopus.android.data.api.models.moments.MomentEditBody
 import app.pantopus.android.data.api.models.moments.MomentGuessBody
 import app.pantopus.android.data.api.models.moments.MomentGuessResponse
+import app.pantopus.android.data.api.models.moments.MomentPlayAnswerBody
+import app.pantopus.android.data.api.models.moments.MomentPlayAnswersPageDto
+import app.pantopus.android.data.api.models.moments.MomentPlayItemDto
 import app.pantopus.android.data.api.models.moments.MomentStampsPreviewBody
 import app.pantopus.android.data.api.models.moments.MomentStampsPreviewDto
 import app.pantopus.android.data.api.net.NetworkResult
@@ -108,6 +111,61 @@ class StudioRepository
             dotId: String,
         ): Boolean =
             when (val answer = safeApiCall { api.removeDot(momentId, dotId) }) {
+                is NetworkResult.Success -> true
+                is NetworkResult.Failure -> {
+                    if (answer.error.serverCode == SWITCH_OFF) feature.refusedOff()
+                    false
+                }
+            }
+
+        /** A reader's answer to one playable item (CONTRACT 7b): the item as the reader may now see it. */
+        suspend fun answerPlay(
+            momentId: String,
+            itemId: String,
+            body: MomentPlayAnswerBody,
+        ): NetworkResult<MomentPlayItemDto?> =
+            when (val answer = safeApiCall { api.answerPlay(momentId, itemId, body) }) {
+                is NetworkResult.Success -> NetworkResult.Success(answer.data.item)
+                is NetworkResult.Failure -> {
+                    if (answer.error.serverCode == SWITCH_OFF) feature.refusedOff()
+                    answer
+                }
+            }
+
+        /** The reader takes their answer back (CONTRACT 7b): true once the server has it gone. */
+        suspend fun takeBackPlay(
+            momentId: String,
+            itemId: String,
+        ): Boolean =
+            when (val answer = safeApiCall { api.takeBackPlay(momentId, itemId) }) {
+                is NetworkResult.Success -> true
+                is NetworkResult.Failure -> {
+                    if (answer.error.serverCode == SWITCH_OFF) feature.refusedOff()
+                    false
+                }
+            }
+
+        /** A question box's answers, to its author (CONTRACT 7b); null when they can't be read. */
+        suspend fun playAnswers(
+            momentId: String,
+            itemId: String,
+            cursor: String?,
+        ): MomentPlayAnswersPageDto? =
+            when (val answer = safeApiCall { api.playAnswers(momentId, itemId, cursor) }) {
+                is NetworkResult.Success -> answer.data
+                is NetworkResult.Failure -> {
+                    if (answer.error.serverCode == SWITCH_OFF) feature.refusedOff()
+                    null
+                }
+            }
+
+        /** The author removes one answer from their post (CONTRACT 7b): true once it is gone. */
+        suspend fun removePlayAnswer(
+            momentId: String,
+            itemId: String,
+            answerId: String,
+        ): Boolean =
+            when (val answer = safeApiCall { api.removePlayAnswer(momentId, itemId, answerId) }) {
                 is NetworkResult.Success -> true
                 is NetworkResult.Failure -> {
                     if (answer.error.serverCode == SWITCH_OFF) feature.refusedOff()

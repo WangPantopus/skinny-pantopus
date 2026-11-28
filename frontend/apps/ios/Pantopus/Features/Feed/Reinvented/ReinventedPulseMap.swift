@@ -58,6 +58,8 @@ final class ReinventedMapModel {
     var moving = false
     /// The filters on (CONTRACT 10a, without `when`: the time row is the map's When); nil sends today's request.
     private(set) var filters: [String: String]?
+    /// Counts the map's rests, so the list can follow the area (PHASE-6 B) at once, before the map's own read.
+    private(set) var rests = 0
 
     @ObservationIgnored private var region: MKCoordinateRegion?
     @ObservationIgnored private var reading: Task<Void, Never>?
@@ -100,8 +102,39 @@ final class ReinventedMapModel {
         return false
     }
 
+    /// The area the map shows, last time it came to rest.
+    var shownRegion: MKCoordinateRegion? {
+        region
+    }
+
+    /// The pin of a Moment or a post of the list.
+    func pin(ofMoment id: String) -> Item? {
+        items.first { item in
+            switch item {
+            case let .ring(ring): ring.moments.contains { $0.id == id }
+            case let .kept(kept): kept.moment.id == id
+            default: false
+            }
+        }
+    }
+
+    func pin(ofPost id: String) -> Item? {
+        items.first { item in
+            if case let .mark(mark) = item { return mark.post.id == id }
+            return false
+        }
+    }
+
+    /// A row of the list tapped while it follows the map (PHASE-6 B): its pin lights and the map flies to it.
+    func light(_ pin: Item?) {
+        guard let pin else { return }
+        focused = pin.id
+        fly(to: pin.coordinate)
+    }
+
     func moved(to region: MKCoordinateRegion) {
         self.region = region
+        rests += 1
         reading?.cancel()
         reading = Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(350))
@@ -295,7 +328,7 @@ struct ReinventedMapPin: View {
         HStack(spacing: 4) {
             Icon(.calendarCheck, size: 13, strokeWidth: 2.2, color: .white)
             Text(ticket.title)
-                .font(.system(size: 12, weight: .bold))
+                .pulseFont(12, weight: .bold)
                 .foregroundStyle(.white)
                 .lineLimit(1)
         }
@@ -319,7 +352,7 @@ struct ReinventedTimeRow: View {
                     let on = model.time == time.key
                     Button { model.pick(time: time.key) } label: {
                         Text(time.title)
-                            .font(.system(size: 13.5, weight: .semibold))
+                            .pulseFont(13.5, weight: .semibold)
                             .foregroundStyle(on ? Color.white : Theme.Color.appText)
                             .padding(.horizontal, Spacing.s3)
                             .frame(height: 32)
@@ -374,11 +407,11 @@ struct ReinventedPeekDeck: View {
                     .frame(width: 64, height: 72)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(title(item))
-                        .font(.system(size: 15, weight: .bold))
+                        .pulseFont(15, weight: .bold)
                         .foregroundStyle(Theme.Color.appText)
                         .lineLimit(2)
                     Text(subtitle(item))
-                        .font(.system(size: 13))
+                        .pulseFont(13)
                         .foregroundStyle(Theme.Color.appTextSecondary)
                         .lineLimit(1)
                 }

@@ -8,6 +8,7 @@ import type { Ring } from '@pantopus/api/endpoints/moments';
 import { MomentFace } from '@/components/moments/MomentFace';
 import { colors } from '@/components/moments/momentState';
 import { startsIn, type ListMoment, type MapTicket, type StripData } from './listApi';
+import { useMouseDragScroll } from './mouseDragScroll';
 
 interface Props {
   strip: StripData;
@@ -64,6 +65,7 @@ function PersonRing({ ring, onOpen }: { ring: Ring; onOpen(): void }) {
 }
 
 export default function AliveStrip({ strip, bandLabel, now, onMoments, onPlan }: Props) {
+  const { ref: rowRef, onPointerDown, onClickCapture } = useMouseDragScroll<HTMLDivElement>();
   const live = strip.live_here || [];
   const plans = strip.plans_soon || [];
   const people = strip.people || [];
@@ -72,7 +74,7 @@ export default function AliveStrip({ strip, bandLabel, now, onMoments, onPlan }:
   return (
     <section className="rp-alive" aria-label="Alive right now">
       <h2 className="rp-alive-title">Alive right now</h2>
-      <div className="rp-alive-row">
+      <div className="rp-alive-row" ref={rowRef} onPointerDown={onPointerDown} onClickCapture={onClickCapture}>
         {people.map((ring) => (
           <PersonRing
             key={`p:${ring.id}`}

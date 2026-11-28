@@ -168,7 +168,7 @@ struct ReinventedPulseRail: View {
                             withAnimation(.snappy(duration: 0.2)) { self.card = nil }
                         } label: {
                             Text(time.title)
-                                .font(.system(size: 13, weight: .semibold))
+                                .pulseFont(sized: 13, weight: .semibold)
                                 .foregroundStyle(on ? Color.white : Theme.Color.appText)
                                 .padding(.horizontal, 10)
                                 .frame(height: 28)
@@ -188,7 +188,7 @@ struct ReinventedPulseRail: View {
             .accessibilityIdentifier("reinventedPulse.rail.whenCard")
         case .listen:
             Text(ReinventedListenButton.said ?? "Listening to the town.")
-                .font(.system(size: 12, weight: .semibold))
+                .pulseFont(sized: 12, weight: .semibold)
                 .foregroundStyle(Theme.Color.appText)
                 .lineLimit(2)
                 .padding(.horizontal, Spacing.s3)
@@ -210,7 +210,7 @@ struct ReinventedFilterPill: View {
         HStack(spacing: 4) {
             Button(action: onOpen) {
                 Text(words)
-                    .font(.system(size: 12, weight: .semibold))
+                    .pulseFont(sized: 12, weight: .semibold)
                     .foregroundStyle(Theme.Color.appText)
                     .lineLimit(1)
                     .padding(.leading, Spacing.s3)
@@ -251,7 +251,7 @@ struct ReinventedLensField: View {
             HStack(spacing: Spacing.s2) {
                 Icon(.search, size: 16, strokeWidth: 2.2, color: Theme.Color.appTextSecondary)
                 TextField("Ask the map or search", text: $text)
-                    .font(.system(size: 14))
+                    .pulseFont(sized: 14)
                     .foregroundStyle(Theme.Color.appText)
                     .submitLabel(.search)
                     .focused($typing)
@@ -262,7 +262,7 @@ struct ReinventedLensField: View {
                     text = ""
                     onClose()
                 }
-                .font(.system(size: 14, weight: .semibold))
+                .pulseFont(sized: 14, weight: .semibold)
                 .frame(minHeight: 44)
                 .accessibilityIdentifier("reinventedPulse.lens.cancel")
             }
@@ -297,7 +297,7 @@ struct ReinventedLensField: View {
             HStack(spacing: Spacing.s2) {
                 Icon(icon, size: 16, strokeWidth: 2.2, color: Theme.Color.primaryTint)
                 Text(title)
-                    .font(.system(size: 14))
+                    .pulseFont(sized: 14)
                     .foregroundStyle(Theme.Color.appText)
                     .lineLimit(1)
                 Spacer(minLength: 0)

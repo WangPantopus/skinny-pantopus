@@ -24,11 +24,16 @@ public struct ReinventedListResponse: Decodable, Sendable {
     public let end: String?
     /// Around me with no place at all: ask for one, as today's Pulse does.
     public let needsPlace: Bool
+    /// With the map's box (CONTRACT 11a), first page: how many things the box holds; nil otherwise or on an older server.
+    public let count: Int?
+    /// The map's cap was reached: more are there than it draws.
+    public let countMore: Bool
 
     private enum CodingKeys: String, CodingKey {
-        case reach, miles, place, chips, bands, items, end
+        case reach, miles, place, chips, bands, items, end, count
         case nextCursor = "next_cursor"
         case needsPlace = "needs_place"
+        case countMore = "count_more"
     }
 
     private enum PlaceKeys: String, CodingKey { case label }
@@ -45,6 +50,8 @@ public struct ReinventedListResponse: Decodable, Sendable {
         nextCursor = try? c.decodeIfPresent(String.self, forKey: .nextCursor)
         end = try? c.decodeIfPresent(String.self, forKey: .end)
         needsPlace = (try? c.decodeIfPresent(Bool.self, forKey: .needsPlace)) ?? false
+        count = try? c.decodeIfPresent(Int.self, forKey: .count)
+        countMore = (try? c.decodeIfPresent(Bool.self, forKey: .countMore)) ?? false
     }
 }
 

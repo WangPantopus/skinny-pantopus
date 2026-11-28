@@ -207,7 +207,7 @@ struct ReinventedPulseFiltersSheet: View {
                             .disabled(store.since == nil)
                     }
                     Text("Heads-ups always show, whatever is filtered.")
-                        .font(.system(size: 12))
+                        .pulseFont(sized: 12)
                         .foregroundStyle(Theme.Color.appTextSecondary)
                 }
                 .padding(Spacing.s4)
@@ -254,7 +254,7 @@ struct ReinventedPulseFiltersSheet: View {
     private func group(_ title: String, @ViewBuilder content: () -> some View) -> some View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
             Text(title)
-                .font(.system(size: 13, weight: .semibold))
+                .pulseFont(sized: 13, weight: .semibold)
                 .foregroundStyle(Theme.Color.appTextSecondary)
                 .accessibilityAddTraits(.isHeader)
             content()
@@ -274,7 +274,7 @@ struct ReinventedPulseFiltersSheet: View {
                     let lit = on(key)
                     Button { tap(key) } label: {
                         Text(title(key))
-                            .font(.system(size: 13, weight: .semibold))
+                            .pulseFont(sized: 13, weight: .semibold)
                             .foregroundStyle(lit ? Color.white : Theme.Color.appText)
                             .padding(.horizontal, Spacing.s3)
                             .frame(height: 28)
@@ -301,7 +301,7 @@ struct ReinventedPulseFiltersSheet: View {
                     color: on ? Theme.Color.primaryTint : Theme.Color.appTextSecondary
                 )
                 Text(title)
-                    .font(.system(size: 14))
+                    .pulseFont(sized: 14)
                     .foregroundStyle(Theme.Color.appText)
                 Spacer(minLength: 0)
             }

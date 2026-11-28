@@ -25,6 +25,10 @@ struct YourDayPhoto: Identifiable {
     let coordinate: CLLocationCoordinate2D
     var thumbnail: UIImage?
     var chosen = true
+    /// Taken at the person's home, or not known yet (today's place preview failed or has not answered): it goes out as
+    /// its area, never its spot, and the card says so ("Your day" skips today's Post sheet and its home notice). Only an
+    /// answer that says away clears it: a home never goes out by mistake.
+    var atHome = true
 
     var id: String {
         asset.localIdentifier
@@ -126,6 +130,20 @@ final class YourDayModel {
             let image = await MomentsLibraryLoader.thumbnail(for: asset, side: 240)
             if index < photos.count, photos[index].asset == asset { photos[index].thumbnail = image }
         }
+        await markHomes()
+    }
+
+    /// Asks today's place preview where each photo was taken, once, so the card says which go out as their area before
+    /// anything is shared. A preview that fails leaves the photo counted as at home.
+    private func markHomes() async {
+        for index in photos.indices {
+            let photo = photos[index]
+            let place: MomentPlacePreviewDTO? = try? await MomentsAPI.send(MomentsEndpoints.placePreview(
+                latitude: photo.coordinate.latitude,
+                longitude: photo.coordinate.longitude
+            ))
+            if let place, index < photos.count, photos[index].id == photo.id { photos[index].atHome = place.atHome }
+        }
     }
 
     /// "Look at today's photos": asks for the library once, then reads.
@@ -193,6 +211,10 @@ final class YourDayModel {
         model.restoreChoices()
         await model.use(asset: photo.asset)
         guard model.draft != nil else { return model.error ?? "Couldn't open that photo." }
+        // Taken at home, or not known (the composer's own preview failed, or the card's had not said away): shown as its
+        // area, as today's Post sheet asks before a Moment from home goes out (with the Sky on the server floats it
+        // anyway). The person saw "At home: shown as your area" on the card.
+        if model.place == nil || model.place?.atHome == true || photo.atHome { model.showArea = true }
         model.audience = audience
         // Under the person's own name only: a made-up name chosen earlier in the Studio never carries into "Your day".
         model.postsUnderMadeUpName = false
@@ -333,10 +355,21 @@ struct YourDayCard: View {
                             Text("\(index + 1) · \(photo.at.formatted(date: .omitted, time: .shortened))")
                                 .font(.system(size: 12.5, weight: .semibold))
                                 .foregroundStyle(photo.chosen ? Theme.Color.appText : Theme.Color.appTextSecondary)
+                            if photo.atHome {
+                                Text("At home: shown as your area")
+                                    .font(.system(size: 11, weight: .medium))
+                                    .foregroundStyle(Theme.Color.appTextSecondary)
+                                    .lineLimit(2)
+                                    .frame(width: 104, alignment: .leading)
+                                    .accessibilityIdentifier("yourDay.photo.atHome")
+                            }
                         }
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("Photo \(index + 1), \(photo.at.formatted(date: .omitted, time: .shortened))")
+                    .accessibilityLabel(
+                        "Photo \(index + 1), \(photo.at.formatted(date: .omitted, time: .shortened))"
+                            + (photo.atHome ? ", at home: shown as your area" : "")
+                    )
                     .accessibilityValue(photo.chosen ? "Chosen" : "Left out")
                     .accessibilityIdentifier("yourDay.photo")
                 }

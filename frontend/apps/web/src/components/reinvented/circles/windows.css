@@ -18,6 +18,8 @@
   overflow-x: auto;
   list-style: none;
   scrollbar-width: none;
+  user-select: none;
+  -webkit-user-select: none;
 }
 .hw-windows li {
   display: flex;

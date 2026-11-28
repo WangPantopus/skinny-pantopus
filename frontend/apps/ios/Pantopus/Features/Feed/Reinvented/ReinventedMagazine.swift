@@ -180,11 +180,11 @@ struct ReinventedMagazineView: View {
     private func pages(_ magazine: ReinventedMagazineDTO) -> some View {
         VStack(alignment: .leading, spacing: Spacing.s1) {
             Text(magazine.circle.name)
-                .font(.system(size: 13, weight: .bold))
+                .pulseFont(13, weight: .bold)
                 .foregroundStyle(Theme.Color.primaryTint)
                 .textCase(.uppercase)
             Text("\(ReinventedMagazineModel.words(magazine.week.from)) to \(ReinventedMagazineModel.words(magazine.week.to))")
-                .font(.system(size: 26, weight: .bold))
+                .pulseFont(26, weight: .bold)
                 .foregroundStyle(Theme.Color.appText)
                 .accessibilityAddTraits(.isHeader)
             if !magazine.people.isEmpty { people(magazine.people) }
@@ -206,7 +206,7 @@ struct ReinventedMagazineView: View {
                         HStack(spacing: 6) {
                             MomentAvatar(author: person, size: 22)
                             Text("\(person.name) · \(entry.count)")
-                                .font(.system(size: 13))
+                                .pulseFont(13)
                                 .foregroundStyle(Theme.Color.appTextSecondary)
                         }
                     }
@@ -240,17 +240,17 @@ struct ReinventedMagazineView: View {
                     if let author = item.author { MomentAvatar(author: author, size: 24) }
                     VStack(alignment: .leading, spacing: 1) {
                         Text(item.author?.name ?? "")
-                            .font(.system(size: 13.5, weight: .semibold))
+                            .pulseFont(13.5, weight: .semibold)
                             .foregroundStyle(Theme.Color.appText)
                         if let caption = item.caption, item.thumbURL != nil {
                             Text(caption)
-                                .font(.system(size: 13))
+                                .pulseFont(13)
                                 .foregroundStyle(Theme.Color.appTextSecondary)
                                 .lineLimit(2)
                         }
                         if item.ended {
                             Text("Kept after it faded")
-                                .font(.system(size: 12.5))
+                                .pulseFont(12.5)
                                 .foregroundStyle(Theme.Color.appTextSecondary)
                         }
                     }
@@ -272,7 +272,7 @@ struct ReinventedMagazineView: View {
             }
         } else {
             Text(item.caption ?? "…")
-                .font(.system(size: 17, weight: .semibold))
+                .pulseFont(17, weight: .semibold)
                 .foregroundStyle(Theme.Color.appText)
                 .multilineTextAlignment(.leading)
                 .padding(Spacing.s4)
