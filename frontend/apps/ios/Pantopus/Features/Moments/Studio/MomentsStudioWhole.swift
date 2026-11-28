@@ -149,7 +149,9 @@ extension MomentsComposerModel {
 
     /// Moved, sized or turned on the canvas (not just filled): the rail offers Reset.
     var studioWholeMoved: Bool {
-        studioShownPlacement != nil && !studioWholeFilled
+        guard let placement = studioShownPlacement, !studioWholeFilled else { return false }
+        // On its canvas only because something lies off it (PHASE-6 F2), fitted whole: nothing to reset.
+        return studioPictureAspect.map { placement != .fit(aspect: $0) } ?? true
     }
 
     // MARK: - Fingers
@@ -192,6 +194,11 @@ extension MomentsComposerModel {
     func studioWholeReset() {
         guard studioWholeOffered, !isPosting, let aspect = studioPictureAspect, studioShownPlacement != nil,
               openWholeEditor() else { return }
+        // Something would lie off the picture (PHASE-6 F2): it stays on its canvas, fitted whole, the things put.
+        if studioThingsOffPicture(MomentsStudioWholeMap(aspect: aspect, toCanvas: false)) {
+            marking.editingPlacement = .fit(aspect: aspect)
+            return keepWhole()
+        }
         if marking.editingPlacement != nil { moveWholeThings(MomentsStudioWholeMap(aspect: aspect, toCanvas: false)) }
         marking.editingPlacement = nil
         keepWhole()
@@ -300,12 +307,16 @@ struct MomentsStudioWholeFrames {
     let canvas: CGRect
     let layers: CGRect
 
-    init(model: MomentsComposerModel, screen: CGSize) {
-        let wide = screen.width / max(screen.height, 1) >= MomentPlacement.canvas
+    /// `room`: where the canvas may go (between the safe area's top and the bottom bar, PHASE-6 K); nil: the screen.
+    init(model: MomentsComposerModel, screen: CGSize, room: CGRect? = nil) {
+        let all = CGRect(origin: .zero, size: screen)
+        let fitted = room.map { $0.intersection(all) }
+        let space = fitted.flatMap { $0.isNull || $0.height < 1 ? nil : $0 } ?? all
+        let wide = space.width / max(space.height, 1) >= MomentPlacement.canvas
         let size = wide
-            ? CGSize(width: screen.height * MomentPlacement.canvas, height: screen.height)
-            : CGSize(width: screen.width, height: screen.width / MomentPlacement.canvas)
-        canvas = CGRect(x: (screen.width - size.width) / 2, y: (screen.height - size.height) / 2, width: size.width, height: size.height)
+            ? CGSize(width: space.height * MomentPlacement.canvas, height: space.height)
+            : CGSize(width: space.width, height: space.width / MomentPlacement.canvas)
+        canvas = CGRect(x: space.midX - size.width / 2, y: space.midY - size.height / 2, width: size.width, height: size.height)
         layers = Self.picture(in: canvas, model: model) ?? canvas
     }
 
@@ -331,10 +342,11 @@ struct MomentsStudioWholeFrames {
 /// canvas with the photo where it was put; its marks on it.
 struct MomentsStudioWholeCanvas: View {
     let model: MomentsComposerModel
+    @Environment(\.studioRoom) private var room
 
     var body: some View {
         GeometryReader { geo in
-            let frames = MomentsStudioWholeFrames(model: model, screen: geo.size)
+            let frames = MomentsStudioWholeFrames(model: model, screen: geo.size, room: room)
             let colors = model.marking.backdrop ?? .dark
             ZStack {
                 LinearGradient(colors: [Color(uiColor: colors.top), Color(uiColor: colors.bottom)], startPoint: .top, endPoint: .bottom)
@@ -375,11 +387,12 @@ struct MomentsStudioWholeCanvas: View {
 /// Everything on the picture, over a whole photo: framed where the picture is drawn. Anything else is as before.
 struct MomentsStudioWholeFrame: ViewModifier {
     let model: MomentsComposerModel
+    @Environment(\.studioRoom) private var room
 
     func body(content: Content) -> some View {
         if model.studioWholeOffered {
             GeometryReader { geo in
-                let layers = MomentsStudioWholeFrames(model: model, screen: geo.size).layers
+                let layers = MomentsStudioWholeFrames(model: model, screen: geo.size, room: room).layers
                 content
                     .frame(width: layers.width, height: layers.height)
                     .position(x: layers.midX, y: layers.midY)
