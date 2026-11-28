@@ -693,11 +693,13 @@
   position: absolute;
   inset: 0 -8px;
 }
+/* Beside the panel, clear of the map's own zoom buttons and the rail at the right (LEAD-7's look, 08:39: its ✕ lay on the
+   map's "+", so a click meant to zoom cleared the filters). */
 .rp-board[data-wide] .rp-filter-pill {
   top: 64px;
-  left: auto;
-  right: 56px;
-  max-width: calc(100% - 480px);
+  left: 404px;
+  right: auto;
+  max-width: calc(100% - 404px - 140px);
 }
 .rp-board[data-wide] > .rp-create {
   z-index: 800;
@@ -1404,6 +1406,9 @@
   padding: 0 12px 2px;
   overflow-x: auto;
   scrollbar-width: none;
+  /* A mouse drags it sideways (AliveStrip's useMouseDragScroll): no text selection on the way. */
+  user-select: none;
+  -webkit-user-select: none;
 }
 .rp-alive-row::-webkit-scrollbar {
   display: none;

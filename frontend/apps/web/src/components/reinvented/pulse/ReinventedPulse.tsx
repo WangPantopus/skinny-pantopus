@@ -84,6 +84,8 @@ interface Back {
   rest: Rest;
   row: string | null;
   rowTop: number;
+  /** The list's area when the page was left (while it followed the map); the row is put back on that area's rows. */
+  area?: string;
 }
 function readBack(): Back | null {
   try {
@@ -395,7 +397,12 @@ export default function ReinventedPulse() {
   const scroller = useRef<HTMLDivElement>(null);
   // A row kept where it was while the list is read for a new area: the row the person came Back to, or the one whose tap
   // flew the map (PHASE-6 G: the list used to jump to its top and the row left the finger).
-  const pendingRow = useRef<{ key: string; top: number } | null>(back?.row ? { key: back.row, top: back.rowTop } : null);
+  // Coming Back, the row waits (up to 4 s) for the list of the area it was left on: on a wide screen the map's area settles
+  // a moment after the first read, and putting the row back on that first read let the list go to its top right after
+  // (LEAD-7's look, 08:39).
+  const pendingRow = useRef<{ key: string; top: number; area?: string; until: number } | null>(
+    back?.row ? { key: back.row, top: back.rowTop, area: back.area, until: Date.now() + 4000 } : null,
+  );
   const sentinel = useRef<HTMLDivElement>(null);
   const { hasNextPage, isFetchingNextPage, fetchNextPage } = list;
   useEffect(() => {
@@ -414,7 +421,9 @@ export default function ReinventedPulse() {
   // A new reach, other filters or (while the list follows the map) a new area start the list from its top.
   const areaKey = listBox ? `${listBox.south},${listBox.west},${listBox.north},${listBox.east}` : '';
   useEffect(() => {
-    if (pendingRow.current) return;
+    const keep = pendingRow.current;
+    if (keep && (!keep.until || Date.now() < keep.until)) return;
+    pendingRow.current = null;
     scroller.current?.scrollTo({ top: 0 });
   }, [reach, filterKey, areaKey, noPlace]);
 
@@ -489,13 +498,13 @@ export default function ReinventedPulse() {
             rowTop = el.getBoundingClientRect().top - box.top;
           }
         }
-        const kept: Back = { at: Date.now(), view: mapView.current?.() ?? null, rest, row, rowTop };
+        const kept: Back = { at: Date.now(), view: mapView.current?.() ?? null, rest, row, rowTop, area: areaKey || undefined };
         window.sessionStorage.setItem(BACK_KEY, JSON.stringify(kept));
       } catch {
         /* storage blocked: Back opens the new Pulse as new */
       }
     },
-    [view, reach, rest],
+    [view, reach, rest, areaKey],
   );
   const openPost = useCallback(
     (id: string) => {
@@ -606,10 +615,13 @@ export default function ReinventedPulse() {
     const keep = pendingRow.current,
       box = scroller.current;
     if (!keep || !box || !following || stale || waiting || !list.data || list.isPlaceholderData) return;
-    pendingRow.current = null;
+    const early = !!keep.until && Date.now() < keep.until;
+    // Coming Back: not on another area's rows while the map is still settling on the kept one.
+    if (early && keep.area && keep.area !== areaKey) return;
     const el = box.querySelector<HTMLElement>(`[data-row="${CSS.escape(keep.key)}"]`);
     if (el) box.scrollTop += el.getBoundingClientRect().top - box.getBoundingClientRect().top - keep.top;
-  }, [shown, following, stale, waiting]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (el || !early) pendingRow.current = null;
+  }, [shown, following, stale, waiting, areaKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const momentIds = useMemo(
     () =>
@@ -773,7 +785,7 @@ export default function ReinventedPulse() {
     e.stopPropagation();
     // The row stays under the finger while the map flies and the list is read for the new area.
     const list = scroller.current;
-    if (list) pendingRow.current = { key: rowKey(it), top: e.currentTarget.getBoundingClientRect().top - list.getBoundingClientRect().top };
+    if (list) pendingRow.current = { key: rowKey(it), top: e.currentTarget.getBoundingClientRect().top - list.getBoundingClientRect().top, until: 0 };
     setSelectedRow(rowKey(it));
     setSelected(pinKeyOf(it));
     setFly({ ...p, serial: Date.now(), keepZoom: true });
