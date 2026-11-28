@@ -8,9 +8,11 @@
 const { DateTime } = require('luxon');
 const supabaseAdmin = require('../../config/supabaseAdmin');
 const penName = require('../penName');
+const { timezoneFromCoordinates } = require('../../utils/timezone');
 
 const FILM_MIN = 8;
 const FILM_PEOPLE = 4;
+// Where the town's own zone can't be told from its point (the pilot is in the Pacific zone).
 const ZONE = 'America/Los_Angeles';
 const NEAR = [-1, 0, 1];
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -74,7 +76,8 @@ async function townFilm(viewerId, body, now = Date.now()) {
   if (body?.latitude == null || body?.longitude == null || !(Math.abs(latitude) <= 90 && Math.abs(longitude) <= 180)) {
     throw fail(400, 'TOWN_FILM_INVALID', 'Send where you are as latitude and longitude.');
   }
-  const local = DateTime.fromMillis(now, { zone: ZONE });
+  // 8 pm to 4 am, and "that day", in the town's own time zone (CONTRACT 8k), not the server's.
+  const local = DateTime.fromMillis(now, { zone: timezoneFromCoordinates(latitude, longitude, ZONE) });
   if (local.hour < 20 && local.hour >= 4) return { film: null };
   const day = local.hour < 4 ? local.minus({ days: 1 }).startOf('day') : local.startOf('day');
   const cell = (v) => Math.floor(v * 10);
