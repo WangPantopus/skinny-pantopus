@@ -154,14 +154,21 @@ struct ReinventedPulseView: View {
     /// The header's one line: how many things the map holds and when ("23 here · Live"); following the map, the list's
     /// own count of the area (CONTRACT 11a).
     private var sheetLine: String {
-        if !inAtlas, model.box != nil, let count = model.count {
-            let when = ReinventedMapModel.times.first { $0.key == map.time }?.title ?? "Live"
+        if inAtlas {
+            let count = map.items.count
+            return count == 1 ? "1 kept here" : "\(count) kept here"
+        }
+        let when = ReinventedMapModel.times.first { $0.key == map.time }?.title ?? "Live"
+        // Following the map: the list's own count of the area. Otherwise (full, Close circle, Explore) the whole list,
+        // never a count of the map's pins, which would say another number than the list under it.
+        if model.box != nil, let count = model.count {
             return "\(count)\(model.countMore ? "+" : "") here · \(when)"
         }
-        let count = map.items.count
-        if inAtlas { return count == 1 ? "1 kept here" : "\(count) kept here" }
-        let when = ReinventedMapModel.times.first { $0.key == map.time }?.title ?? "Live"
-        return "\(count) here · \(when)"
+        switch model.reach {
+        case "close": return "Your circle · \(when)"
+        case "explore": return "Today, elsewhere"
+        default: return "Nearest first · \(when)"
+        }
     }
 
     /// The viewer opens from the Pulse tab's root (`ReinventedStudioCover`), outside the tab's navigation stack.
