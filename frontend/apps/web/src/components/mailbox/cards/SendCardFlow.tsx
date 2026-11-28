@@ -2271,7 +2271,6 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null,
     thanksOpened.current = true;
     openCollection(shelf);
     // Once, as the flow opens at its shelf.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [thanks, step, shelves, thankYou]);
 
   // Send one back: that person is already chosen and the flow opens at Pick a card, unless today's card has gone and
