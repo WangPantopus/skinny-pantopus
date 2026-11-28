@@ -164,19 +164,45 @@ export default function ReinventedPulse() {
   }, [toast]);
 
   const circleId = reach === 'close' ? circle?.id ?? null : null;
+  // PHASE-6 B: at peek and half (and in the wide panel) the list is what is on the map now, the part not under the top line
+  // or the list (CONTRACT 11a, Around me only); at full it is the reach's whole list as before (the map is covered).
+  const [openBox, setOpenBox] = useState<Box | null>(null);
+  const following = view === 'pulse' && reach === 'around' && (wide || rest !== 'full') && !!openBox;
+  const listBox = following ? openBox : null;
+  // "No place" in the sheet's header (CONTRACT 11b): posts and Moments without a place follow the placed ones. Off at first.
+  const [noPlace, setNoPlace] = useState(false);
   const key = useMemo(
-    () => ['reinvented', 'list', account, reach, reach === 'around' ? miles : null, filterKey, point?.latitude ?? null, point?.longitude ?? null, circleId] as const,
-    [account, reach, miles, filterKey, point, circleId],
+    () =>
+      [
+        'reinvented',
+        'list',
+        account,
+        reach,
+        reach === 'around' && !listBox ? miles : null,
+        filterKey,
+        listBox ? null : point?.latitude ?? null,
+        listBox ? null : point?.longitude ?? null,
+        circleId,
+        listBox ? `${listBox.south},${listBox.west},${listBox.north},${listBox.east}` : null,
+        reach === 'around' && noPlace,
+      ] as const,
+    [account, reach, miles, filterKey, point, circleId, listBox, noPlace],
   );
   const list = useInfiniteQuery({
     queryKey: key,
-    queryFn: ({ pageParam, signal }) => readList({ reach, miles, chip: 'all', cursor: pageParam, point, circle: circleId, filters: listFilters }, signal),
+    // The read for an area the map has left is dropped (its signal aborts once no one watches it).
+    queryFn: ({ pageParam, signal }) =>
+      readList({ reach, miles, chip: 'all', cursor: pageParam, point, circle: circleId, filters: listFilters, box: listBox, noPlace }, signal),
     initialPageParam: null as string | null,
     getNextPageParam: (last) => last.next_cursor ?? undefined,
     enabled: !!account && filtersRead && reach !== 'explore',
+    // The old rows stay, dimmed, until the new area's are there: no spinner and no empty flash between two areas. Each
+    // area's answer is kept for the visit (the cache, by the rounded box).
+    placeholderData: keepPreviousData,
     staleTime: 30_000,
     retry: (count, error) => !isSwitchedOff(error) && count < 1,
   });
+  const stale = list.isPlaceholderData;
   // Explore (CONTRACT §6f): its own read, a page at a time, pausing with "Keep exploring?" instead of running on.
   const explore = useInfiniteQuery({
     queryKey: ['reinvented', 'explore', account, point?.latitude ?? null, point?.longitude ?? null],
@@ -282,9 +308,11 @@ export default function ReinventedPulse() {
   useBackWhenMissing(circleGone ? null : list.error, map.error, strip.error, explore.error);
   // A box with no height (the map laid out before the sheet settles, at phone width) is never read: the server answers
   // 400 to it.
-  const onBox = useCallback((b: Box) => {
+  const onBox = useCallback((b: Box, open: Box) => {
     const r = roundBox(b);
     if (r.north > r.south && r.east > r.west) setBox(r);
+    const o = roundBox(open);
+    if (o.north > o.south && o.east > o.west) setOpenBox((was) => (was && was.south === o.south && was.west === o.west && was.north === o.north && was.east === o.east ? was : o));
   }, []);
 
   const pages = list.data?.pages;
@@ -312,10 +340,11 @@ export default function ReinventedPulse() {
     return () => watch.disconnect();
   }, [hasNextPage, isFetchingNextPage, fetchNextPage, items.length]);
 
-  // A new reach or other filters start the list from its top.
+  // A new reach, other filters or (while the list follows the map) a new area start the list from its top.
+  const areaKey = listBox ? `${listBox.south},${listBox.west},${listBox.north},${listBox.east}` : '';
   useEffect(() => {
     scroller.current?.scrollTo({ top: 0 });
-  }, [reach, filterKey]);
+  }, [reach, filterKey, areaKey, noPlace]);
 
   // ── Posts: today's card, its answers patched into this list's pages ──
   const patchPost = useCallback(
@@ -552,14 +581,62 @@ export default function ReinventedPulse() {
     },
     [openPost, router, openExplored],
   );
-  // A pin tapped on the map opens it.
+  // The row chosen from the map, or the map from a row (PHASE-6 B): its pin and its row are lit together.
+  const [selectedRow, setSelectedRow] = useState<string | null>(null);
+  useEffect(() => {
+    setSelectedRow(null);
+    setSelected(null);
+  }, [reach, filterKey, view]);
+  const rowKey = (it: ListItem) => `${it.type}:${it.id}`;
+  const pinKeyOf = useCallback(
+    (it: ListItem): string | null => {
+      if (it.type === 'post') return pins.some((p) => p.key === `mark:${it.post.id}`) ? `mark:${it.post.id}` : null;
+      const ring = pins.find((p) => p.type === 'ring' && p.ring.moments.some((m) => m.id === it.id));
+      return ring?.key ?? (pins.some((p) => p.key === `kept:${it.id}`) ? `kept:${it.id}` : null);
+    },
+    [pins],
+  );
+  // A pin tapped on the map: while the list follows the map, the list scrolls to its row (a second tap opens it); otherwise,
+  // or when it has no row here, it opens.
   const onPick = useCallback(
     (key: string) => {
       const pin = pins.find((p) => p.key === key);
-      if (pin) openPin(pin);
+      if (!pin) return;
+      const row = following
+        ? shown.find((it) =>
+            pin.type === 'mark'
+              ? it.type === 'post' && it.post.id === pin.mark.post.id
+              : pin.type === 'ring'
+                ? it.type === 'moment' && pin.ring.moments.some((m) => m.id === it.id)
+                : pin.type === 'kept'
+                  ? it.id === pin.moment.id
+                  : false,
+          )
+        : undefined;
+      if (!row || selected === key) return openPin(pin);
+      setSelected(key);
+      setSelectedRow(rowKey(row));
+      if (!wide && rest === 'peek') setRest('half');
+      if (wide && folded) setFolded(false);
+      requestAnimationFrame(() =>
+        scroller.current?.querySelector(`[data-row="${CSS.escape(rowKey(row))}"]`)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }),
+      );
     },
-    [pins, openPin],
+    [pins, openPin, following, shown, selected, wide, rest, folded],
   );
+  // A row tapped while the list follows the map flies the map to it and lights its pin; a second tap opens it. The row's own
+  // controls (reactions, replies, "show on the map") stay theirs.
+  const onRowTap = (e: ReactMouseEvent, it: ListItem) => {
+    if (!following || selectedRow === rowKey(it)) return;
+    if ((e.target as HTMLElement).closest('button, a, input, textarea, select, label, [role="menu"], [role="menuitem"]')) return;
+    const p = itemPoint(it);
+    if (!p) return;
+    e.preventDefault();
+    e.stopPropagation();
+    setSelectedRow(rowKey(it));
+    setSelected(pinKeyOf(it));
+    setFly({ ...p, serial: Date.now(), keepZoom: true });
+  };
 
   // Map | Atlas (the List button is gone: the list is the sheet).
   const toView = (v: 'pulse' | 'atlas') => {
@@ -664,7 +741,9 @@ export default function ReinventedPulse() {
             ? 'Pulse couldn’t load'
             : first?.needs_place
               ? 'No place yet'
-              : `${shown.length ? `${shown.length}${hasNextPage ? '+' : ''}` : 'Nothing'} here · ${whenWord}`;
+              : following && typeof first?.count === 'number'
+                ? `${first.count ? `${first.count}${first.count_more ? '+' : ''}` : 'Nothing'} here · ${whenWord}`
+                : `${shown.length ? `${shown.length}${hasNextPage ? '+' : ''}` : 'Nothing'} here · ${whenWord}`;
   const words = canFilter ? filterWords(filters, time) : '';
   const topInset = TOP_LINE_PX + (words ? PILL_PX : 0);
   const clearFilters = () => {
@@ -806,6 +885,13 @@ export default function ReinventedPulse() {
         onFold={setFolded}
         topInset={topInset}
         line={sheetLine}
+        tools={
+          view === 'pulse' && reach === 'around' ? (
+            <button type="button" className="rp-noplace" role="switch" aria-checked={noPlace} onClick={() => setNoPlace((on) => !on)}>
+              No place
+            </button>
+          ) : undefined
+        }
         create={
           !creating && (
             <button type="button" className="rp-create" aria-label="Create" title="Create" onClick={() => setCreating(true)}>
@@ -950,13 +1036,18 @@ export default function ReinventedPulse() {
                   )}
                 </div>
               )}
-              <ol className="rp-items">
+              <ol className="rp-items" data-stale={stale || undefined}>
                 {shown.map((item) => {
                   const label = item.band ? bandLabels.get(item.band) || null : null;
-                  const line = reach === 'around' && item.band && item.band !== prevBand ? label : null;
+                  const line = reach === 'around' && item.band && item.band !== prevBand ? label || (item.band === 'no_place' ? 'Without a place' : null) : null;
                   prevBand = item.band;
                   return (
-                    <li key={`${item.type}:${item.id}`}>
+                    <li
+                      key={`${item.type}:${item.id}`}
+                      data-row={rowKey(item)}
+                      data-selected={selectedRow === rowKey(item) || undefined}
+                      onClickCapture={(e) => onRowTap(e, item)}
+                    >
                       {line && (
                         <p className="rp-band" role="separator">
                           <span>{line}</span>
