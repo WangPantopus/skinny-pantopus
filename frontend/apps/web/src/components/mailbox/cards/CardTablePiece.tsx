@@ -35,6 +35,7 @@ import { launchFeatures } from '@/lib/featureFlags';
 import type { SentHolidayCard } from '@pantopus/api';
 import PassOnSheet, { type PassOnReady } from './PassOnSheet';
 import { arrivalLine, firstName, sendMessage, takeBackLine } from './SendCardFlow';
+import { holdForCard } from './cardNoticeHold';
 
 /** "Ivy and Cass" from the cards a reader passed on: first names, a masked address, or "someone" for a link not yet opened. */
 function passedNames(passed: { first_name: string | null; to_name: string | null; by_link?: boolean }[]): string {
@@ -103,6 +104,9 @@ export default function CardTablePiece({
   // side up, with the reply lying on it. The card itself (or, once gone, the reply's own picture) comes from the joined read.
   const replyPiece = piece.card_reply ?? null;
   const joined = useCardExchange(piece.card?.sealed ? null : piece.id);
+  // Wave 4.1: someone who just came to this card from its email or link sees no briefing notice or guidance over it.
+  const joinedFor = Boolean(piece.card?.joined_for);
+  useEffect(() => (joinedFor ? holdForCard() : undefined), [joinedFor]);
   const exchange = joined.data ?? null;
   const original = replyPiece ? exchange?.original ?? null : null;
   const card: TableCard = piece.card ?? original?.card ?? {

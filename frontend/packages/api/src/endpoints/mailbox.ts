@@ -772,6 +772,22 @@ export interface HolidayCards {
    * card experience from before them. Never kept beyond this read.
    */
   improved?: boolean;
+  /**
+   * Wave 4.1, only while `improved`: a new account's first opened card, for the welcome strip under the mantel. Absent:
+   * no strip. `stamps` is null when the balance couldn't be read.
+   */
+  welcome?: { card_id: string; from_first_name: string; can_write_back: boolean; stamps: number | null };
+  /**
+   * Wave 4.2, only while `improved` and a photo can be added: "Make a photo card". Its design is never in `designs`.
+   * Shapes are width:height.
+   */
+  photo_card?: {
+    design: string;
+    frames: CardFrame[];
+    default_frame: CardFrame;
+    caption_limit: number;
+    shapes: { id: CardShape; w: number; h: number }[];
+  };
   /** Which of a card's own photo and voice can be added now (launch key holiday_card_memories), and their limits. */
   media?: {
     photo: { usable: boolean; max_bytes: number; long_side: number };
@@ -835,6 +851,11 @@ export interface HolidayCards {
     /** While `improved`: where the switch starts (false: off); absent, it starts on as before. */
     default_on?: boolean };
 }
+
+/** A photo card's frame (Wave 4.2): Heirloom Cream, Midnight Velvet, Winter Arch. */
+export type CardFrame = 'heirloom' | 'midnight' | 'arch';
+/** A photo card's shape, cropped on the device: 4:5, 1:1 or 4:3. */
+export type CardShape = 'portrait' | 'square' | 'landscape';
 
 /** GET /api/mailbox/cards */
 export async function getHolidayCards(): Promise<HolidayCards> {
