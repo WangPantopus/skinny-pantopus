@@ -211,7 +211,8 @@ struct CardTableSendCover: ViewModifier {
             return .sent(words: travelWords("Your card is ready.", viewModel), primary: "Done", buttons: [copy, shareLink] + again)
         }
         let first = MailPieceModel.firstText(card.toName).map(HolidayCardWords.firstName) ?? "them"
-        let lines = [HolidayCardWords.arrivalLine(card), HolidayCardWords.takeBackLine(card)].compactMap(\.self)
+        let arrives = HolidayCardWords.arrivalLine(card, improved: viewModel.improved)
+        let lines = [arrives, HolidayCardWords.takeBackLine(card)].compactMap(\.self)
         var buttons: [CardTableMenuItem] = []
         if card.canTakeBack {
             buttons.append(CardTableMenuItem(title: "Take it back", identifier: "cardTableSendTakeBack") { [weak model] in

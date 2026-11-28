@@ -309,7 +309,7 @@ struct HolidayCardSentView: View {
                         .font(.system(size: 17, weight: .semibold))
                         .foregroundStyle(MailPaper.cardText)
                         .lineLimit(1)
-                    Text(HolidayCardWords.arrivalLine(card))
+                    Text(HolidayCardWords.arrivalLine(card, improved: viewModel.improved))
                         .font(.system(size: 14))
                         .foregroundStyle(MailPaper.cardTextSoft)
                         .fixedSize(horizontal: false, vertical: true)
