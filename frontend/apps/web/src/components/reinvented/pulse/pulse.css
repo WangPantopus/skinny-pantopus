@@ -293,6 +293,14 @@
 .rp-top[data-phone] .rp-bell button {
   padding: 6px;
 }
+/* The bell (today's NotificationBell, drawn here) gets the same 44 px hit box as the other round buttons (LEAD-8's look,
+   10:08: only its 32 px drawing answered). */
+.rp-top[data-phone] .rp-bell button::before {
+  content: '';
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+}
 .rp-top[data-phone] .rp-scope {
   gap: 4px;
   padding: 0 6px;
@@ -459,6 +467,24 @@
   border-radius: 18px;
   background: var(--rp-paper);
   box-shadow: 0 10px 34px #0003;
+}
+/* A short phone-shaped window (375 x 480, say): the rail lies along the top, right under the line, so the "+" riding on the
+   sheet never covers Listen or My place (round 3's note); its cards open under it, at its right edge. */
+@media (max-width: 699px) and (max-height: 620px) {
+  .rp-rail {
+    flex-direction: row;
+  }
+  .rp-rail-item {
+    position: static;
+  }
+  .rp-rail-card {
+    top: calc(100% + 8px);
+    right: 0;
+  }
+  /* The filters' pill stays left of the rail's row. */
+  .rp-filter-pill {
+    max-width: calc(100% - 200px);
+  }
 }
 .rp-rail-card-when {
   width: min(400px, calc(100vw - 72px));

@@ -397,15 +397,18 @@ export default function ReinventedPulse() {
   // flew the map (PHASE-6 G: the list used to jump to its top and the row left the finger).
   // Coming Back, the row is put back on every settled list for 4 s, not once: on a wide screen the map's area settles and the
   // list is read again a moment after the first read, which sent the list to its top (LEAD-7's look, 08:39; LEAD-8's,
-  // 09:36: 2 of 4). The person's own scroll, wheel, tap or key on the list ends it at once.
-  const pendingRow = useRef<{ key: string; top: number; until: number } | null>(
+  // 09:36: 2 of 4). The person's own scroll, wheel, tap or key on the list ends that at once, and from then on nothing moves
+  // the list for the rest of the window, not even the map's area settling (`held`; LEAD-8's look, 10:08: a wheel 0.55 s after
+  // Back was thrown to the top).
+  const pendingRow = useRef<{ key: string; top: number; until: number; held?: boolean } | null>(
     back?.row ? { key: back.row, top: back.rowTop, until: Date.now() + 4000 } : null,
   );
   useEffect(() => {
     const el = scroller.current;
     if (!el) return undefined;
     const mine = () => {
-      if (pendingRow.current?.until) pendingRow.current = null;
+      const keep = pendingRow.current;
+      if (keep?.until && !keep.held) pendingRow.current = { ...keep, held: true };
     };
     const kinds = ['wheel', 'pointerdown', 'touchstart', 'keydown'] as const;
     kinds.forEach((k) => el.addEventListener(k, mine, { passive: true }));
@@ -624,7 +627,7 @@ export default function ReinventedPulse() {
       box = scroller.current;
     if (!keep || !box || !following || stale || waiting || !list.data || list.isPlaceholderData) return;
     const early = !!keep.until && Date.now() < keep.until;
-    const el = box.querySelector<HTMLElement>(`[data-row="${CSS.escape(keep.key)}"]`);
+    const el = keep.held ? null : box.querySelector<HTMLElement>(`[data-row="${CSS.escape(keep.key)}"]`);
     if (el) box.scrollTop += el.getBoundingClientRect().top - box.getBoundingClientRect().top - keep.top;
     // Coming Back it stays for the window (the list may be read again for the settled area); a flown row is put back once.
     if (!early) pendingRow.current = null;
