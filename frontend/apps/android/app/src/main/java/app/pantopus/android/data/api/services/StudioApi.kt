@@ -11,13 +11,16 @@ import app.pantopus.android.data.api.models.moments.MomentPlayAnswersPageDto
 import app.pantopus.android.data.api.models.moments.MomentSignalResponse
 import app.pantopus.android.data.api.models.moments.MomentStampsPreviewBody
 import app.pantopus.android.data.api.models.moments.MomentStampsPreviewResponse
+import okhttp3.MultipartBody
 import okhttp3.RequestBody
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
+import retrofit2.http.Multipart
 import retrofit2.http.PATCH
 import retrofit2.http.POST
 import retrofit2.http.PUT
+import retrofit2.http.Part
 import retrofit2.http.Path
 import retrofit2.http.Query
 
@@ -120,4 +123,17 @@ interface StudioApi {
         @Path("item") item: String,
         @Path("answer") answer: String,
     )
+
+    /**
+     * `POST /api/reinvented/moments/:id/motion` (CONTRACT 10b): a motion photo's clip (`video/mp4`, at most 4 s and 15 MB)
+     * beside the author's own photo Moment, once its photo is up, with one or two frames for the picture check. Route
+     * `backend/routes/reinvented.js` (motion).
+     */
+    @Multipart
+    @POST("api/reinvented/moments/{id}/motion")
+    suspend fun uploadMotion(
+        @Path("id") id: String,
+        @Part file: MultipartBody.Part,
+        @Part frames: List<MultipartBody.Part>,
+    ): MomentEnvelope
 }
